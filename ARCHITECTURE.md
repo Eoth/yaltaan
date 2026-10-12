@@ -226,7 +226,7 @@ By default, functions do not mutate. A mutating variant exists only if a benchma
 @yaltaan/vue        later
 ```
 
-Allowed dependency graph, checked in CI (for example with dependency-cruiser):
+Allowed dependency graph, checked by the verification gate on the manifests, the built modules and the files each build compiles ([ADR 0011](docs/adr/0011-dependency-graph-check.md)):
 
 ```text
 core ← temporal

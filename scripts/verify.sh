@@ -128,6 +128,10 @@ for config in packages/*/tsconfig.build.json; do
 done
 [ "$built" = 0 ] && echo "ok (not applicable: no package has sources yet)"
 
+step "dependency graph"
+# After the build: the check reads the modules each package publishes under dist/, and what each build compiles.
+node scripts/check-dependency-graph.ts || failed
+
 step "import sizes"
 # After the build: the library's scenarios bundle what the packages publish.
 node scripts/size-report.ts || failed
