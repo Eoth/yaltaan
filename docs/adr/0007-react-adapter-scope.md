@@ -1,7 +1,7 @@
 # ADR 0007 — React adapter scope
 
 - Date: 2026-10-12
-- Status: proposed — recommendation, awaiting the owner
+- Status: accepted (decision delegated by the owner to the recommendation, 2026-10-12)
 
 ## Context
 
@@ -21,7 +21,7 @@ Not measured yet: the glue code a TanStack Form user writes around `@yaltaan/rul
 
 ## Decision
 
-Recommended: option 2. A TanStack Form adapter is reopened only if the vertical slice measures repeated glue code that Standard Schema does not remove.
+Option 2. A TanStack Form adapter is reopened only if the vertical slice measures repeated glue code that Standard Schema does not remove.
 
 ## Consequences
 

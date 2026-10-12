@@ -1,7 +1,7 @@
 # ADR 0002 — Licence
 
 - Date: 2026-10-12
-- Status: proposed — recommendation, awaiting the owner
+- Status: accepted (the owner's choice, 2026-10-12)
 
 ## Context
 
@@ -21,7 +21,7 @@ Not measured: this is a policy decision. Facts used: the third-party licences al
 
 ## Decision
 
-Recommended: option 2, MIT, with the copyright line "Copyright (c) 2026 Pak nguni". Contributions are accepted under the same licence (inbound = outbound), without a contributor licence agreement. Each published package carries a copy of the licence text.
+Option 2, MIT, with the copyright line "Copyright (c) 2026 Pak nguni". Contributions are accepted under the same licence (inbound = outbound), without a contributor licence agreement. Each published package carries a copy of the licence text.
 
 ## Consequences
 

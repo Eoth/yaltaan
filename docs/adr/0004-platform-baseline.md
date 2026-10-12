@@ -1,7 +1,7 @@
 # ADR 0004 — Platform baseline
 
 - Date: 2026-10-12
-- Status: proposed — recommendation, awaiting the owner
+- Status: accepted (decision delegated by the owner to the recommendation, 2026-10-12)
 
 ## Context
 
@@ -47,7 +47,7 @@ Node lines on 2026-10-12: 22 in maintenance until 2027-04-30; 24 in active LTS, 
 
 ## Decision
 
-Recommended: option 2.
+Option 2.
 
 - An API is used inside the library only if it is in the baseline of the release being prepared; it is never polyfilled implicitly. When a missing API is truly needed, a ponyfill is isolated in `@yaltaan/core/compat/*` and never imported by another function of the library.
 - The documentation's native-to-library table states each API's status, so users know what they can rely on.

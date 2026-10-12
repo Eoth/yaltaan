@@ -1,7 +1,7 @@
 # ADR 0006 — Supported TypeScript, Angular and Node versions
 
 - Date: 2026-10-12
-- Status: proposed — recommendation, awaiting the owner
+- Status: accepted (decision delegated by the owner to the recommendation, 2026-10-12)
 
 ## Context
 
@@ -11,7 +11,7 @@ Facts checked on 2026-10-12:
 
 - TypeScript 7.0.2 (native compiler) is the current release; 6.0.3 is the last JavaScript-based one, maintained as `@typescript/typescript6`. TypeScript 7.0 does not yet support the editor tooling of embedded languages, Angular templates included: Angular projects stay on 6.0 for now.
 - Angular 22 (2026-06-03) is the current major; from 22 on, one major a year, each supported 24 months (12 active, 12 LTS). Angular 21 is in LTS until 2027-06, Angular 20 until 2026-11-28. Signal Forms is stable in 22 (`form()` and `validateStandardSchema()` are public API since 22.0) and accepts any Standard Schema validator.
-- Node: see ADR 0004 (22, 24 and 26 are the supported LTS lines from 2026-10-28).
+- Node: see ADR 0004 (22, 24 and 26 are the supported LTS lines from 2026-10-28). The packages are ESM only; a CommonJS application loads them through `require()` of an ES module, enabled by default since Node 22.12.0 (and 20.19.0): on an earlier 22.x, `require('@yaltaan/core')` fails.
 
 ## Options
 
@@ -26,11 +26,11 @@ Not measured: version facts from the npm registry (dist-tags, publication dates)
 
 ## Decision
 
-Recommended: option 2.
+Option 2.
 
 - Type declarations are tested under TypeScript 6.0 and 7.x, with and without `exactOptionalPropertyTypes`.
 - `@yaltaan/angular` requires Angular 22 or later and targets Signal Forms; an interop with Reactive Typed Forms is added only if a pilot project needs it.
-- Node: every LTS line not past its end of life at the date of a release (ADR 0004).
+- Node: every LTS line not past its end of life at the date of a release (ADR 0004), from the first release of the line that loads ES modules through `require()` by default: `"engines": { "node": ">=22.12" }` today.
 - Dropping a TypeScript, Angular or Node line is a major release, announced in the changelog.
 
 ## Consequences

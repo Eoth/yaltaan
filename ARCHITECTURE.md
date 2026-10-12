@@ -76,10 +76,10 @@ The authoritative list, with each verdict, is ROADMAP.md §4; a new exclusion ne
 
 ### Baseline
 
-Proposed in ADR 0004, awaiting the owner:
+Decided in ADR 0004:
 
 - browsers: "Baseline Widely available" (web-features) at the date of each major release;
-- Node: every LTS line that has not reached its end of life at that date (on 2026-10-12: 22, 24 and 26); recent Deno and Bun; workers and edge runtimes that conform to WinterTC, wherever no runtime-specific API is required;
+- Node: every LTS line that has not reached its end of life at that date (on 2026-10-12: 22, 24 and 26), from the first release that loads ES modules through `require()` by default (22.12, ADR 0006); recent Deno and Bun; workers and edge runtimes that conform to WinterTC, wherever no runtime-specific API is required;
 - Temporal is the exception, treated as a platform peer (§7.8, ADR 0005), because stable Safari and iOS do not ship it, nor do Node 22 and 24.
 
 An API is Widely available when every core browser (Chrome, Edge, Firefox and Safari, on desktop and mobile) has shipped it for at least 30 months. Node, Deno and Bun are outside Baseline, so an API must also exist on every supported Node line before the library relies on it.
@@ -352,7 +352,7 @@ Each domain is described by its scope, its decisions, what it does not do, and i
 **Decisions**
 
 - `globalThis.Temporal` is read at call time, never when the module loads. If it is absent, an explicit error names the recommended polyfill.
-- The library embeds no polyfill. The polyfill to recommend is proposed in ADR 0005, awaiting the owner: `temporal-polyfill` (1.0.5, MIT, 19.3 kB minified + brotli, maintained, up to date with the September 2026 specification) rather than `@js-temporal/polyfill` (0.5.1, 38.9 kB, no release since March 2025). The default entry of `temporal-polyfill` covers the ISO and Gregorian calendars; its full build adds the others.
+- The library embeds no polyfill. The polyfill the documentation recommends (ADR 0005) is `temporal-polyfill` (1.0.5, MIT, 19.3 kB minified + brotli, maintained, up to date with the September 2026 specification) rather than `@js-temporal/polyfill` (0.5.1, 38.9 kB, no release since March 2025). The default entry of `temporal-polyfill` covers the ISO and Gregorian calendars; its full build adds the others.
 - Tests run against the native implementation (Chrome, Firefox, Node 26, Deno, Bun) and against both polyfills, `@js-temporal/polyfill` for as long as it remains widely installed.
 
 **Does not do**: time-zone data, daylight saving computation, formatting (`Intl` does it).
@@ -367,7 +367,7 @@ Each domain is described by its scope, its decisions, what it does not do, and i
 
 - An API of functions, not methods, on the pattern of valibot: it is the condition for tree-shaking. valibot is the size reference to beat or to match.
 - An interpreted implementation, without `new Function` (compatibility with a strict Content Security Policy).
-- Unknown keys: `'strip' | 'reject' | 'passthrough'`. Default `strip`: a field added on the server must not break deployed clients. `reject` is recommended for untrusted input. This default is proposed and awaits the owner's confirmation (ROADMAP.md §3).
+- Unknown keys: `'strip' | 'reject' | 'passthrough'`. Default `strip`: a field added on the server must not break deployed clients. `reject` is recommended for untrusted input. Decided in ADR 0008.
 - A missing key, `undefined` and `null` are three distinct states; `optional` accepts absence, and the `exactOptional` option refuses an explicit `undefined`.
 - `codec(schema, encode)`: a transformation without `encode` is marked non-reversible at the type level (calling `encode` on it is a compile error).
 - `versioned({ 1: s1, 2: s2 }, migrations)`: chained migrations; an unknown version produces the issue `schema.unknown_version`.
@@ -418,12 +418,12 @@ aggregate(arrayPath, fn, check)  when(discriminantPath, cases)  withContext(ctx 
 
 - Priority target: Signal Forms, stable in Angular 22, which accepts Standard Schema through `validateStandardSchema`. Reactive Typed Forms as an interop for existing codebases, added when a pilot project needs it (ADR 0006).
 - `@yaltaan/rules` is exposed as Signal Forms validators; `@yaltaan/form` nodes are exposed as signals.
-- Supported versions follow the Angular support policy (active and LTS versions); proposed in ADR 0006, awaiting the owner: Angular 22 and later. From Angular 22 on, a major version ships every 12 months and is supported for 24 (12 active, 12 LTS).
+- Supported versions follow the Angular support policy (active and LTS versions); decided in ADR 0006: Angular 22 and later. From Angular 22 on, a major version ships every 12 months and is supported for 24 (12 active, 12 LTS).
 
 **React**
 
 - A `useSyncExternalStore` bridge; `useField(form, path, selector?)` to limit re-renders; no mandatory context provider.
-- Scope proposed in ADR 0007, awaiting the owner: Yaltaan's own hooks only. TanStack Form already reads Standard Schema natively, so a Yaltaan schema or rule works there without a bridge; a dedicated TanStack Form adapter is reconsidered only if the vertical slice measures glue code that users repeat.
+- Scope decided in ADR 0007: Yaltaan's own hooks only. TanStack Form already reads Standard Schema natively, so a Yaltaan schema or rule works there without a bridge; a dedicated TanStack Form adapter is reconsidered only if the vertical slice measures glue code that users repeat.
 
 **Vue**: later; the reactive node converts to a `customRef` (§5.5).
 
@@ -431,7 +431,7 @@ aggregate(arrayPath, fn, check)  when(discriminantPath, cases)  withContext(ctx 
 
 ## 8. TypeScript
 
-- Reference compiler: TypeScript 7, the native compiler, GA since July 2026 (7.0.2). Supported versions are proposed in ADR 0006, awaiting the owner: TypeScript 6.0 and 7.x, because Angular template tooling stays on TypeScript 6.0. Dropping a version line is a major release.
+- Reference compiler: TypeScript 7, the native compiler, GA since July 2026 (7.0.2). Supported versions (ADR 0006): TypeScript 6.0 and 7.x, because Angular template tooling stays on TypeScript 6.0. Dropping a version line is a major release.
 - TypeScript 7.0 ships without a compiler API. Tools that need one (such as the contract-tag lint of §5.6) run on `@typescript/typescript6`, the full 6.0 API installable side by side, or on their own parser.
 - Library settings: `strict`, `exactOptionalPropertyTypes`, `noUncheckedIndexedAccess`, `isolatedDeclarations` (explicit public return types: a stable API, and declaration files that are fast to produce).
 - Also `verbatimModuleSyntax` and `erasableSyntaxOnly`: sources and tests run directly through Node's type stripping, which requires type-only imports to say so, and Node 26 removed the transform of non-erasable syntax (`enum`, runtime `namespace`, parameter properties), so such syntax could never run there.

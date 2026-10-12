@@ -1,7 +1,7 @@
 # ADR 0005 — Temporal as a platform peer, and the polyfill to recommend
 
 - Date: 2026-10-12
-- Status: proposed — recommendation, awaiting the owner
+- Status: accepted (decision delegated by the owner to the recommendation, 2026-10-12)
 
 ## Context
 
@@ -26,7 +26,7 @@ Sizes measured on jsDelivr's minified ESM builds with their dependency chunks, c
 
 ## Decision
 
-Recommended: option 3, and `temporal-polyfill` as the polyfill named in errors and documentation. `@yaltaan/temporal` declares no dependency on either polyfill; its tests run against the native implementation (Node 26, Chromium, Firefox) and against `temporal-polyfill`, and against `@js-temporal/polyfill` as long as it remains widely installed.
+Option 3, and `temporal-polyfill` as the polyfill named in errors and documentation. `@yaltaan/temporal` declares no dependency on either polyfill; its tests run against the native implementation (Node 26, Chromium, Firefox) and against `temporal-polyfill`, and against `@js-temporal/polyfill` as long as it remains widely installed.
 
 ## Consequences
 
