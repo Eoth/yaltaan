@@ -21,7 +21,7 @@ Ce fichier est un **carnet de tickets**, pas un journal : le « pourquoi » d'un
 
 Aucun paquet publié, aucune API. Les mesures de référence (taille d'import, coût des types, comptage d'instructions) commencent avec les harnais T0.2, T0.3 et T0.4 ; les budgets d'`ARCHITECTURE.md` §9.1 restent des hypothèses jusqu'à leur calibration par T0.2.
 
-Outillage de développement (empreinte installée, à ne laisser croître que par ADR) : relevé à chaque changement du verrou par `npm ls --all` et la taille de `node_modules` ; chiffres de référence dans le message de commit qui change le verrou.
+Outillage de développement (empreinte installée, à ne laisser croître que par ADR 0003 ou suivant) : 6 paquets installés (TypeScript 7.0.2 et son binaire, Prettier 3.9.9, `@types/node` 22.20.5, `undici-types`), `node_modules` 43,4 Mo dont 28 Mo de compilateur natif ; verrou de 24 entrées tierces, MIT et Apache-2.0, aucun script d'installation (mesure du 2026-10-12, Windows x64). Porte : 64 tests ; verte sous Windows (Node 24.17.0) et Linux (Node 22.23.3). Relevé à chaque changement du verrou (`npm ls --all`, taille de `node_modules`), chiffres dans le message de commit.
 
 ## 2. Ordre d'exécution
 
@@ -77,13 +77,6 @@ Une décision réservée au propriétaire (nom, licence, API publique, contrat t
 ## 5. Tickets
 
 ### Lot 0 — Outillage
-
-#### T0.1 — Amorçage : dépôt, gouvernance, espace de travail vide, porte de vérification
-- **Pourquoi** : chaque ticket suivant se juge par la même porte ; une porte posée après coup laisse passer ce qu'elle aurait arrêté, et un nom interne entré dans l'historique ne s'en retire qu'en le réécrivant.
-- **Faire** : dépôt (`main`, extractions en LF, crochets versionnés activés par `git config core.hooksPath githooks`) ; documents publics (README, LICENSE, CHANGELOG, SECURITY, CONTRIBUTING, ARCHITECTURE) ; ADR 0001 à 0007 ; espace de travail npm avec `packages/core` vide et privé ; `tsconfig` de librairie ; Prettier épinglé ; `.npmrc` durci ; `scripts/verify.sh` et ses gardes (références internes, format du texte, taille des fichiers, hygiène des commentaires, tickets en double, scripts exécutables, message de commit, manifestes des paquets, licences et sources du verrou) avec leurs tests ; crochets pre-commit, commit-msg, pre-push ; CI GitHub (actions épinglées par SHA, permissions minimales, Node 22, 24 et 26) et Scorecard.
-- **Où** : racine, `scripts/`, `githooks/`, `.github/`, `docs/adr/`, `packages/core/`.
-- **Accepté si** : `bash scripts/verify.sh` affiche `OK` ; chaque garde vue rouge sur un cas fabriqué (tests de `scripts/`) ; actionlint sans constat ; `npm pack --dry-run` de `packages/core` ne liste que les fichiers voulus ; la CI rejouée sous Linux (WSL) verte.
-- **Taille** M · **Prio** P0
 
 #### T0.2 — Harnais de taille et budgets d'import calibrés
 - **Pourquoi** : la taille livrée est l'argument central ; un budget non mesuré est une promesse (`ARCHITECTURE.md` §9.1).
@@ -503,3 +496,4 @@ Une ligne par ticket : `identifiant — commit — résultat mesuré — itérat
 
 | Ticket | Commit | Résultat | Itérations |
 |---|---|---|---|
+| T0.1 | `chore: start the repository with guards on what a commit may name`, puis `style(scripts): keep the commit-message guard within 120 columns`, `build: set up the npm workspace and its TypeScript toolchain`, `ci: add the verification gate and the guards it runs`, `ci: run the gate, the Node matrix and a secret scan on GitHub`, `docs: describe the library, its decisions and its plan` (cités par sujet : commits de journée sur `wip`, rejoués ensuite) | Dépôt, porte `verify.sh` (18 étapes), 10 gardes et contrôles, crochets pre-commit/commit-msg/pre-push, CI (porte, Node 22/24/26, gitleaks, « CI passed ») et Scorecard, `ARCHITECTURE.md`, ADR 0001 à 0007, documents publics. 64 tests, chaque garde neutralisée vue rouge ; porte verte sous Windows et sous Linux (WSL, Node 22.23.3, npm 10.9.9) ; actions épinglées vérifiées par `git ls-remote`, sommes d'actionlint et de gitleaks égales à celles publiées ; outillage 6 paquets, 43,4 Mo. | 1 (M) |
