@@ -31,7 +31,7 @@ Tranche verticale d'abord : la colonne vertébrale (§5 d'`ARCHITECTURE.md`) se 
 |---|---|---|---|
 | 1 | 0 — Outillage | T0.1, T0.2, T0.7, T0.6, T0.5, T0.3, T0.4, T0.8, T0.9 | Un paquet vide qui passe toute la CI ; budgets calibrés contre les références. |
 | 2 | 1 — Colonne vertébrale | T1.1, T1.3, T1.2, T1.5, T1.4, T1.6 a, T1.6 b | Contrats v0 (`Result`, `Issue`, `Path`, `equal`, nœud réactif), propriétés testées. |
-| 3 | 2 — Tranche verticale | T2.1, T2.2, T2.3, T2.4 a, b, c, T2.5, T2.6, T0.10, T2.7 | Formulaire pilote de bout en bout, mesures, **ADR go/no-go de `form`**, gel des contrats ; première version expérimentale publiée avec provenance. |
+| 3 | 2 — Tranche verticale | T2.1, T2.2, T2.3, T2.4 a, b, c, T2.5, T0.13, T2.6, T0.10, T2.7 | Formulaire pilote de bout en bout, mesures, **ADR go/no-go de `form`**, gel des contrats ; première version expérimentale publiée avec provenance. |
 | 4 | 3 — Données | T3.1, T3.2, T3.3 a, b, T3.4, T3.5, T3.6 a, b, c, T3.7 a, b, T3.8 | Modules `@experimental`. |
 | 5 | 4 — Temporal | T4.1, T4.2, T4.3, T4.4 | Tests sur l'implémentation native et sur le polyfill recommandé. |
 | 6 | 5 — Schéma et règles complets | T5.1 a, b, T5.2, T5.3, T5.4, T5.5, T5.6, T5.7 | Interopérabilité Standard Schema vérifiée avec au moins deux moteurs tiers. |
@@ -156,6 +156,13 @@ Une décision réservée au propriétaire (nom, licence, API publique, contrat t
 - **Où** : `scripts/`, `ROADMAP.md`.
 - **Accepté si** : un ticket clos sans régénération fait échouer la porte ; sortie identique à l'octet sur deux exécutions.
 - **Taille** S · **Prio** P3
+
+#### T0.13 — Temps de compilation et d'exécution à froid des scénarios d'import
+- **Pourquoi** : les octets ne disent pas tout du coût d'un import ; un module qui travaille au chargement le fait payer à chaque démarrage d'application, et `ARCHITECTURE.md` §9.1 promet cette mesure sans qu'aucun harnais la fasse.
+- **Faire** : pour chaque scénario de `bench/size/` (références comprises), temps de compilation et d'exécution à froid du bundle minifié produit par le rapport de taille : isolat V8 neuf par mesure (Node), passes répétées, dispersion publiée ; méthode et seuils par ADR (comptage d'instructions de T0.4 si le chronomètre ne départage pas) ; résultat versionné à côté de `docs/size-baseline.tsv`.
+- **Où** : `scripts/`, `bench/size/`, `docs/`.
+- **Accepté si** : un scénario fabriqué qui exécute un travail coûteux au chargement dépasse le seuil et fait échouer la porte ; deux exécutions dans la dispersion mesurée ; temporal-polyfill mesuré comme référence.
+- **Taille** M · **Prio** P2 · **Dépend de** T0.2, T0.4
 
 ### Lot 1 — Colonne vertébrale
 
