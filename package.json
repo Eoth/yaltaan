@@ -27,8 +27,14 @@
     "format:check": "prettier --check ."
   },
   "devDependencies": {
+    "@preact/signals-core": "1.14.4",
+    "@rollup/wasm-node": "4.64.0",
     "@types/node": "22.20.5",
+    "es-toolkit": "1.52.0",
+    "esbuild-wasm": "0.28.2",
     "prettier": "3.9.9",
-    "typescript": "7.0.2"
+    "temporal-polyfill": "1.0.5",
+    "typescript": "7.0.2",
+    "valibot": "1.5.0"
   }
 }

@@ -23,8 +23,12 @@ export const ALLOWED_LICENSES: readonly string[] = ['MIT', 'Apache-2.0'];
 /**
  * Packages allowed to declare an install script (`"hasInstallScript": true`). Adding an entry requires an architecture
  * decision record that justifies the dependency and its script. An entry that no locked package needs fails the check.
+ * The repository's .npmrc runs no install script at all: an entry only accepts a package whose script is never needed.
+ *
+ * - fsevents: an optional dependency of Rollup, installed on macOS only for watch mode, which ships its compiled
+ *   binary (docs/adr/0009-size-harness-bundlers-and-references.md).
  */
-export const INSTALL_SCRIPT_ALLOWLIST: readonly string[] = [];
+export const INSTALL_SCRIPT_ALLOWLIST: readonly string[] = ['fsevents'];
 
 /** The only source a locked package may come from. */
 export const REGISTRY = 'https://registry.npmjs.org/';
@@ -239,6 +243,6 @@ if (import.meta.main) {
   const verdict = checkRepositoryLockfile(repositoryRoot);
   report(
     verdict.problems,
-    `${verdict.entries} lockfile entries: registry sources, sha512 checksums, allowed licences, no install script.`,
+    `${verdict.entries} lockfile entries: registry sources, sha512 checksums, allowed licences and install scripts.`,
   );
 }

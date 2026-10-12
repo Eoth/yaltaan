@@ -48,6 +48,11 @@ function lockfile(changes: Json = {}): Json {
     '': { name: 'yaltaan-workspace', license: 'MIT', workspaces: ['packages/*'], devDependencies: DEV_DEPENDENCIES },
     'node_modules/@yaltaan/core': { resolved: 'packages/core', link: true },
     'node_modules/@types/node': registryEntry('@types/node', '22.20.5', 'MIT'),
+    'node_modules/fsevents': registryEntry('fsevents', '2.3.3', 'MIT', {
+      optional: true,
+      os: ['darwin'],
+      hasInstallScript: true,
+    }),
     'node_modules/prettier': registryEntry('prettier', '3.9.9', 'MIT'),
     'node_modules/typescript': registryEntry('typescript', '7.0.2', 'Apache-2.0'),
     'node_modules/undici-types': registryEntry('undici-types', '6.21.0', 'MIT'),
@@ -72,9 +77,9 @@ test('a lockfile that follows every rule has no problem', () => {
   assert.deepEqual(checkLockfile(lockfile(), rootManifest()), []);
 });
 
-test('the allowlists are MIT and Apache-2.0, and no install script', () => {
+test('the allowlists are MIT and Apache-2.0, and the install script of fsevents alone', () => {
   assert.deepEqual(ALLOWED_LICENSES, ['MIT', 'Apache-2.0']);
-  assert.deepEqual(INSTALL_SCRIPT_ALLOWLIST, []);
+  assert.deepEqual(INSTALL_SCRIPT_ALLOWLIST, ['fsevents']);
 });
 
 test('the lockfile is a version 3 object with a "packages" map', () => {
@@ -117,7 +122,7 @@ test('every locked package carries an allowed licence, as an exact SPDX identifi
 });
 
 test('an allowed licence that no locked package carries is a stale allowance', () => {
-  const policy = { licenses: ['MIT', 'Apache-2.0', 'ISC'], installScripts: [] };
+  const policy = { licenses: ['MIT', 'Apache-2.0', 'ISC'], installScripts: INSTALL_SCRIPT_ALLOWLIST };
   assertOneProblem(checkLockfile(lockfile(), rootManifest(), policy), 'licence ISC is allowed but no locked package');
   // Removing the only Apache-2.0 package leaves its allowance unused: the workspace entries, skipped, never count.
   const problems = checkLockfile(lockfile({ 'node_modules/typescript': undefined }), rootManifest());
@@ -130,7 +135,7 @@ test('a locked package runs an install script only when allowed by name', () => 
     checkLockfile(lockfile(scripted), rootManifest()),
     'prettier is not in the install-script allowlist',
   );
-  const allowed = { licenses: ALLOWED_LICENSES, installScripts: ['prettier'] };
+  const allowed = { licenses: ALLOWED_LICENSES, installScripts: [...INSTALL_SCRIPT_ALLOWLIST, 'prettier'] };
   assert.deepEqual(checkLockfile(lockfile(scripted), rootManifest(), allowed), []);
   // A nested copy and an alias are judged by the name of the package they install.
   const nested = {
@@ -139,17 +144,20 @@ test('a locked package runs an install script only when allowed by name', () => 
     }),
     'node_modules/alias': registryEntry('real-name', '1.0.0', 'MIT', { name: 'real-name', hasInstallScript: true }),
   };
-  const nestedPolicy = { licenses: ALLOWED_LICENSES, installScripts: ['@scope/helper', 'real-name'] };
+  const nestedPolicy = {
+    licenses: ALLOWED_LICENSES,
+    installScripts: [...INSTALL_SCRIPT_ALLOWLIST, '@scope/helper', 'real-name'],
+  };
   assert.deepEqual(checkLockfile(lockfile(nested), rootManifest(), nestedPolicy), []);
   const problems = checkLockfile(lockfile(nested), rootManifest(), {
     ...nestedPolicy,
-    installScripts: ['@scope/helper'],
+    installScripts: [...INSTALL_SCRIPT_ALLOWLIST, '@scope/helper'],
   });
   assertOneProblem(problems, 'real-name is not in the install-script allowlist');
 });
 
 test('an install-script allowance that no locked package needs is stale', () => {
-  const policy = { licenses: ALLOWED_LICENSES, installScripts: ['esbuild'] };
+  const policy = { licenses: ALLOWED_LICENSES, installScripts: [...INSTALL_SCRIPT_ALLOWLIST, 'esbuild'] };
   assertOneProblem(checkLockfile(lockfile(), rootManifest(), policy), 'esbuild may run an install script but no');
 });
 
@@ -209,7 +217,7 @@ test('the repository check reads package.json and package-lock.json from disk', 
   fs.writeFileSync(path.join(root, 'packages', 'core', 'package.json'), JSON.stringify(coreManifest));
   assertOneProblem(checkRepositoryLockfile(root).problems, 'package-lock.json: cannot be read as JSON');
   fs.writeFileSync(path.join(root, 'package-lock.json'), JSON.stringify(lockfile()));
-  assert.deepEqual(checkRepositoryLockfile(root), { problems: [], entries: 7 });
+  assert.deepEqual(checkRepositoryLockfile(root), { problems: [], entries: 8 });
   const unlicensed = lockfile({ 'node_modules/prettier': registryEntry('prettier', '3.9.9', undefined) });
   fs.writeFileSync(path.join(root, 'package-lock.json'), JSON.stringify(unlicensed));
   assertOneProblem(checkRepositoryLockfile(root).problems, 'has licence undefined');

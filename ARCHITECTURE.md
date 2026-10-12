@@ -466,7 +466,7 @@ These figures are hypotheses, to calibrate by measurement against es-toolkit, va
 
 Also measured: gzip size, parse time and execution time at cold start.
 
-Forbidden import leaks, checked on real bundles (esbuild, Rollup, Vite):
+Forbidden import leaks, checked on real bundles by esbuild and by Rollup ([ADR 0009](docs/adr/0009-size-harness-bundlers-and-references.md)):
 
 - `omit` pulls in nothing from `temporal`, `schema`, `rules`, `form` or the adapters;
 - `@yaltaan/schema` pulls in neither `rules` nor `form`;
