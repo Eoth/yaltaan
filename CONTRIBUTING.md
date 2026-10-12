@@ -47,7 +47,7 @@ A verdict from an in-house checker counts only once a second, independent method
 
 ## Dependency policy
 
-- Zero runtime dependencies in `core`, `temporal`, `schema`, `rules` and `form`; an adapter has only a peer dependency on its framework.
+- Zero third-party runtime dependencies in `core`, `temporal`, `schema`, `rules` and `form`: a package depends only on the packages below it in the graph of ARCHITECTURE.md §6, at their exact workspace version; an adapter also has a peer dependency on its framework. The gate checks the graph on the manifests, the built modules and the type-only imports.
 - Development dependencies are pinned to exact versions, come from the npm registry only (never a git repository or a tarball URL), never run install scripts, and are at least 7 days old when picked: a compromised release is usually caught within days.
 - Every package in the lockfile has a licence from the allowlist that the gate checks: permissive licences only, never one of the GPL family.
 - `package-lock.json` is committed, and changes only in a commit that says why, with the installed footprint before and after.

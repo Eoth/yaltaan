@@ -11,6 +11,7 @@ import {
   checkPackageManifest,
   checkRepositoryManifests,
   checkRootManifest,
+  checkWorkspaceVersions,
 } from '../check-manifests.ts';
 import { listWorkspacePackages, parseWorkspaceGlobs, repositoryRoot } from '../lib/workspace.ts';
 
@@ -207,14 +208,52 @@ test('"files" is a non-empty list of paths', () => {
   }
 });
 
-test('a package has zero runtime dependency', () => {
+test('a package has zero third-party runtime dependency', () => {
   for (const folder of ['core', ...ADAPTER_PACKAGES]) {
     const dir = `packages/${folder}`;
-    for (const field of ['dependencies', 'optionalDependencies', 'bundleDependencies', 'bundledDependencies']) {
+    for (const field of ['optionalDependencies', 'bundleDependencies', 'bundledDependencies']) {
       const manifest = { ...validPackage(folder), [field]: {} };
       assertOneProblem(checkPackageManifest(manifest, dir), `"${field}" must be absent`);
     }
+    const thirdParty = { ...validPackage(folder), dependencies: { tslib: '2.8.1' } };
+    assertOneProblem(checkPackageManifest(thirdParty, dir), 'dependencies["tslib"] must be absent');
   }
+  assertOneProblem(checkPackageManifest({ ...validPackage(), dependencies: [] }, 'packages/core'), 'must be an object');
+});
+
+test('a package depends on the workspace packages below it, at an exact version, never as peers', () => {
+  const schema = { ...validPackage('schema'), dependencies: { '@yaltaan/core': '0.0.0' } };
+  assert.deepEqual(checkPackageManifest(schema, 'packages/schema'), []);
+  for (const spec of ['^0.0.0', '*', 'workspace:*', 'file:../core', 0]) {
+    const ranged = { ...validPackage('schema'), dependencies: { '@yaltaan/core': spec } };
+    assertOneProblem(checkPackageManifest(ranged, 'packages/schema'), 'not an exact version x.y.z');
+  }
+  const peer = { ...validPackage('react'), peerDependencies: { react: '>=19', '@yaltaan/form': '0.0.0' } };
+  assertOneProblem(checkPackageManifest(peer, 'packages/react'), 'peerDependencies["@yaltaan/form"]');
+});
+
+test('an internal dependency names a workspace package at the version it has', () => {
+  const core = validPackage('core');
+  const schema = { ...validPackage('schema'), dependencies: { '@yaltaan/core': '0.0.0' } };
+  assert.deepEqual(
+    checkWorkspaceVersions(
+      new Map<string, Manifest>([
+        ['packages/core', core],
+        ['packages/schema', schema],
+      ]),
+    ),
+    [],
+  );
+  const behind = new Map<string, Manifest>([
+    ['packages/core', { ...core, version: '0.1.0' }],
+    ['packages/schema', schema],
+  ]);
+  assertOneProblem(checkWorkspaceVersions(behind), 'not the workspace version "0.1.0"');
+  const unknown = { ...validPackage('rules'), dependencies: { '@yaltaan/kernel': '0.0.0' } };
+  assertOneProblem(
+    checkWorkspaceVersions(new Map([['packages/rules', unknown]])),
+    'dependencies["@yaltaan/kernel"] names no package of the workspace',
+  );
 });
 
 test('only the adapters have peer dependencies', () => {
@@ -254,7 +293,7 @@ test('every violation of a package manifest is reported, each with the file and 
   assert.ok(problems.every((problem) => problem.startsWith('packages/core/package.json: ')));
   assert.ok(problems[0]?.includes('"sideEffects"'));
   assert.ok(problems[1]?.includes('"license"'));
-  assert.ok(problems[2]?.includes('"dependencies"'));
+  assert.ok(problems[2]?.includes('dependencies["tslib"]'));
   assertOneProblem(checkPackageManifest('{}', 'packages/core'), 'packages/core/package.json: not a JSON object');
 });
 
@@ -310,6 +349,10 @@ test('the repository check reads every manifest from disk', () => {
   writeFile(root, 'package.json', JSON.stringify(without(validRoot(), 'type')));
   writeFile(root, 'packages/schema/package.json', JSON.stringify(validPackage('schema')));
   assertOneProblem(checkRepositoryManifests(root).problems, 'package.json: "type" must be "module"');
+  writeFile(root, 'package.json', JSON.stringify(validRoot()));
+  const schemaOnCore = { ...validPackage('schema'), dependencies: { '@yaltaan/core': '0.0.1' } };
+  writeFile(root, 'packages/schema/package.json', JSON.stringify(schemaOnCore));
+  assertOneProblem(checkRepositoryManifests(root).problems, 'not the workspace version "0.0.0"');
   fs.rmSync(path.join(root, 'package.json'));
   assertOneProblem(checkRepositoryManifests(root).problems, 'package.json: cannot be read as JSON');
 });

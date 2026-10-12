@@ -30,8 +30,9 @@ export const NPM_SCOPE = '@yaltaan';
 
 const EXACT_VERSION = /^(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)$/;
 
-// Every field through which a package pulls code at install time; peers are allowed to adapters only.
-const RUNTIME_DEPENDENCY_FIELDS = ['dependencies', 'optionalDependencies', 'bundleDependencies', 'bundledDependencies'];
+// Every field through which a package pulls third-party code at install time; peers are allowed to adapters only.
+// "dependencies" is read apart: it holds the edges of the graph between the workspace packages, and nothing else.
+const RUNTIME_DEPENDENCY_FIELDS = ['optionalDependencies', 'bundleDependencies', 'bundledDependencies'];
 const PEER_DEPENDENCY_FIELDS = ['peerDependencies', 'peerDependenciesMeta'];
 
 /** Problems of the root package.json, each prefixed with the file name. */
@@ -106,14 +107,24 @@ export function checkPackageManifest(manifest: unknown, dir: string): string[] {
 
   for (const field of RUNTIME_DEPENDENCY_FIELDS) {
     if (Object.hasOwn(manifest, field)) {
-      fail(`"${field}" must be absent: a package has zero runtime dependency`);
+      fail(`"${field}" must be absent: a package has zero third-party runtime dependency`);
     }
   }
+  problems.push(...checkInternalDependencies(manifest['dependencies'], file));
   if (!ADAPTER_PACKAGES.includes(folder)) {
     for (const field of PEER_DEPENDENCY_FIELDS) {
       if (Object.hasOwn(manifest, field)) {
         fail(`"${field}" must be absent: only the adapters (${ADAPTER_PACKAGES.join(', ')}) have peers`);
       }
+    }
+  }
+  const peers = manifest['peerDependencies'];
+  for (const name of isJsonObject(peers) ? Object.keys(peers) : []) {
+    if (name.startsWith(`${NPM_SCOPE}/`)) {
+      fail(
+        `peerDependencies["${name}"]: a package of the workspace is a dependency, never a peer, so that the size ` +
+          'report measures it inside the bundles of the packages above it',
+      );
     }
   }
   problems.push(...checkPinnedDevDependencies(manifest, file));
@@ -143,11 +154,46 @@ export function checkRepositoryManifests(root: string): ManifestsVerdict {
   const problems = checkRootManifest(rootRead.value);
   const listing = listWorkspacePackages(root, rootRead.value);
   problems.push(...listing.problems);
+  const manifests = new Map<string, JsonObject>();
   for (const workspacePackage of listing.packages) {
     const read = readJson(root, `${workspacePackage.dir}/package.json`);
     problems.push(...(read.ok ? checkPackageManifest(read.value, workspacePackage.dir) : [read.problem]));
+    if (read.ok && isJsonObject(read.value)) {
+      manifests.set(workspacePackage.dir, read.value);
+    }
   }
+  problems.push(...checkWorkspaceVersions(manifests));
   return { problems, packages: listing.packages.map((workspacePackage) => workspacePackage.dir) };
+}
+
+/**
+ * Problems of the internal dependencies across the workspace: each must name a workspace package, at its exact
+ * version. npm links a workspace package only when its version satisfies the spec; any other spec makes npm install
+ * the name from the registry instead, where nothing guarantees who published it. `manifests` maps each package folder
+ * (`packages/core`) to its manifest.
+ */
+export function checkWorkspaceVersions(manifests: ReadonlyMap<string, JsonObject>): string[] {
+  const versions = new Map<string, unknown>();
+  for (const manifest of manifests.values()) {
+    if (typeof manifest['name'] === 'string') {
+      versions.set(manifest['name'], manifest['version']);
+    }
+  }
+  const problems: string[] = [];
+  for (const [dir, manifest] of manifests) {
+    const dependencies = manifest['dependencies'];
+    for (const [name, spec] of isJsonObject(dependencies) ? Object.entries(dependencies) : []) {
+      if (!versions.has(name)) {
+        problems.push(`${dir}/package.json: dependencies["${name}"] names no package of the workspace`);
+      } else if (spec !== versions.get(name)) {
+        problems.push(
+          `${dir}/package.json: dependencies["${name}"] is ${JSON.stringify(spec)}, not the workspace version ` +
+            `${JSON.stringify(versions.get(name))}: npm would install the name from the registry instead`,
+        );
+      }
+    }
+  }
+  return problems;
 }
 
 function hasNodeRuntime(devEngines: unknown): boolean {
@@ -198,6 +244,26 @@ function checkPinnedDevDependencies(manifest: JsonObject, file: string): string[
         `${file}: devDependencies["${name}"] is ${JSON.stringify(spec)}, not an exact version x.y.z (no range, tag, ` +
         'URL, git or file spec)',
     );
+}
+
+// The only runtime dependencies are the packages below in the graph, each pinned to the exact version that the
+// workspace check compares with the package's own.
+function checkInternalDependencies(dependencies: unknown, file: string): string[] {
+  if (dependencies === undefined) {
+    return [];
+  }
+  if (!isJsonObject(dependencies)) {
+    return [`${file}: "dependencies" must be an object`];
+  }
+  return Object.entries(dependencies).flatMap(([name, spec]) => {
+    if (!name.startsWith(`${NPM_SCOPE}/`)) {
+      return [`${file}: dependencies["${name}"] must be absent: a package has zero third-party runtime dependency`];
+    }
+    if (typeof spec !== 'string' || !EXACT_VERSION.test(spec)) {
+      return [`${file}: dependencies["${name}"] is ${JSON.stringify(spec)}, not an exact version x.y.z`];
+    }
+    return [];
+  });
 }
 
 function checkNoInstallScripts(manifest: JsonObject, file: string): string[] {

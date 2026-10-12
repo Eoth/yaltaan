@@ -233,7 +233,7 @@ core ← temporal
 core ← schema ← rules ← form ← angular | react | vue
 ```
 
-Nothing points upward. Adapters never depend on one another.
+Nothing points upward. Adapters never depend on one another. A package may depend on every package below it in its chain; each edge is a `dependencies` entry of its package.json, at the exact version of the workspace package, and the code imports nothing its manifest does not declare.
 
 Concerns that get no package of their own:
 
@@ -544,7 +544,7 @@ An `@experimental` API can change in a minor version; a `@stable` API follows Se
 
 ## 11. Supply chain and publishing
 
-- Zero runtime dependencies in `core`, `temporal`, `schema`, `rules` and `form`. The adapters only have peer dependencies on their framework.
+- Zero third-party runtime dependencies in `core`, `temporal`, `schema`, `rules` and `form`: a package depends only on the packages below it in the graph (§6). The adapters also have peer dependencies on their framework.
 - Lockfile under version control; no Git dependency; licence check; vulnerability scan; secret detection.
 - The repository's `.npmrc` enforces part of this at install time: no dependency lifecycle script runs, versions are saved exactly, nothing is installed from Git, and a version published less than seven days ago is never picked.
 - Publishing through trusted publishing (OIDC) with npm provenance; an SBOM with every release; two-factor authentication mandatory.

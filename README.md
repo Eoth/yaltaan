@@ -24,7 +24,7 @@ Dependencies flow one way and never back: `core ← temporal`, and `core ← sch
 ## Principles
 
 - **Native-first.** A function exists only if the platform lacks it on the supported runtimes. Each candidate passes a relevance test: if the platform does it, the native equivalent is documented instead; if an existing library does it better on its own, Yaltaan writes it only when fitting it to the shared contracts brings a demonstrable gain; a composition of primitives starts as a documented recipe and enters the API only if it is common and hard to write correctly.
-- **Zero runtime dependencies** in `core`, `temporal`, `schema`, `rules` and `form`; an adapter has only a peer dependency on its framework.
+- **Zero third-party runtime dependencies** in `core`, `temporal`, `schema`, `rules` and `form`: a package depends only on the Yaltaan packages below it; an adapter also has a peer dependency on its framework.
 - **`Result` for expected failures, exceptions for bugs.** Invalid input returns a `Result`; an exception means the caller broke a documented precondition.
 - **Data-first API.** Free functions that take the data first, at most two positional arguments then an options object, never a positional boolean; no classes with chained methods, which bundlers cannot tree-shake. Strict by default, coercion on request.
 - **ESM only**, `"sideEffects": false`, an explicit `exports` entry per sub-path, and no code run when a module loads.
