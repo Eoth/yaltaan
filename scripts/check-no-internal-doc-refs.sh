@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Fails (exit 1) if a tracked file names a local development-notes file or folder that clones never receive
+# Fails (exit 1) if a file git does not ignore names a local development-notes file or folder that clones never receive
 # (CLAUDE.md, AGENTS.md, HANDOFF.md, HANDOFF-ARCHIVE.md, the guide/ folder at the repository root): a reference to
 # them points at text a reader will never have, so the reason it stood for must be written out in place instead.
 #
@@ -7,11 +7,13 @@
 # what the repository ships: a document names the change, the ticket or the iteration.
 #
 # Usage:
-#   scripts/check-no-internal-doc-refs.sh            checks the working tree (CI)
+#   scripts/check-no-internal-doc-refs.sh            checks the working tree, untracked files included (CI)
 #   scripts/check-no-internal-doc-refs.sh --cached   checks the index (pre-commit hook)
 set -uo pipefail
 
-mode_args=()
+# Untracked files count, unless ignored (the notes themselves are, by .git/info/exclude): the gate, run before a
+# commit, judges what that commit will add.
+mode_args=(--untracked)
 if [ "${1:-}" = "--cached" ]; then
   mode_args=(--cached)
 fi

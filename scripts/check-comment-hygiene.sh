@@ -5,17 +5,18 @@
 # commit message, where history keeps them without ageing in the code; a ticket number in a comment points at a line
 # of the roadmap that is gone once the ticket closes.
 #
-# Every line of every tracked file is judged, since the repository started clean. The comment part of a line starts
-# at `//` or `/*` at the start of the line or after white space, so that a URL (`https://`) in code is not taken for
-# one; a line whose first non-space character is `*` continues a block comment. In a shell script, a comment is a
-# line that starts with `#` after optional white space, the shebang aside.
+# Every line of every file git does not ignore is judged, since the repository started clean. The comment part of a
+# line starts at `//` or `/*` at the start of the line or after white space, so that a URL (`https://`) in code is not
+# taken for one; a line whose first non-space character is `*` continues a block comment. In a shell script, a
+# comment is a line that starts with `#` after optional white space, the shebang aside.
 #
 # Usage:
-#   scripts/check-comment-hygiene.sh            # the working tree (verify.sh, CI)
+#   scripts/check-comment-hygiene.sh            # the working tree, untracked files included (verify.sh, CI)
 #   scripts/check-comment-hygiene.sh --cached   # the index, i.e. the next commit (pre-commit hook)
 set -uo pipefail
 
-mode_args=()
+# Untracked files count, unless ignored: the gate, run before a commit, judges what that commit will add.
+mode_args=(--untracked)
 case "${1:-}" in
   "") ;;
   --cached) mode_args=(--cached) ;;

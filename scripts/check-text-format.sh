@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Format of every tracked text file, so that a diff shows only what changed and a file reads the same in every editor
-# and terminal:
+# Format of every text file git does not ignore, so that a diff shows only what changed and a file reads the same in
+# every editor and terminal:
 # - indentation in spaces, never a tab, by an even number of them; a line whose first non-space character is `*` is
 #   let through, since the continuation lines of a block comment (` * @param`) sit one space in;
 # - at most 120 characters per line outside Markdown, counted in characters, not bytes;
@@ -14,7 +14,7 @@
 # mawk and BWK awk whatever locales the machine has installed. A carriage return before the newline is not counted.
 #
 # Usage:
-#   scripts/check-text-format.sh            # the working tree (verify.sh, CI)
+#   scripts/check-text-format.sh            # the working tree, untracked files included (verify.sh, CI)
 #   scripts/check-text-format.sh --cached   # the index, i.e. the next commit (pre-commit hook)
 set -uo pipefail
 
@@ -34,8 +34,13 @@ tmp=$(mktemp -d) || exit 1
 trap 'rm -rf "$tmp"' EXIT
 
 # Text files as git sees them (-I leaves out what it takes for binary), NUL-separated so that any path is read
-# verbatim. Exit status 1 only means that no file matched.
-git grep --cached -I -l -z -e '' > "$tmp/all"
+# verbatim. Exit status 1 only means that no file matched. The working tree includes the files not added yet, unless
+# .gitignore or .git/info/exclude leaves them out: the gate, run before a commit, judges what that commit will add.
+if [ "$cached" = 1 ]; then
+  git grep --cached -I -l -z -e '' > "$tmp/all"
+else
+  git grep --untracked -I -l -z -e '' > "$tmp/all"
+fi
 rc=$?
 if [ "$rc" -gt 1 ]; then
   echo "error: cannot list the tracked text files" >&2

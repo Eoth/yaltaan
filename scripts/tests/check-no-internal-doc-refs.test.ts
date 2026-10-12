@@ -34,9 +34,18 @@ test('--cached judges the index, not the working tree', () => {
   withRepo({ 'a.txt': 'clean\n' }, (repo) => {
     repo.write({ 'b.txt': 'see HANDOFF.md\n' });
     repo.git('reset', '-q', '--', 'b.txt');
-    // b.txt is now untracked: neither mode sees it.
+    // b.txt is now untracked: the index does not hold it, the working tree does.
     assert.equal(repo.run(SCRIPT, '--cached').status, 0);
+    assert.equal(repo.run(SCRIPT).status, 1);
     repo.git('add', 'b.txt');
     assert.equal(repo.run(SCRIPT, '--cached').status, 1);
+  });
+});
+
+test('an ignored file is never judged', () => {
+  withRepo({ '.gitignore': 'notes/\n' }, (repo) => {
+    repo.write({ 'notes/b.txt': 'see HANDOFF.md\n' });
+    assert.equal(repo.run(SCRIPT).status, 0);
+    assert.equal(repo.run(SCRIPT, '--cached').status, 0);
   });
 });

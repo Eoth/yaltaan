@@ -47,6 +47,20 @@ test('text format: --cached judges the staged content', () => {
   });
 });
 
+test('text format and comment hygiene: the working tree includes untracked files, never ignored ones', () => {
+  withRepo({ 'a.ts': 'const x = 1;\n', '.gitignore': 'ignored/\n' }, (repo) => {
+    fs.writeFileSync(path.join(repo.dir, 'new.ts'), '\tconst y = 1;\n// see ROADMAP.md\n');
+    assert.equal(repo.run(TEXT).status, 1);
+    assert.equal(repo.run(COMMENTS).status, 1);
+    assert.equal(repo.run(TEXT, '--cached').status, 0);
+    assert.equal(repo.run(COMMENTS, '--cached').status, 0);
+    fs.mkdirSync(path.join(repo.dir, 'ignored'));
+    fs.renameSync(path.join(repo.dir, 'new.ts'), path.join(repo.dir, 'ignored', 'new.ts'));
+    assert.equal(repo.run(TEXT).status, 0);
+    assert.equal(repo.run(COMMENTS).status, 0);
+  });
+});
+
 test('comment hygiene: dates, roadmap references and ticket identifiers are refused in comments only', () => {
   assert.equal(
     status({ 'a.ts': "const url = 'https://example.org/2026-10-12';\n// Why: SameValueZero.\n" }, COMMENTS),
