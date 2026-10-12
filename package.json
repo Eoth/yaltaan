@@ -1,7 +1,7 @@
 {
-  "name": "pien-workspace",
+  "name": "yaltaan-workspace",
   "private": true,
-  "description": "Workspace of the Pien packages: a native-first TypeScript standard library for applications.",
+  "description": "Workspace of the Yaltaan packages: a native-first TypeScript standard library for applications.",
   "license": "MIT",
   "type": "module",
   "workspaces": [

@@ -1,6 +1,6 @@
 # Security policy
 
-Pien is a library: it runs inside the applications that import it, in browsers and on servers, and several of its functions are designed to read strings that may come from untrusted sources, such as paths in text form, numbers, dates in declared formats and any value checked by a schema. A flaw in it can therefore reach those applications. This page says what counts as a vulnerability and how to report one privately.
+Yaltaan is a library: it runs inside the applications that import it, in browsers and on servers, and several of its functions are designed to read strings that may come from untrusted sources, such as paths in text form, numbers, dates in declared formats and any value checked by a schema. A flaw in it can therefore reach those applications. This page says what counts as a vulnerability and how to report one privately.
 
 ## Threat surface
 
@@ -42,7 +42,7 @@ In scope, for example:
 
 Out of scope:
 
-- vulnerabilities in an application's own code, its framework or the Temporal polyfill it installs, with no demonstrated path through Pien: please report them upstream;
+- vulnerabilities in an application's own code, its framework or the Temporal polyfill it installs, with no demonstrated path through Yaltaan: please report them upstream;
 - resource use beyond a limit that the caller explicitly raised or removed;
 - bugs without a security impact, such as a wrong result on trusted input: please open a normal issue.
 

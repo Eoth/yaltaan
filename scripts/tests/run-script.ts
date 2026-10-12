@@ -36,7 +36,7 @@ export class FixtureRepo {
   readonly dir: string;
 
   constructor(files: Readonly<Record<string, string>>) {
-    this.dir = fs.mkdtempSync(path.join(os.tmpdir(), 'pien-test-'));
+    this.dir = fs.mkdtempSync(path.join(os.tmpdir(), 'yaltaan-test-'));
     this.git('init', '-q', '-b', 'main');
     this.git('config', 'core.autocrlf', 'false');
     this.git('config', 'user.name', 'test');

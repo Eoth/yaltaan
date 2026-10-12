@@ -1,10 +1,10 @@
-# @pienjs/core
+# @yaltaan/core
 
-The shared contracts and data primitives of Pien. The other packages build on them, and they depend on nothing.
+The shared contracts and data primitives of Yaltaan. The other packages build on them, and they depend on nothing.
 
 **Empty today**: the package holds no code yet, is private and is not published.
 
-It will hold one sub-path per domain, each imported on its own (`@pienjs/core/result`), so that an application ships only what it imports:
+It will hold one sub-path per domain, each imported on its own (`@yaltaan/core/result`), so that an application ships only what it imports:
 
 | Sub-path | Holds |
 |---|---|

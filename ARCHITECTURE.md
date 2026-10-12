@@ -1,8 +1,8 @@
 # Architecture
 
-Pien is a TypeScript standard library for applications: native-first, frugal, with zero runtime dependencies. This document is its design reference: the thesis, what is out of scope, the target platform, the contracts every package shares, the packages and their domains, and the rules for types, measurement, quality and the supply chain.
+Yaltaan is a TypeScript standard library for applications: native-first, frugal, with zero runtime dependencies. This document is its design reference: the thesis, what is out of scope, the target platform, the contracts every package shares, the packages and their domains, and the rules for types, measurement, quality and the supply chain.
 
-"Pien" and the npm scope `@pienjs` are a working name, proposed in ADR 0001 and awaiting the owner's validation.
+The product is named Yaltaan and its packages are published under the npm scope `@yaltaan` (ADR 0001).
 
 Status: no package is published and no API exists yet. ROADMAP.md tracks what is built and in which order; this document states the rules the code follows as it lands.
 
@@ -44,7 +44,7 @@ Success is not counted in functions shipped but in the amount of application cod
 
 The library does not try to beat es-toolkit on `chunk`, valibot on the size of an object schema, or Temporal on time zones. It wins when the pieces talk to each other: an `Issue` produced by a schema, a date parser, a relational rule or an imported server error has the same shape and the same `Path`; a typed `Path` serves `get`, `set`, `diff`, errors and form fields alike.
 
-The strongest differentiator is probably `@pienjs/rules` (§7.10): declarative relational rules ("at least N", "all or none", "required if…") that work in any form engine. No library does this well today.
+The strongest differentiator is probably `@yaltaan/rules` (§7.10): declarative relational rules ("at least N", "all or none", "required if…") that work in any form engine. No library does this well today.
 
 ### Relevance test for any new function
 
@@ -91,7 +91,7 @@ An API is Widely available when every core browser (Chrome, Edge, Firefox and Sa
 
 ### Rule
 
-A primitive ships only if it is absent from the baseline. When the native equivalent exists but is newer than the baseline, the library does not polyfill it implicitly: it documents the recommended polyfill and, if needed, provides an isolated ponyfill in `@pienjs/core/compat/*`, never imported by another function, so that only an application that imports it pays for it.
+A primitive ships only if it is absent from the baseline. When the native equivalent exists but is newer than the baseline, the library does not polyfill it implicitly: it documents the recommended polyfill and, if needed, provides an isolated ponyfill in `@yaltaan/core/compat/*`, never imported by another function, so that only an application that imports it pays for it.
 
 Consequence: until an API is Widely available at the date of a major release (and present on every supported Node line), the library neither uses it internally nor tells users to rely on it without a polyfill. Lazy iteration helpers, for instance, are written as generators that do not depend on Iterator helpers.
 
@@ -166,9 +166,9 @@ type Path = readonly PathSegment[];
 
 ### 5.4 Schema = Standard Schema
 
-- Every schema of `@pienjs/schema` implements the Standard Schema interface (`~standard`, interface version 1, specification 1.1.0). This gives immediate interoperability with the engines that consume it: TanStack Form reads it natively, react-hook-form through `standardSchemaResolver` from `@hookform/resolvers`, and Angular Signal Forms, stable in Angular 22, through `validateStandardSchema`.
+- Every schema of `@yaltaan/schema` implements the Standard Schema interface (`~standard`, interface version 1, specification 1.1.0). This gives immediate interoperability with the engines that consume it: TanStack Form reads it natively, react-hook-form through `standardSchemaResolver` from `@hookform/resolvers`, and Angular Signal Forms, stable in Angular 22, through `validateStandardSchema`.
 - The interface's types are copied into the library rather than taken as a dependency: the specification allows it, and the zero runtime dependency rule (§11) holds.
-- Conversely, `@pienjs/rules` and `@pienjs/form` accept any Standard Schema schema (zod, valibot, arktype…). No lock-in: Pien's own schema can lose a comparison without breaking the rest of the library.
+- Conversely, `@yaltaan/rules` and `@yaltaan/form` accept any Standard Schema schema (zod, valibot, arktype…). No lock-in: Yaltaan's own schema can lose a comparison without breaking the rest of the library.
 
 ### 5.5 Reactive node
 
@@ -215,15 +215,15 @@ By default, functions do not mutate. A mutating variant exists only if a benchma
 ## 6. Packages
 
 ```text
-@pienjs/core       data primitives, one subpath per domain:
+@yaltaan/core       data primitives, one subpath per domain:
                    /result /path /object /collection /string /number /equal /diff /async /cache /reactive
-@pienjs/temporal   layer over Temporal (provided by the platform or by a polyfill the application installs)
-@pienjs/schema     schemas and codecs (Standard Schema, interface version 1)
-@pienjs/rules      declarative relational rules, pure, usable without a form
-@pienjs/form       form state on reactive nodes; conditional on the go/no-go decision that closes the vertical slice
-@pienjs/angular    Signal Forms bridge (plus Reactive Typed Forms interop)
-@pienjs/react      useSyncExternalStore bridge
-@pienjs/vue        later
+@yaltaan/temporal   layer over Temporal (provided by the platform or by a polyfill the application installs)
+@yaltaan/schema     schemas and codecs (Standard Schema, interface version 1)
+@yaltaan/rules      declarative relational rules, pure, usable without a form
+@yaltaan/form       form state on reactive nodes; conditional on the go/no-go decision that closes the vertical slice
+@yaltaan/angular    Signal Forms bridge (plus Reactive Typed Forms interop)
+@yaltaan/react      useSyncExternalStore bridge
+@yaltaan/vue        later
 ```
 
 Allowed dependency graph, checked in CI (for example with dependency-cruiser):
@@ -237,11 +237,11 @@ Nothing points upward. Adapters never depend on one another.
 
 Concerns that get no package of their own:
 
-- codecs, serialization, transformation and mapping → `@pienjs/schema` (a codec is a bidirectional schema);
+- codecs, serialization, transformation and mapping → `@yaltaan/schema` (a codec is a bidirectional schema);
 - immutable updates, snapshots → `core/object` and `core/diff`;
-- configuration → a recipe on `@pienjs/schema` (no dedicated module);
+- configuration → a recipe on `@yaltaan/schema` (no dedicated module);
 - localization → out of scope, `Intl` recipes;
-- security primitives → spread where they apply: refusal of dangerous keys in `core/path`, `redact` in `core/object`, size and depth limits in the parse options of `@pienjs/schema`.
+- security primitives → spread where they apply: refusal of dangerous keys in `core/path`, `redact` in `core/object`, size and depth limits in the parse options of `@yaltaan/schema`.
 
 Publishing: `"sideEffects": false`, an explicit `exports` field per subpath, no barrel that re-exports another package, no code executed when a module loads other than declarations.
 
@@ -339,7 +339,7 @@ Each domain is described by its scope, its decisions, what it does not do, and i
 - A maximum size is mandatory: no cache is unbounded by default. An unbounded cache is a deferred memory leak.
 - Strict, deterministic LRU eviction.
 
-### 7.8 `@pienjs/temporal`
+### 7.8 `@yaltaan/temporal`
 
 **Scope**, what Temporal does not provide:
 
@@ -347,7 +347,7 @@ Each domain is described by its scope, its decisions, what it does not do, and i
 - Parsing of declared formats (`parsePlainDate('01/02/03', { format: 'dd/MM/yy', pivotYear: 1970 })` → `Result`). Without an explicit format, an ambiguous string produces the issue `temporal.ambiguous_format`, never a guess.
 - Boundary conversions `fromDate(date, { timeZone })` / `toDate(...)` that require an explicit time zone.
 - `startOf`/`endOf` (week with an explicit `firstDayOfWeek`, quarter…), business days with an injected holiday calendar (no data embedded).
-- `@pienjs/schema` codecs for the Temporal types, in a separate subpath so as not to create a dependency from `temporal` to `schema`.
+- `@yaltaan/schema` codecs for the Temporal types, in a separate subpath so as not to create a dependency from `temporal` to `schema`.
 
 **Decisions**
 
@@ -359,7 +359,7 @@ Each domain is described by its scope, its decisions, what it does not do, and i
 
 **Invariants**: `parse(format(x, f), f)` equals `x` for every declared format; intersection is commutative and associative; the `union` of disjoint intervals keeps the total measure.
 
-### 7.9 `@pienjs/schema` (schemas and codecs)
+### 7.9 `@yaltaan/schema` (schemas and codecs)
 
 **Scope**: primitives, `literal`, `enum`, `object`, `record`, `array`, `tuple`, `map`, `set`, `union`, discriminated union, `intersect`, `lazy` (recursive and mutually recursive), `optional`, `nullable`, `default`, refinements, transformations, bidirectional codecs, versioning and migrations, `partial`/`deepPartial`/`pick`/`omit`/`extend`.
 
@@ -378,7 +378,7 @@ Each domain is described by its scope, its decisions, what it does not do, and i
 
 **Invariants**: determinism (the same input and the same context give the same result); `decode(encode(x))` equals `x` for a reversible codec; `parse` of an already valid value without transformation is idempotent.
 
-### 7.10 `@pienjs/rules`: the differentiator
+### 7.10 `@yaltaan/rules`: the differentiator
 
 Declarative relational rules over a set of values. Pure and stateless, they return targeted `Issue`s.
 
@@ -393,11 +393,11 @@ aggregate(arrayPath, fn, check)  when(discriminantPath, cases)  withContext(ctx 
 
 - Each rule declares its dependencies (the paths it reads) and its targets (the paths where it places issues). This enables targeted invalidation, cycle detection and explanation ("why is this field required?"). In test mode, the actual reads are traced and compared with the declared dependencies.
 - Whether a field is required is a derived state (`requiredPaths(rules, values)`), never a mutation of other rules. No rule modifies a rule, so no loop is possible.
-- A rule is also usable as a Standard Schema refinement. It therefore works in Angular Signal Forms or TanStack Form without `@pienjs/form`.
+- A rule is also usable as a Standard Schema refinement. It therefore works in Angular Signal Forms or TanStack Form without `@yaltaan/form`.
 
 **Invariants**: determinism; a rule reads only its declared dependencies; `atLeast(n)` is monotonic (filling one more field cannot create an error).
 
-### 7.11 `@pienjs/form`: conditional
+### 7.11 `@yaltaan/form`: conditional
 
 **Structure**: a tree of reactive nodes (`field`, `group`, `array`, `record`), a raw value and a parsed value (through a codec), derived states (`dirty`, `touched`, `pending`, `submitted`, `disabled`, `readonly`, `hidden`), local and server issues.
 
@@ -405,25 +405,25 @@ aggregate(arrayPath, fn, check)  when(discriminantPath, cases)  withContext(ctx 
 
 - Arrays: each element has a stable identity (a business key or a generated one). Issues and state are attached to the identity, not to the index, and therefore follow moves.
 - Async validation: each run carries a generation token and an `AbortSignal`. A result whose token is no longer current is ignored. Removing a node aborts its validations. `pending` is derived: true while a run of the current generation is in progress.
-- Targeted revalidation through the dependency graph of `@pienjs/rules`, never global by default.
+- Targeted revalidation through the dependency graph of `@yaltaan/rules`, never global by default.
 - Server errors: import of `Issue`s with their `Path` (`{ key }` segments included); a `clearOn: 'change' | 'submit'` policy; categories (validation, business, authorization, transport) carried by the namespace of the code.
 - Drafts: a snapshot is the raw value plus the schema version; restoration goes through the schema's migrations.
 - Multi-step forms: a step is a subset of paths; validating a step is filtering issues by path. No dedicated engine.
 
-**Condition for existing**: Angular Signal Forms is stable since Angular 22, and TanStack Form covers React. The added value of `@pienjs/form` over these engines must be demonstrated by the vertical slice (see ROADMAP.md), then recorded by a decision record. If the answer is no, the product is `schema` + `rules` + bridges to the native engines, which remains a strong product and a much smaller one.
+**Condition for existing**: Angular Signal Forms is stable since Angular 22, and TanStack Form covers React. The added value of `@yaltaan/form` over these engines must be demonstrated by the vertical slice (see ROADMAP.md), then recorded by a decision record. If the answer is no, the product is `schema` + `rules` + bridges to the native engines, which remains a strong product and a much smaller one.
 
 ### 7.12 Adapters
 
 **Angular**
 
 - Priority target: Signal Forms, stable in Angular 22, which accepts Standard Schema through `validateStandardSchema`. Reactive Typed Forms as an interop for existing codebases, added when a pilot project needs it (ADR 0006).
-- `@pienjs/rules` is exposed as Signal Forms validators; `@pienjs/form` nodes are exposed as signals.
+- `@yaltaan/rules` is exposed as Signal Forms validators; `@yaltaan/form` nodes are exposed as signals.
 - Supported versions follow the Angular support policy (active and LTS versions); proposed in ADR 0006, awaiting the owner: Angular 22 and later. From Angular 22 on, a major version ships every 12 months and is supported for 24 (12 active, 12 LTS).
 
 **React**
 
 - A `useSyncExternalStore` bridge; `useField(form, path, selector?)` to limit re-renders; no mandatory context provider.
-- Scope proposed in ADR 0007, awaiting the owner: Pien's own hooks only. TanStack Form already reads Standard Schema natively, so a Pien schema or rule works there without a bridge; a dedicated TanStack Form adapter is reconsidered only if the vertical slice measures glue code that users repeat.
+- Scope proposed in ADR 0007, awaiting the owner: Yaltaan's own hooks only. TanStack Form already reads Standard Schema natively, so a Yaltaan schema or rule works there without a bridge; a dedicated TanStack Form adapter is reconsidered only if the vertical slice measures glue code that users repeat.
 
 **Vue**: later; the reactive node converts to a `customRef` (§5.5).
 
@@ -460,7 +460,7 @@ These figures are hypotheses, to calibrate by measurement against es-toolkit, va
 | 10 core primitives | ≤ 1.5 kB |
 | Reactive graph | ≤ 1 kB |
 | Schema of a login form (object, string, email, minLength) | ≤ 1.5 kB |
-| 5 rules of `@pienjs/rules` | ≤ 1 kB |
+| 5 rules of `@yaltaan/rules` | ≤ 1 kB |
 | `form` + `rules` + `schema` on a realistic form | ≤ 7 kB |
 | Angular or React adapter (framework excluded) | ≤ 1.5 kB |
 
@@ -469,13 +469,13 @@ Also measured: gzip size, parse time and execution time at cold start.
 Forbidden import leaks, checked on real bundles (esbuild, Rollup, Vite):
 
 - `omit` pulls in nothing from `temporal`, `schema`, `rules`, `form` or the adapters;
-- `@pienjs/schema` pulls in neither `rules` nor `form`;
+- `@yaltaan/schema` pulls in neither `rules` nor `form`;
 - an adapter pulls in no other adapter.
 
 ### 9.2 Benchmarks
 
 - Tool: mitata or tinybench. Runtimes: Node LTS, Bun, Deno; browsers through Playwright for the critical hot paths.
-- Mandatory comparison: native / best reference library / Pien.
+- Mandatory comparison: native / best reference library / Yaltaan.
 - Seeded datasets: micro, realistic, pathological (deep, wide, very large).
 - Published with: CPU, OS, runtime and version, command, dataset, warmup, iterations, dispersion (p50, p99, spread).
 - Regression detection in CI: shared runners are noisy, hence a dedicated machine or instruction counting. A regression above 5 % on a hot path blocks, unless a decision record documents it (5 % is a hypothesis to calibrate by measurement).

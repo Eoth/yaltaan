@@ -26,7 +26,7 @@ export const LIFECYCLE_INSTALL_SCRIPTS: readonly string[] = [
 /** Package folders that adapt a framework: the framework is a peer, installed by the application, never by us. */
 export const ADAPTER_PACKAGES: readonly string[] = ['angular', 'react', 'vue'];
 
-export const NPM_SCOPE = '@pienjs';
+export const NPM_SCOPE = '@yaltaan';
 
 const EXACT_VERSION = /^(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)$/;
 

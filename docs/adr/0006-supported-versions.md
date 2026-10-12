@@ -29,7 +29,7 @@ Not measured: version facts from the npm registry (dist-tags, publication dates)
 Recommended: option 2.
 
 - Type declarations are tested under TypeScript 6.0 and 7.x, with and without `exactOptionalPropertyTypes`.
-- `@pienjs/angular` requires Angular 22 or later and targets Signal Forms; an interop with Reactive Typed Forms is added only if a pilot project needs it.
+- `@yaltaan/angular` requires Angular 22 or later and targets Signal Forms; an interop with Reactive Typed Forms is added only if a pilot project needs it.
 - Node: every LTS line not past its end of life at the date of a release (ADR 0004).
 - Dropping a TypeScript, Angular or Node line is a major release, announced in the changelog.
 

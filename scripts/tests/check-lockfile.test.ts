@@ -44,13 +44,13 @@ function registryEntry(name: string, version: string, license: unknown, changes:
 /** A lockfile like the one of this repository; `changes` replaces entries of "packages", `undefined` removes one. */
 function lockfile(changes: Json = {}): Json {
   const packages: Json = {
-    '': { name: 'pien-workspace', license: 'MIT', workspaces: ['packages/*'], devDependencies: DEV_DEPENDENCIES },
-    'node_modules/@pienjs/core': { resolved: 'packages/core', link: true },
+    '': { name: 'yaltaan-workspace', license: 'MIT', workspaces: ['packages/*'], devDependencies: DEV_DEPENDENCIES },
+    'node_modules/@yaltaan/core': { resolved: 'packages/core', link: true },
     'node_modules/@types/node': registryEntry('@types/node', '22.20.5', 'MIT'),
     'node_modules/prettier': registryEntry('prettier', '3.9.9', 'MIT'),
     'node_modules/typescript': registryEntry('typescript', '7.0.2', 'Apache-2.0'),
     'node_modules/undici-types': registryEntry('undici-types', '6.21.0', 'MIT'),
-    'packages/core': { name: '@pienjs/core', version: '0.0.0', license: 'MIT' },
+    'packages/core': { name: '@yaltaan/core', version: '0.0.0', license: 'MIT' },
     ...changes,
   };
   for (const [location, entry] of Object.entries(packages)) {
@@ -58,7 +58,7 @@ function lockfile(changes: Json = {}): Json {
       delete packages[location];
     }
   }
-  return { name: 'pien-workspace', lockfileVersion: 3, requires: true, packages };
+  return { name: 'yaltaan-workspace', lockfileVersion: 3, requires: true, packages };
 }
 
 /** Asserts that `problems` holds exactly one problem, and that it contains `fragment`. */
@@ -153,10 +153,10 @@ test('an install-script allowance that no locked package needs is stale', () => 
 });
 
 test('workspace packages are skipped, any other link is refused, nested dependencies are checked', () => {
-  const unlicensedWorkspace = { 'packages/core': { name: '@pienjs/core', version: '0.0.0' } };
+  const unlicensedWorkspace = { 'packages/core': { name: '@yaltaan/core', version: '0.0.0' } };
   assert.deepEqual(checkLockfile(lockfile(unlicensedWorkspace), rootManifest()), []);
   for (const resolved of ['../outside', 'packages/core/nested', 'packages', 'vendor/core', undefined]) {
-    const link = { 'node_modules/@pienjs/core': { resolved, link: true } };
+    const link = { 'node_modules/@yaltaan/core': { resolved, link: true } };
     assertOneProblem(checkLockfile(lockfile(link), rootManifest()), 'only a workspace package may be linked');
   }
   const nested = { 'packages/core/node_modules/left-pad': registryEntry('left-pad', '1.3.0', 'WTFPL') };
@@ -200,7 +200,7 @@ test('every violation of a lockfile is reported', () => {
 });
 
 test('the repository check reads package.json and package-lock.json from disk', () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'pien-test-'));
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'yaltaan-test-'));
   temporaryRoots.push(root);
   fs.writeFileSync(path.join(root, 'package.json'), JSON.stringify(rootManifest()));
   assertOneProblem(checkRepositoryLockfile(root).problems, 'package-lock.json: cannot be read as JSON');

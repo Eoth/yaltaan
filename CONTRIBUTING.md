@@ -42,7 +42,7 @@ A verdict from an in-house checker counts only once a second, independent method
   - type tests: the inference expected, and the compilation errors expected with `@ts-expect-error`, their messages read for clarity;
   - bundle checks: import leaks between packages, side effects, size budgets;
   - type-checking cost, measured on a reference project with and without the library, within a budget;
-  - benchmarks on hot paths, comparing native code, the best reference library and Pien, with the method published;
+  - benchmarks on hot paths, comparing native code, the best reference library and Yaltaan, with the method published;
   - adapters tested on real components.
 
 ## Dependency policy
@@ -82,4 +82,4 @@ A request that goes against a principle is answered with the principle it touche
 
 ## Licensing
 
-Pien is under the [MIT license](LICENSE). By contributing, you agree that your contribution is licensed under the same terms: inbound equals outbound, and no contributor licence agreement is asked.
+Yaltaan is under the [MIT license](LICENSE). By contributing, you agree that your contribution is licensed under the same terms: inbound equals outbound, and no contributor licence agreement is asked.

@@ -1,7 +1,7 @@
 # ADR 0001 — Product name and npm scope
 
 - Date: 2026-10-12
-- Status: proposed — recommendation, awaiting the owner
+- Status: accepted (the owner's choice, 2026-10-12)
 
 ## Context
 
@@ -13,30 +13,26 @@ A name that describes the function ("ts-stdlib", "app-utils") makes a weak trade
 
 1. **Do nothing: keep a placeholder.** Blocks the first publication, and every document written meanwhile carries a name that will change.
 2. **A descriptive name.** Immediately understood, but a weak trademark (see Context), and every common descriptive npm name is taken.
-3. **Pien, under the scope `@pien`.** Short, pronounceable in French and in English, not descriptive (its sense is "clear", what the contracts aim to be). The scope is held by a third-party account (see Measurements).
-4. **Pien, under the scope `@pienjs`.** Same name; the scope adds the suffix that several JavaScript projects already use for their organisation (`@vitejs` for Vite), and it is free.
+3. **Pien, under the scope `@pienjs`.** The first working name; its own scope `@pien` is held by a third-party account, hence the suffix.
+4. **Yaltaan, under the scope `@yaltaan`.** Not descriptive, pronounceable in French and in English; its sense, shared help, is the thesis of the library (one model shared by every domain). The scope bearing the product's own name is free, so no suffix is needed; `@yaltaanjs` and `@yaltaants`, also free, are not needed.
 
 ## Measurements
 
-Checked on 2026-10-12 against the public registry and DNS:
+Checked on 2026-10-12 against the public registry and the GitHub API (`https://registry.npmjs.org/-/org/<name>/package` answers `{"error":"Scope not found"}` for a free scope, `{}` or a package map for a taken one):
 
-- `https://registry.npmjs.org/-/org/pien/package` answers `{}`: the scope exists and holds no package, so it belongs to someone; `https://registry.npmjs.org/-/org/pienjs/package` answers `{"error":"Scope not found"}`: free.
-- `https://registry.npmjs.org/pien` answers 404: the unscoped package name is free.
-- `https://api.github.com/users/pienjs` answers 404: no GitHub user or organisation of that name.
-- `pien.dev`, `pien.com`, `pienjs.dev`, `pienjs.com`: no DNS answer; registration status not checked (needs a WHOIS lookup).
-- Not done: trademark searches (INPI, EUIPO, WIPO, classes 9 and 42).
+- `@yaltaan`, `@yaltaanjs`, `@yaltaants`: free. The unscoped package `yaltaan`: free (404). GitHub user or organisation `yaltaan`: free (404).
+- `@pien`: taken (an account without packages); `@pienjs`: free.
+- Not done: trademark searches (INPI, EUIPO, WIPO, classes 9 and 42) and domain registration, left to the owner before the first publication.
 
 ## Decision
 
-Recommended: option 4. The product is named **Pien**; its packages are `@pienjs/core`, `@pienjs/temporal`, `@pienjs/schema`, `@pienjs/rules`, `@pienjs/form`, `@pienjs/angular`, `@pienjs/react`, `@pienjs/vue`.
-
-Until the owner accepts this record and the trademark searches come back clear, every package stays `"private": true` and nothing is published, registered or bought under the name.
+Option 4. The product is named **Yaltaan**; its packages are `@yaltaan/core`, `@yaltaan/temporal`, `@yaltaan/schema`, `@yaltaan/rules`, `@yaltaan/form`, `@yaltaan/angular`, `@yaltaan/react`, `@yaltaan/vue`. Every package stays `"private": true` until the release workflow exists and the trademark searches come back clear.
 
 ## Consequences
 
-- Manifests, documentation and imports in examples use `@pienjs/…` from now on; a rename before the first publication is a mechanical replacement.
-- The unscoped `pien` package can be reserved later if a meta-package or a CLI ever needs it.
+- Manifests, documentation and examples use `@yaltaan/…`; the repository folder and the GitHub repository are named `yaltaan`.
+- The npm organisation `yaltaan` and the unscoped package `yaltaan` should be reserved by the owner early, before someone else takes them.
 
 ## Review condition
 
-A trademark conflict found by the searches; the `@pien` scope becoming available; or the owner choosing another name.
+A trademark conflict found by the searches.

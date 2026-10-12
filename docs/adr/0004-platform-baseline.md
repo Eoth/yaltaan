@@ -49,7 +49,7 @@ Node lines on 2026-10-12: 22 in maintenance until 2027-04-30; 24 in active LTS, 
 
 Recommended: option 2.
 
-- An API is used inside the library only if it is in the baseline of the release being prepared; it is never polyfilled implicitly. When a missing API is truly needed, a ponyfill is isolated in `@pienjs/core/compat/*` and never imported by another function of the library.
+- An API is used inside the library only if it is in the baseline of the release being prepared; it is never polyfilled implicitly. When a missing API is truly needed, a ponyfill is isolated in `@yaltaan/core/compat/*` and never imported by another function of the library.
 - The documentation's native-to-library table states each API's status, so users know what they can rely on.
 - When an API becomes Widely available, the library function it replaces is deprecated, then removed in the next major release.
 - Temporal is the one exception, treated as a platform peer (ADR 0005).

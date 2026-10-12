@@ -24,7 +24,7 @@ after(() => {
 });
 
 function temporaryRoot(): string {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'pien-test-'));
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'yaltaan-test-'));
   temporaryRoots.push(root);
   return root;
 }
@@ -37,7 +37,7 @@ function writeFile(root: string, relative: string, content: string): void {
 
 function validRoot(): Manifest {
   return {
-    name: 'pien-workspace',
+    name: 'yaltaan-workspace',
     private: true,
     type: 'module',
     workspaces: ['packages/*'],
@@ -49,7 +49,7 @@ function validRoot(): Manifest {
 
 function validPackage(name = 'core'): Manifest {
   return {
-    name: `@pienjs/${name}`,
+    name: `@yaltaan/${name}`,
     version: '0.0.0',
     private: true,
     license: 'MIT',
@@ -164,10 +164,10 @@ test('a package manifest that follows every rule has no problem', () => {
 });
 
 test('the package name is the scope and the folder name', () => {
-  for (const name of ['@pienjs/schema', 'core', '@pien/core', '@pienjs/Core', undefined]) {
+  for (const name of ['@yaltaan/schema', 'core', '@yaltaanjs/core', '@yaltaan/Core', undefined]) {
     assertOneProblem(checkPackageManifest({ ...validPackage(), name }, 'packages/core'), '"name"');
   }
-  assertOneProblem(checkPackageManifest(validPackage(), 'packages/schema'), 'expected "@pienjs/schema"');
+  assertOneProblem(checkPackageManifest(validPackage(), 'packages/schema'), 'expected "@yaltaan/schema"');
 });
 
 test('a package is an ES module without side effects, under MIT, with its Node engines', () => {

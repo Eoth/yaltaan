@@ -1,8 +1,8 @@
-# Pien
+# Yaltaan
 
-Pien is a native-first TypeScript standard library for applications. Its value is not a long list of functions but one shared model — `Result`, `Issue`, `Path`, schemas that implement [Standard Schema](https://standardschema.dev), and reactive nodes — used the same way by every domain: an error from a schema, a date parser, a relational rule or a server has the same shape and the same `Path`, and one typed `Path` serves reading, writing, diffs, errors and form fields alike. It ships only what the platform lacks, has no runtime dependency, and its contracts (mutation, complexity, errors, import cost) are written down, checked in CI and measured.
+Yaltaan is a native-first TypeScript standard library for applications. Its value is not a long list of functions but one shared model — `Result`, `Issue`, `Path`, schemas that implement [Standard Schema](https://standardschema.dev), and reactive nodes — used the same way by every domain: an error from a schema, a date parser, a relational rule or a server has the same shape and the same `Path`, and one typed `Path` serves reading, writing, diffs, errors and form fields alike. It ships only what the platform lacks, has no runtime dependency, and its contracts (mutation, complexity, errors, import cost) are written down, checked in CI and measured.
 
-**Status: pre-release. Nothing is published and there is no API yet. "Pien" is a working name pending a trademark check: the name and the npm scope `@pienjs` may still change before the first release.**
+**Status: pre-release. Nothing is published and there is no API yet.**
 
 ## Packages
 
@@ -10,18 +10,18 @@ Dependencies flow one way and never back: `core ← temporal`, and `core ← sch
 
 | Package | Status | Purpose |
 |---|---|---|
-| [`@pienjs/core`](packages/core/README.md) | empty | The shared contracts (`Result`, `Issue`, `Path`, reactive nodes) and the data primitives the platform lacks: objects, collections, strings, numbers, deep equality, diff, async control, bounded caches. |
-| `@pienjs/temporal` | planned | What Temporal does not provide: intervals, parsing of declared formats, `Date` conversions that require an explicit time zone. Temporal itself comes from the platform or from a polyfill the application installs. |
-| `@pienjs/schema` | planned | Schemas and reversible codecs implementing Standard Schema v1, usable by any engine that reads it. |
-| `@pienjs/rules` | planned | Declarative relational rules (required if, all or none, at least n of) that work in any form engine, with or without `@pienjs/form`. |
-| `@pienjs/form` | planned | A form model on reactive nodes, conditional: built only if a vertical slice on a real form shows its value over Angular Signal Forms and TanStack Form, a go/no-go decision recorded in [docs/adr/](docs/adr/). |
-| `@pienjs/angular` | planned | Bridge to Angular Signal Forms. |
-| `@pienjs/react` | planned | Bridge to React through `useSyncExternalStore`. |
-| `@pienjs/vue` | planned | Bridge to Vue, later, after the Angular and React ones. |
+| [`@yaltaan/core`](packages/core/README.md) | empty | The shared contracts (`Result`, `Issue`, `Path`, reactive nodes) and the data primitives the platform lacks: objects, collections, strings, numbers, deep equality, diff, async control, bounded caches. |
+| `@yaltaan/temporal` | planned | What Temporal does not provide: intervals, parsing of declared formats, `Date` conversions that require an explicit time zone. Temporal itself comes from the platform or from a polyfill the application installs. |
+| `@yaltaan/schema` | planned | Schemas and reversible codecs implementing Standard Schema v1, usable by any engine that reads it. |
+| `@yaltaan/rules` | planned | Declarative relational rules (required if, all or none, at least n of) that work in any form engine, with or without `@yaltaan/form`. |
+| `@yaltaan/form` | planned | A form model on reactive nodes, conditional: built only if a vertical slice on a real form shows its value over Angular Signal Forms and TanStack Form, a go/no-go decision recorded in [docs/adr/](docs/adr/). |
+| `@yaltaan/angular` | planned | Bridge to Angular Signal Forms. |
+| `@yaltaan/react` | planned | Bridge to React through `useSyncExternalStore`. |
+| `@yaltaan/vue` | planned | Bridge to Vue, later, after the Angular and React ones. |
 
 ## Principles
 
-- **Native-first.** A function exists only if the platform lacks it on the supported runtimes. Each candidate passes a relevance test: if the platform does it, the native equivalent is documented instead; if an existing library does it better on its own, Pien writes it only when fitting it to the shared contracts brings a demonstrable gain; a composition of primitives starts as a documented recipe and enters the API only if it is common and hard to write correctly.
+- **Native-first.** A function exists only if the platform lacks it on the supported runtimes. Each candidate passes a relevance test: if the platform does it, the native equivalent is documented instead; if an existing library does it better on its own, Yaltaan writes it only when fitting it to the shared contracts brings a demonstrable gain; a composition of primitives starts as a documented recipe and enters the API only if it is common and hard to write correctly.
 - **Zero runtime dependencies** in `core`, `temporal`, `schema`, `rules` and `form`; an adapter has only a peer dependency on its framework.
 - **`Result` for expected failures, exceptions for bugs.** Invalid input returns a `Result`; an exception means the caller broke a documented precondition.
 - **Data-first API.** Free functions that take the data first, at most two positional arguments then an options object, never a positional boolean; no classes with chained methods, which bundlers cannot tree-shake. Strict by default, coercion on request.
