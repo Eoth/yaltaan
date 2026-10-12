@@ -5,6 +5,7 @@
 // Usage: node scripts/check-lockfile.ts
 import {
   isJsonObject,
+  listWorkspacePackages,
   parseWorkspaceGlobs,
   readJson,
   readRootManifest,
@@ -137,6 +138,48 @@ export interface LockfileVerdict {
 }
 
 /** Reads the real repository's package.json and package-lock.json. */
+/** Fields npm copies from a workspace package.json into the lockfile entry of that package. */
+export const WORKSPACE_FIELDS: readonly string[] = [
+  'name',
+  'version',
+  'license',
+  'engines',
+  'dependencies',
+  'peerDependencies',
+  'optionalDependencies',
+];
+
+/**
+ * Problems between the lockfile entries of the workspace packages and their package.json files (folder -> parsed
+ * manifest). `npm ci` neither rewrites the lockfile nor compares these copies, and `npm ls` does not either: a field
+ * changed in a package.json alone (its engines, its name) would stay stale in the lockfile without this check.
+ */
+export function checkWorkspaceEntries(lock: unknown, manifests: ReadonlyMap<string, unknown>): string[] {
+  const packages = isJsonObject(lock) ? lock['packages'] : undefined;
+  if (!isJsonObject(packages)) {
+    return [];
+  }
+  const problems: string[] = [];
+  for (const [dir, manifest] of manifests) {
+    const entry = packages[dir];
+    if (!isJsonObject(entry) || !isJsonObject(manifest)) {
+      problems.push(`${FILE}: packages["${dir}"] is missing: run npm install`);
+      continue;
+    }
+    for (const field of WORKSPACE_FIELDS) {
+      const locked = JSON.stringify(entry[field]);
+      const declared = JSON.stringify(manifest[field]);
+      if (locked !== declared) {
+        problems.push(
+          `${FILE}: packages["${dir}"].${field} is ${locked ?? 'absent'}, but ${dir}/package.json says ` +
+            `${declared ?? 'nothing'}: run npm install`,
+        );
+      }
+    }
+  }
+  return problems;
+}
+
 export function checkRepositoryLockfile(root: string): LockfileVerdict {
   const manifestRead = readRootManifest(root);
   const lockRead = readJson(root, FILE);
@@ -145,8 +188,18 @@ export function checkRepositoryLockfile(root: string): LockfileVerdict {
     return { problems, entries: 0 };
   }
   const packages = isJsonObject(lockRead.value) ? lockRead.value['packages'] : undefined;
+  const listing = listWorkspacePackages(root, manifestRead.value);
+  const manifests = new Map<string, unknown>();
+  for (const workspacePackage of listing.packages) {
+    const read = readJson(root, `${workspacePackage.dir}/package.json`);
+    manifests.set(workspacePackage.dir, read.ok ? read.value : undefined);
+  }
   return {
-    problems: checkLockfile(lockRead.value, manifestRead.value),
+    problems: [
+      ...checkLockfile(lockRead.value, manifestRead.value),
+      ...listing.problems,
+      ...checkWorkspaceEntries(lockRead.value, manifests),
+    ],
     entries: isJsonObject(packages) ? Object.keys(packages).length : 0,
   };
 }

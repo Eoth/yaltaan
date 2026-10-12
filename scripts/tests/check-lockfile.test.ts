@@ -11,6 +11,7 @@ import {
   REGISTRY,
   checkLockfile,
   checkRepositoryLockfile,
+  checkWorkspaceEntries,
 } from '../check-lockfile.ts';
 import { repositoryRoot } from '../lib/workspace.ts';
 
@@ -203,6 +204,9 @@ test('the repository check reads package.json and package-lock.json from disk', 
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'yaltaan-test-'));
   temporaryRoots.push(root);
   fs.writeFileSync(path.join(root, 'package.json'), JSON.stringify(rootManifest()));
+  fs.mkdirSync(path.join(root, 'packages', 'core'), { recursive: true });
+  const coreManifest = { name: '@yaltaan/core', version: '0.0.0', license: 'MIT', private: true };
+  fs.writeFileSync(path.join(root, 'packages', 'core', 'package.json'), JSON.stringify(coreManifest));
   assertOneProblem(checkRepositoryLockfile(root).problems, 'package-lock.json: cannot be read as JSON');
   fs.writeFileSync(path.join(root, 'package-lock.json'), JSON.stringify(lockfile()));
   assert.deepEqual(checkRepositoryLockfile(root), { problems: [], entries: 7 });
@@ -226,4 +230,15 @@ test('run as a program, the check reads this repository and prints its verdict',
   });
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.stdout, /^ok: \d+ lockfile entries: registry sources, sha512 checksums, allowed licences/);
+});
+
+test('the lockfile entry of a workspace package matches its package.json', () => {
+  const entry = { name: '@yaltaan/core', version: '0.0.0', license: 'MIT', engines: { node: '>=22.12' } };
+  const lock = { lockfileVersion: 3, packages: { 'packages/core': entry } };
+  assert.deepEqual(checkWorkspaceEntries(lock, new Map([['packages/core', { ...entry, private: true }]])), []);
+  const stale = checkWorkspaceEntries(lock, new Map([['packages/core', { ...entry, engines: { node: '>=24' } }]]));
+  assert.equal(stale.length, 1);
+  assert.match(stale[0] ?? '', /engines/);
+  const missing = checkWorkspaceEntries(lock, new Map([['packages/schema', entry]]));
+  assert.match(missing[0] ?? '', /packages\["packages\/schema"\] is missing/);
 });
