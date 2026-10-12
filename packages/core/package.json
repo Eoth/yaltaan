@@ -1,0 +1,19 @@
+{
+  "name": "@pienjs/core",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Shared contracts and data primitives of Pien: Result, Issue, Path, deep equality, reactive nodes.",
+  "license": "MIT",
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist/",
+    "!dist/**/*.test.*"
+  ],
+  "engines": {
+    "node": ">=22"
+  }
+}

@@ -1,0 +1,34 @@
+{
+  "name": "pien-workspace",
+  "private": true,
+  "description": "Workspace of the Pien packages: a native-first TypeScript standard library for applications.",
+  "license": "MIT",
+  "type": "module",
+  "workspaces": [
+    "packages/*"
+  ],
+  "devEngines": {
+    "runtime": {
+      "name": "node",
+      "version": ">=22.18.0",
+      "onFail": "error"
+    },
+    "packageManager": {
+      "name": "npm",
+      "version": ">=10.9.0",
+      "onFail": "error"
+    }
+  },
+  "scripts": {
+    "verify": "bash scripts/verify.sh",
+    "typecheck": "tsc -b",
+    "test": "node --import ./scripts/test-env.ts --test --test-reporter=spec \"**/*.test.ts\"",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
+  },
+  "devDependencies": {
+    "@types/node": "22.20.5",
+    "prettier": "3.9.9",
+    "typescript": "7.0.2"
+  }
+}

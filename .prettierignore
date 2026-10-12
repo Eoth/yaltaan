@@ -1,0 +1,7 @@
+# Markdown keeps one line per paragraph and its tables unpadded (checked by scripts/check-text-format.sh); npm writes
+# package.json and package-lock.json itself.
+*.md
+package.json
+package-lock.json
+node_modules/
+dist/
