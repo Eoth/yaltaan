@@ -1,11 +1,17 @@
 #!/usr/bin/env bash
 # Judges what the commit will record (the index), with the checks that are fast enough to run on every commit; the
-# full gate, scripts/verify.sh, runs before every push. Enable the hooks of this folder once per clone with:
+# full gate, scripts/verify.sh, runs before every push and in CI. Enable the hooks of this folder once per clone with:
 #   git config core.hooksPath githooks
 set -euo pipefail
 
 repo_root="$(git rev-parse --show-toplevel)"
-"$repo_root/scripts/check-no-internal-doc-refs.sh" --cached
+cd "$repo_root"
+bash scripts/check-no-internal-doc-refs.sh --cached
+bash scripts/check-text-format.sh --cached
+bash scripts/check-comment-hygiene.sh --cached
+bash scripts/check-file-size.sh --cached
+bash scripts/check-roadmap-tickets.sh --cached
+bash scripts/check-executable-scripts.sh
 
 # A clone may add checks of its own, never versioned, in .git/hooks/pre-commit.local.
 local_hook="$(git rev-parse --git-dir)/hooks/pre-commit.local"
