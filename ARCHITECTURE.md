@@ -180,7 +180,7 @@ interface ReadableNode<T> {
 ```
 
 - This is exactly the contract of React's `useSyncExternalStore`, and it converts trivially to an Angular signal or a Vue `customRef`.
-- Internal implementation: a push-pull graph, lazy and glitch-free, with explicit batching, topological evaluation order and cycle detection at construction. Budget: at most 1 kB minified + brotli (a hypothesis to calibrate by measurement).
+- Internal implementation: a push-pull graph, lazy and glitch-free, with explicit batching, topological evaluation order and cycle detection at construction. Budget: at most 1 kB minified + brotli, below the reactive libraries measured ([ADR 0010](docs/adr/0010-import-size-budgets.md)).
 - No global scheduler: batching is carried by an instance or by an explicit call.
 - Why not reuse the framework's signals: the core's semantics (timing, glitches, effects) would then depend on the framework, which contradicts the framework-agnostic principle.
 - Why not wait for TC39 Signals: the proposal is still at Stage 1, where it has stood since April 2024. The interface is designed to switch to it the day it is standardized.
@@ -352,7 +352,7 @@ Each domain is described by its scope, its decisions, what it does not do, and i
 **Decisions**
 
 - `globalThis.Temporal` is read at call time, never when the module loads. If it is absent, an explicit error names the recommended polyfill.
-- The library embeds no polyfill. The polyfill the documentation recommends (ADR 0005) is `temporal-polyfill` (1.0.5, MIT, 19.3 kB minified + brotli, maintained, up to date with the September 2026 specification) rather than `@js-temporal/polyfill` (0.5.1, 38.9 kB, no release since March 2025). The default entry of `temporal-polyfill` covers the ISO and Gregorian calendars; its full build adds the others.
+- The library embeds no polyfill. The polyfill the documentation recommends (ADR 0005) is `temporal-polyfill` (1.0.5, MIT, 19.3 kB minified + brotli as jsDelivr builds it and 17.9 kB once an application bundler tree-shakes it, ADR 0009; maintained, up to date with the September 2026 specification) rather than `@js-temporal/polyfill` (0.5.1, 38.9 kB as jsDelivr builds it, no release since March 2025). The default entry of `temporal-polyfill` covers the ISO and Gregorian calendars; its full build adds the others.
 - Tests run against the native implementation (Chrome, Firefox, Node 26, Deno, Bun) and against both polyfills, `@js-temporal/polyfill` for as long as it remains widely installed.
 
 **Does not do**: time-zone data, daylight saving computation, formatting (`Intl` does it).
@@ -450,23 +450,15 @@ aggregate(arrayPath, fn, check)  when(discriminantPath, cases)  withContext(ctx 
 
 The energy consumed by a JavaScript function cannot be measured reliably. What is measured is the proxies that determine it: bytes transferred and parsed, CPU time, allocations and garbage collection, retained memory. Public communication is about these proxies, never about grams of CO₂.
 
-### 9.1 Initial budgets
+### 9.1 Import budgets
 
-These figures are hypotheses, to calibrate by measurement against es-toolkit, valibot and temporal-polyfill in the same harness; calibrated values replace them through a decision record.
+Every import scenario of `bench/size/` is bundled for real, by esbuild and by Rollup, minified with `"sideEffects"` honoured, then measured raw, gzip and brotli. [docs/size-baseline.tsv](docs/size-baseline.tsv) records each figure, and a byte that moves fails the gate until the baseline is rewritten by a commit that explains the change ([ADR 0009](docs/adr/0009-size-harness-bundlers-and-references.md)). Reference libraries are measured by the same harness: es-toolkit (primitives), valibot (schemas), temporal-polyfill (the polyfill of ADR 0005), `@preact/signals-core` (reactive graph).
 
-| Import scenario | Minified + brotli |
-|---|---|
-| 1 core primitive (for example `omit`) | ≤ 0.3 kB |
-| 10 core primitives | ≤ 1.5 kB |
-| Reactive graph | ≤ 1 kB |
-| Schema of a login form (object, string, email, minLength) | ≤ 1.5 kB |
-| 5 rules of `@yaltaan/rules` | ≤ 1 kB |
-| `form` + `rules` + `schema` on a realistic form | ≤ 7 kB |
-| Angular or React adapter (framework excluded) | ≤ 1.5 kB |
+The budgets, in bytes minified and brotli-compressed under every bundler, live in one file, [bench/size/budgets.tsv](bench/size/budgets.tsv). Each is the tighter of the design's first hypothesis and one and a half times the reference for the same scenario; the temporal layer gets a tenth of the polyfill it sits on; the rules, the form and the adapters, which no library matches, keep their hypothesis until the pilot form is measured against the same form written with Angular Signal Forms alone ([ADR 0010](docs/adr/0010-import-size-budgets.md)).
 
-Also measured: gzip size, parse time and execution time at cold start.
+Parse time and execution time at cold start are to be measured for the same scenarios.
 
-Forbidden import leaks, checked on real bundles by esbuild and by Rollup ([ADR 0009](docs/adr/0009-size-harness-bundlers-and-references.md)):
+A scenario's bundle holds code only from the packages the scenario imports and their declared dependencies, under both bundlers; in particular:
 
 - `omit` pulls in nothing from `temporal`, `schema`, `rules`, `form` or the adapters;
 - `@yaltaan/schema` pulls in neither `rules` nor `form`;

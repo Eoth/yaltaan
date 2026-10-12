@@ -54,6 +54,8 @@ Une décision réservée au propriétaire (nom, licence, API publique, contrat t
 | Versions prises en charge (ADR 0006) | TypeScript, Angular, Node côté utilisateur ? | **Acté le 2026-10-12, délégué par le propriétaire à la recommandation** : TypeScript 6.0 et 7.x (l'outillage des gabarits Angular reste sur 6.0, selon l'annonce de TypeScript 7) ; Angular ≥ 22 pour le pont Signal Forms (stable en 22, qui accepte Standard Schema par `validateStandardSchema`), versions actives et LTS ensuite ; Node ≥ 22.12 (première version de la ligne 22 qui charge un module ESM par `require()` sans drapeau : une librairie ESM seule en dépend pour ses utilisateurs CommonJS). Une ligne retirée = version majeure. |
 | React (ADR 0007) | Hooks propres seulement, ou aussi un adapter TanStack Form ? | **Acté le 2026-10-12, délégué par le propriétaire à la recommandation** : hooks propres seulement (`useSyncExternalStore`). TanStack Form lit déjà Standard Schema nativement : un schéma ou une règle de Yaltaan y fonctionne sans pont. Un adapter dédié n'est rouvert que si T2.6 mesure du code de colle répété chez l'utilisateur. |
 | Clés inconnues (ADR 0008) | Défaut des schémas d'objet : `strip`, `reject` ou `passthrough` ? | **Acté le 2026-10-12, délégué par le propriétaire à la recommandation** : `strip`, comme le cadrage le proposait et comme le font Zod 4 et Valibot : un champ ajouté côté serveur ne casse pas les clients déployés, et aucune clé non déclarée ne traverse sans contrôle ; `reject` recommandé et documenté pour les entrées non fiables. |
+| Harnais de taille (ADR 0009) | Avec quels bundlers mesurer les imports, et contre quelles références ? | **Décidé (choix technique interne)** : esbuild et Rollup dans leurs versions WebAssembly (`esbuild-wasm` 0.28.2, `@rollup/wasm-node` 4.64.0 : mêmes octets sur tout système, aucun binaire par plateforme, sorties identiques aux versions natives), résolveur propre pour Rollup vérifié contre esbuild à chaque exécution, minification par esbuild des deux sorties ; références es-toolkit, valibot, temporal-polyfill et `@preact/signals-core`, recoupées à l'octet par bundlejs.com. Seul script d'installation admis : fsevents (macOS, jamais exécuté). Coût : 25,5 Mo installés, 11 entrées de verrou, 4 s par porte. |
+| Budgets d'import (ADR 0010) | Quelles valeurs remplacent les hypothèses d'`ARCHITECTURE.md` §9.1 ? | **Décidé (choix technique interne)** : le plus serré de l'hypothèse et de 1,5 × la référence, arrondi à 10 o : `omit` 150 o (es-toolkit 97), dix primitives 1 000 o (661), graphe réactif 1 000 o (`@preact/signals-core` 1 562), schéma de connexion 1 500 o (valibot 1 285) ; couche Temporal 1 790 o, un dixième du polyfill ; règles, formulaire et adapters gardent leur hypothèse jusqu'à la mesure du pilote (T2.6). Source unique : `bench/size/budgets.tsv`. |
 | Projet pilote | Quel formulaire réel pour la tranche verticale ? | **À fournir par le propriétaire** : un formulaire métier réel d'une application Angular qu'il connaît (multi-étapes, tableau dynamique, requis conditionnel, validation serveur), anonymisé et reproduit dans `examples/` ; à défaut, un formulaire administratif public et documenté de même complexité. Bloque T2.1. |
 
 ## 4. Non-objectifs (exclusions motivées)
@@ -196,7 +198,7 @@ Une décision réservée au propriétaire (nom, licence, API publique, contrat t
 - **Pourquoi** : tout le formulaire en dépend, et sa sémantique ne doit pas dépendre d'un framework (`ARCHITECTURE.md` §5.5).
 - **Faire** : (a) nœuds source et dérivés, `get` et `subscribe` (le contrat de `useSyncExternalStore`), graphe push-pull paresseux sans glitch, batch explicite porté par une instance ou un appel, ordre topologique, aucun ordonnanceur global ; (b) détection des cycles à la construction, propriétés (aucun glitch observable sous entrelacements fast-check, aucun abonné qui fuit), conversion en signal Angular et en `customRef` Vue documentée.
 - **Où** : `packages/core/src/reactive/`.
-- **Accepté si** : (a) tests de glitch et de paresse ; (b) cycle refusé à la construction, budget ≤ 1 ko brotli (hypothèse, calibrée par T0.2).
+- **Accepté si** : (a) tests de glitch et de paresse ; (b) cycle refusé à la construction, budget ≤ 1 000 o brotli tenu (scénario `yaltaan/core-reactive`, ADR 0010).
 - **Taille** L → (a) M, (b) M · **Prio** P0 · **Dépend de** T0.5
 
 ### Lot 2 — Tranche verticale
@@ -212,7 +214,7 @@ Une décision réservée au propriétaire (nom, licence, API publique, contrat t
 - **Pourquoi** : premier domaine branché sur `Result`, `Issue` et `Path`, et porte d'entrée vers les moteurs tiers.
 - **Faire** : `object`, `string`, `number`, `optional`, `nullable`, `array`, `literal`, union discriminée ; API en fonctions (tree-shaking) ; interface `~standard` (types recopiés, aucune dépendance) ; clés inconnues selon §3 ; clé absente, `undefined` et `null` distincts ; validation qui ne mute jamais l'entrée.
 - **Où** : `packages/schema/`.
-- **Accepté si** : un schéma consommé par `validateStandardSchema` d'Angular et par TanStack Form sans pont ; déterminisme ; budget du schéma de connexion tenu face à valibot (T0.2).
+- **Accepté si** : un schéma consommé par `validateStandardSchema` d'Angular et par TanStack Form sans pont ; déterminisme ; budget du schéma de connexion tenu (scénario `yaltaan/schema-login`, 1 500 o, ADR 0010).
 - **Taille** M · **Prio** P0 · **Dépend de** T1.1, T1.2, T1.3
 
 #### T2.3 — Cinq règles relationnelles
@@ -238,9 +240,9 @@ Une décision réservée au propriétaire (nom, licence, API publique, contrat t
 
 #### T2.6 — Pilote de bout en bout et mesures
 - **Pourquoi** : la décision go/no-go se prend sur des chiffres.
-- **Faire** : pilote complet sur la tranche ; mesures : octets livrés, temps, re-rendus, coût des types, lignes de code de l'application, face au même formulaire écrit avec Signal Forms seul (et avec les seuls `schema` et `rules`).
+- **Faire** : pilote complet sur la tranche ; mesures : octets livrés, temps, re-rendus, coût des types, lignes de code de l'application, face au même formulaire écrit avec Signal Forms seul (et avec les seuls `schema` et `rules`) ; budgets de `rules`, de `form` et des adapters recalibrés sur cette mesure par un ADR qui remplace leurs hypothèses (ADR 0010).
 - **Où** : `examples/pilot/`, `bench/`.
-- **Accepté si** : chaque scénario de T2.1 vert ; tableau de mesures reproductible.
+- **Accepté si** : chaque scénario de T2.1 vert ; tableau de mesures reproductible ; plus aucun budget `hypothesis` dans `bench/size/budgets.tsv`.
 - **Taille** M · **Prio** P0 · **Dépend de** T2.5
 
 #### T2.7 — Décision go/no-go de `form` et gel des contrats

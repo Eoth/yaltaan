@@ -2,3 +2,12 @@
 # every bundler of scripts/size-report.ts. A decision record sets each budget, and only a new one changes it. The
 # basis is the reference scenario a budget was calibrated against, or "hypothesis" until one is measured.
 scenario	brotli	basis
+yaltaan/core-omit	150	references/es-toolkit-omit
+yaltaan/core-ten-primitives	1000	references/es-toolkit-ten-primitives
+yaltaan/core-reactive	1000	references/preact-signals
+yaltaan/schema-login	1500	references/valibot-login
+yaltaan/temporal-layer	1790	references/temporal-polyfill
+yaltaan/rules-five	1000	hypothesis
+yaltaan/form-realistic	7000	hypothesis
+yaltaan/angular-adapter	1500	hypothesis
+yaltaan/react-adapter	1500	hypothesis
