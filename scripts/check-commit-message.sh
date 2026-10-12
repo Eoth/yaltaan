@@ -37,8 +37,8 @@ fi
 if printf '%s\n' "$message" | grep -n -i -E '^(co-authored-by|assisted-by|generated-by):' >&2; then
   fail "a commit names no co-author or generator trailer (line above)"
 fi
-if printf '%s\n' "$message" | grep -n -i -E 'CLAUDE\.md|AGENTS\.md|HANDOFF(-ARCHIVE)?\.md|(^|[^[:alnum:]_./-])guide/' >&2
-then
+internal_names='CLAUDE\.md|AGENTS\.md|HANDOFF(-ARCHIVE)?\.md|(^|[^[:alnum:]_./-])guide/'
+if printf '%s\n' "$message" | grep -n -i -E "$internal_names" >&2; then
   fail "the message names local development notes that no clone receives (line above)"
 fi
 if printf '%s\n' "$message" | grep -n -i -w -E 'sessions?' >&2; then
