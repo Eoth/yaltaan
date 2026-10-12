@@ -1,0 +1,69 @@
+name: Scorecard
+
+# OpenSSF Scorecard rates the repository's supply-chain practices (pinned dependencies, token permissions, security
+# policy, fuzzing, branch protection, code review...) from its files and from the GitHub API.
+#
+# Nothing leaves GitHub while the repository is private:
+# - `publish_results` sends the result to the OpenSSF API, which backs the public badge. The action turns it off by
+#   itself on a private repository (it reads the visibility from the event, or from the API when the event carries
+#   no repository, as on `schedule`), so the input stays `true` and publication starts the day the repository goes
+#   public.
+# - The SARIF upload to code scanning needs GitHub Advanced Security on a private repository, so it runs only when
+#   the event says the repository is public. A `schedule` event carries no repository object, hence no upload on
+#   the weekly run; the next push uploads again. (`github.event.repository.private == false` would not do: GitHub
+#   compares null and false as numbers, both 0, and would upload from a private repository on `schedule`.)
+# - The SARIF file is always kept as a run artifact, readable by whoever can read the repository.
+#
+# Once results are published, the OpenSSF API rejects a run whose workflow breaks its rules: no top-level `env` or
+# `defaults`, no workflow-level write permission, `id-token: write` on the analysis job only, and in that job no
+# `env`, `defaults`, container or service, an Ubuntu runner, and only checkout, scorecard-action, upload-artifact
+# and upload-sarif steps.
+#
+# Actions are pinned to commit SHAs, the version in the comment: a tag can be moved, a commit cannot.
+
+on:
+  push:
+    branches: [main]
+  schedule:
+    - cron: '17 4 * * 1'
+  branch_protection_rule:
+
+permissions: read-all
+
+jobs:
+  analysis:
+    name: OpenSSF Scorecard
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    # Job-level permissions replace the workflow's: every read the action needs is listed again.
+    permissions:
+      # Code scanning upload.
+      security-events: write
+      # OIDC token that authenticates a published result.
+      id-token: write
+      # What the action reads with the default token on a private repository (its README).
+      contents: read
+      issues: read
+      pull-requests: read
+      checks: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: ossf/scorecard-action@2d1146689b8cda280b9bc96326124645441f03bc # v2.4.4
+        with:
+          results_file: results.sarif
+          results_format: sarif
+          publish_results: true
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: scorecard-sarif
+          path: results.sarif
+          retention-days: 5
+
+      - if: github.event.repository && !github.event.repository.private
+        uses: github/codeql-action/upload-sarif@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2 # v4.38.2
+        with:
+          sarif_file: results.sarif

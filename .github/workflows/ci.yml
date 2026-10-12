@@ -1,0 +1,140 @@
+# The gate every change to main passes. "CI passed" is the one check branch protection requires: it fails unless
+# every other job succeeded, so a job added below only has to be added to its `needs`.
+#
+# Actions are pinned to commit SHAs, the version in the comment: a tag can be moved, a commit cannot. A new version is
+# taken once it has been out seven days, as for npm packages (.npmrc), the time a compromised release usually takes to
+# be found and withdrawn. The runner image is pinned too: a new image is a change like any other, not a surprise.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    # Weekly, so that a quiet week still meets the advisories published since against an unchanged lock file, the
+    # latest patch release of each Node line and the current runner image.
+    - cron: '41 3 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  # The event is part of the group so that a push never cancels the weekly run of the same branch.
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    # An explicit `bash` runs every step with `-eo pipefail`: a failing command inside a pipe fails the step.
+    shell: bash
+
+jobs:
+  verify:
+    name: Verification gate (scripts/verify.sh)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # The gate judges the commits it is given, not only the last one, so it needs the history.
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          # setup-node caches npm by itself when package.json names npm (devEngines). The locked tree is about 13 MB of
+          # tarballs, and a restore would move the same bytes from another store, plus a save step and a stored entry
+          # per lock file; npm checks every tarball against the lock file's integrity either way.
+          package-manager-cache: false
+      # On PATH, the gate checks the workflows instead of reporting the check as skipped. Nothing from the archive runs
+      # before it matches the SHA-256 published for this version: a release asset can be replaced after its tag.
+      - name: Install actionlint
+        run: |
+          version=1.7.12
+          sum=8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8
+          archive="actionlint_${version}_linux_amd64.tar.gz"
+          cd "$RUNNER_TEMP"
+          curl -fsSLO "https://github.com/rhysd/actionlint/releases/download/v$version/$archive"
+          echo "$sum  $archive" | sha256sum --check --strict
+          mkdir actionlint
+          tar -xzf "$archive" -C actionlint actionlint
+          echo "$RUNNER_TEMP/actionlint" >> "$GITHUB_PATH"
+      - run: npm ci --ignore-scripts
+      - run: bash scripts/verify.sh
+      # The gate runs actionlint without shellcheck, which a developer's machine may lack; the runner has it, so the
+      # shell of every `run` step is checked here as well.
+      - name: Workflows with their shell steps (actionlint, shellcheck)
+        run: actionlint -color
+
+  test:
+    name: Tests (Node ${{ matrix.node-version }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    strategy:
+      # Every line is reported: a failure on one Node line says nothing about the others.
+      fail-fast: false
+      matrix:
+        # Every Node line the packages support.
+        node-version: [22, 24, 26]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: ${{ matrix.node-version }}
+          package-manager-cache: false
+      - run: npm ci --ignore-scripts
+      - run: npm test
+
+  secrets:
+    name: Secret scan (gitleaks, full history)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # A secret removed by a later commit is still in the history: every commit is scanned.
+          fetch-depth: 0
+          persist-credentials: false
+      # Nothing from the archive runs before it matches both the checksums file published with the release and the
+      # SHA-256 written here. The sum written here is the pin: an asset and its checksums file can be replaced together
+      # after the tag. The published file tells a sum mistyped here apart from a replaced archive.
+      - name: Install gitleaks
+        run: |
+          version=8.30.1
+          sum=551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb
+          archive="gitleaks_${version}_linux_x64.tar.gz"
+          checksums="gitleaks_${version}_checksums.txt"
+          cd "$RUNNER_TEMP"
+          curl -fsSLO "https://github.com/gitleaks/gitleaks/releases/download/v$version/$archive"
+          curl -fsSLO "https://github.com/gitleaks/gitleaks/releases/download/v$version/$checksums"
+          awk -v name="$archive" '$2 == name' "$checksums" | sha256sum --check --strict
+          echo "$sum  $archive" | sha256sum --check --strict
+          mkdir gitleaks
+          tar -xzf "$archive" -C gitleaks gitleaks
+          echo "$RUNNER_TEMP/gitleaks" >> "$GITHUB_PATH"
+      - name: Scan every commit
+        run: gitleaks detect --source . --redact --verbose
+
+  ci-passed:
+    name: CI passed
+    needs: [verify, test, secrets]
+    # Branch protection takes a skipped required check as passed: this job runs whatever became of the others, and
+    # anything but a success (failure, cancellation, skip) fails it.
+    if: always()
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Every job succeeded
+        env:
+          NEEDS: ${{ toJSON(needs) }}
+        run: |
+          jq -r 'to_entries[] | "\(.key): \(.value.result)"' <<< "$NEEDS"
+          if ! jq -e 'length > 0 and all(.[]; .result == "success")' <<< "$NEEDS" > /dev/null; then
+            echo "::error::a job above did not succeed (failed, cancelled or skipped)"
+            exit 1
+          fi
+          echo "ok: every job succeeded"
