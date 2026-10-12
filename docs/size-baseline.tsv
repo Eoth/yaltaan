@@ -1,0 +1,14 @@
+# Bytes of each import scenario of bench/size/, bundled and minified by each bundler, then compressed by node:zlib
+# (gzip level 9, brotli quality 11). Written by `node scripts/size-report.ts --update`, never by hand: the gate
+# fails on any difference, and the commit that records one explains it.
+scenario	bundler	raw	gzip	brotli	sha256
+references/es-toolkit-omit	esbuild	108	116	90	45d594c53e3c6de1
+references/es-toolkit-omit	rollup	112	116	97	51ad18dd0793fec6
+references/es-toolkit-ten-primitives	esbuild	1665	732	657	66bab324ac6f5d6a
+references/es-toolkit-ten-primitives	rollup	1705	735	661	609032171bb1c757
+references/preact-signals	esbuild	4670	1686	1562	703e0e44eba998cf
+references/preact-signals	rollup	4670	1684	1559	11a02797017f1a4d
+references/temporal-polyfill	esbuild	57158	19793	17851	27300b9b8508605f
+references/temporal-polyfill	rollup	57911	19849	17876	705b0870ad76d476
+references/valibot-login	esbuild	3472	1408	1285	bbd0d9439e42b90b
+references/valibot-login	rollup	3354	1371	1254	7e92d1ca736dfefc

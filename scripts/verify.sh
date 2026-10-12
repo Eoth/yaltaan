@@ -128,6 +128,10 @@ for config in packages/*/tsconfig.build.json; do
 done
 [ "$built" = 0 ] && echo "ok (not applicable: no package has sources yet)"
 
+step "import sizes"
+# After the build: the library's scenarios bundle what the packages publish.
+node scripts/size-report.ts || failed
+
 step "package contents"
 node scripts/check-package-contents.ts || failed
 

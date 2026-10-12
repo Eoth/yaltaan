@@ -1,0 +1,4 @@
+# Import budgets: the most bytes a scenario of bench/size/yaltaan/ may weigh, minified and brotli-compressed, under
+# every bundler of scripts/size-report.ts. A decision record sets each budget, and only a new one changes it. The
+# basis is the reference scenario a budget was calibrated against, or "hypothesis" until one is measured.
+scenario	brotli	basis
