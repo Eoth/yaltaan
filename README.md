@@ -1,3 +1,5 @@
+<p align="center"><img src="docs/logo.svg" alt="" width="96" height="96"></p>
+
 # Yaltaan
 
 Yaltaan is a native-first TypeScript standard library for applications. Its value is not a long list of functions but one shared model — `Result`, `Issue`, `Path`, schemas that implement [Standard Schema](https://standardschema.dev), and reactive nodes — used the same way by every domain: an error from a schema, a date parser, a relational rule or a server has the same shape and the same `Path`, and one typed `Path` serves reading, writing, diffs, errors and form fields alike. It ships only what the platform lacks, has no runtime dependency, and its contracts (mutation, complexity, errors, import cost) are written down, checked in CI and measured.
