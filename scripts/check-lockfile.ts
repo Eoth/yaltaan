@@ -137,7 +137,6 @@ export interface LockfileVerdict {
   readonly entries: number;
 }
 
-/** Reads the real repository's package.json and package-lock.json. */
 /** Fields npm copies from a workspace package.json into the lockfile entry of that package. */
 export const WORKSPACE_FIELDS: readonly string[] = [
   'name',
@@ -180,6 +179,7 @@ export function checkWorkspaceEntries(lock: unknown, manifests: ReadonlyMap<stri
   return problems;
 }
 
+/** Reads the real repository's package.json and package-lock.json. */
 export function checkRepositoryLockfile(root: string): LockfileVerdict {
   const manifestRead = readRootManifest(root);
   const lockRead = readJson(root, FILE);
