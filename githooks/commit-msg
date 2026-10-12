@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+# Judges the message of every commit made in this clone. Enable the hooks of this folder once per clone with:
+#   git config core.hooksPath githooks
+set -euo pipefail
+
+repo_root="$(git rev-parse --show-toplevel)"
+"$repo_root/scripts/check-commit-message.sh" "$1"
+
+# A clone may add checks of its own, never versioned, in .git/hooks/commit-msg.local.
+local_hook="$(git rev-parse --git-dir)/hooks/commit-msg.local"
+if [ -x "$local_hook" ]; then
+  "$local_hook" "$1"
+fi

@@ -1,0 +1,8 @@
+# Every text file is checked out with LF on every platform: guards read sources line by line, and a CRLF shebang
+# makes a hook fail on Linux and macOS. Windows clones with core.autocrlf=true would otherwise write CRLF.
+* text=auto eol=lf
+*.sh text eol=lf
+githooks/* text eol=lf
+*.png binary
+*.webp binary
+*.tgz binary

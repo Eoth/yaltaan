@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+# Runs the full verification gate before anything leaves this clone. Enable the hooks of this folder once per clone
+# with:
+#   git config core.hooksPath githooks
+set -euo pipefail
+
+repo_root="$(git rev-parse --show-toplevel)"
+bash "$repo_root/scripts/verify.sh"

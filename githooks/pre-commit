@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+# Judges what the commit will record (the index), with the checks that are fast enough to run on every commit; the
+# full gate, scripts/verify.sh, runs before every push. Enable the hooks of this folder once per clone with:
+#   git config core.hooksPath githooks
+set -euo pipefail
+
+repo_root="$(git rev-parse --show-toplevel)"
+"$repo_root/scripts/check-no-internal-doc-refs.sh" --cached
+
+# A clone may add checks of its own, never versioned, in .git/hooks/pre-commit.local.
+local_hook="$(git rev-parse --git-dir)/hooks/pre-commit.local"
+if [ -x "$local_hook" ]; then
+  "$local_hook"
+fi
+
+# Optional: gitleaks on the staged changes, when it is installed.
+if command -v gitleaks > /dev/null 2>&1; then
+  gitleaks protect --source "$repo_root" --staged --verbose
+fi
