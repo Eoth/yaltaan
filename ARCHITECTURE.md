@@ -187,19 +187,21 @@ interface ReadableNode<T> {
 
 ### 5.6 Mutation contract and checked metadata
 
-Every public export carries normalized JSDoc tags, checked by a lint rule: an export without its tags fails CI.
+Every public export carries normalized JSDoc tags, checked by the verification gate on the published declarations: an export without its tags, an unknown tag or a `@mutates` that names no parameter fails CI ([ADR 0012](docs/adr/0012-contract-tag-checker.md)).
 
 ```ts
 /**
- * @pure                       (or @mutates <param>)
- * @sharing structural         (none | structural | identity-preserving)
- * @complexity O(n)            (n = …)
- * @throws never               (or the conditions)
+ * Removes `keys` from `target`.
+ * @mutates target
+ * @sharing identity-preserving
+ * @complexity O(k) (k = number of keys)
+ * @throws never
  * @since 0.3
+ * @experimental
  */
 ```
 
-The reference documentation is built from these tags. The promise "every function documents its mutation" thus becomes checkable instead of a wish. Each export also carries its stability level, `@experimental` or `@stable` (§10.5).
+An export that runs (a function, a constant that can be called, a class) carries the whole contract: `@pure` or one `@mutates` per mutated parameter, then sharing, complexity, thrown errors, the version that added it, and its stability level, `@experimental` or `@stable` (§10.5). An export that never runs (a constant, an interface, a type alias) carries `@since` and its stability level only. The admitted tags and their values are defined once, in `scripts/lib/contract-tags.ts`, and the [reference documentation](docs/reference/README.md) is generated from the tags. The promise "every function documents its mutation" thus becomes checkable instead of a wish.
 
 By default, functions do not mutate. A mutating variant exists only if a benchmark shows a significant gain, and it is named explicitly (suffix `InPlace`).
 

@@ -132,6 +132,11 @@ step "dependency graph"
 # After the build: the check reads the modules each package publishes under dist/, and what each build compiles.
 node scripts/check-dependency-graph.ts || failed
 
+step "contract tags"
+# After the build: the check reads the declarations and the modules each package publishes under dist/, and compares
+# the reference under docs/reference/ with what their tags give.
+node scripts/check-contract-tags.ts || failed
+
 step "import sizes"
 # After the build: the library's scenarios bundle what the packages publish.
 node scripts/size-report.ts || failed

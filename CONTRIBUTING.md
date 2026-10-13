@@ -21,7 +21,7 @@ These are the engineering rules of this repository: how a change is decided, tes
 
 A change is done when all of these hold, not when its own tests pass:
 
-1. `bash scripts/verify.sh` prints `OK`: the repository guards, formatting, types, tests, build, package manifests and contents, the lockfile's sources, integrity and licences, import sizes, the dependency audit and the workflows; then, as each harness arrives, type-checking cost, the dependency graph between packages, contract tags, the adversarial catalogue and the platform baseline. A step that cannot run (a tool missing, the registry unreachable) is reported as skipped, never as passed.
+1. `bash scripts/verify.sh` prints `OK`: the repository guards, formatting, types, tests, build, package manifests and contents, the lockfile's sources, integrity and licences, the dependency graph between packages, the contract tags of every public export and the reference generated from them, import sizes, the dependency audit and the workflows; then, as each harness arrives, type-checking cost, the adversarial catalogue and the platform baseline. A step that cannot run (a tool missing, the registry unreachable) is reported as skipped, never as passed.
 2. A bug fixed comes with its regression test in the same commit, seen failing before the fix: remove the fix, watch the test fail, put the fix back.
 3. A bug that reveals a gap in the process (a check nobody ran, a gate that could not fail) also gets a mechanical guard, a script, a hook or a CI job, that stops the whole class of error, not only the case found.
 4. A decision record, written before the code, in every case listed in [docs/adr/README.md](docs/adr/README.md) (a new package, a new dependency, a change to a shared contract, an exception to a rule, a promotion to `@stable`…).
@@ -63,6 +63,7 @@ A verdict from an in-house checker counts only once a second, independent method
 - One source of truth: a list (issue codes, the table of native equivalents, budgets) lives in one file, and everything else derives from it.
 - A production file stays within 1 200 lines, and a function aims at 150 lines at most. A split follows responsibilities and is a pure move, never mixed with a change of logic.
 - No exception for an expected failure (return a `Result`), no silent `catch`, and every `switch` over a union is exhaustive, checked against `never`.
+- Every public export carries its contract tags (ARCHITECTURE.md §5.6; the admitted tags are listed in [docs/reference/README.md](docs/reference/README.md)). The reference under `docs/reference/` is generated, never edited: `node scripts/check-contract-tags.ts --update` rewrites it after a build.
 - Markdown: one line per paragraph or list item, never wrapped by hand; tables unpadded.
 - Everything tracked is in English (code, tests, decision records, documents, commit messages), except the roadmap, which is in French.
 
