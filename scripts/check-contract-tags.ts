@@ -33,8 +33,16 @@ import {
   report,
 } from './lib/workspace.ts';
 
+/** The exports of one code subpath, as the compiler read them. */
+export interface SubpathSurface {
+  readonly specifier: string;
+  readonly exports: readonly PublicExport[];
+}
+
 export interface ContractVerdict {
   readonly problems: readonly string[];
+  /** Every code subpath read, in the order of the packages and their "exports". */
+  readonly surface: readonly SubpathSurface[];
   readonly packages: number;
   /** Subpaths whose declarations were read. */
   readonly subpaths: number;
@@ -58,12 +66,12 @@ export async function checkContractTags(
 ): Promise<ContractVerdict> {
   const rootRead = readRootManifest(root);
   if (!rootRead.ok) {
-    return { problems: [rootRead.problem], packages: 0, subpaths: 0, exports: 0, written: false };
+    return { problems: [rootRead.problem], surface: [], packages: 0, subpaths: 0, exports: 0, written: false };
   }
   const listing = listWorkspacePackages(root, rootRead.value);
   const internal = readInternalPackages(root);
   if (!internal.ok) {
-    return { problems: [internal.problem], packages: 0, subpaths: 0, exports: 0, written: false };
+    return { problems: [internal.problem], surface: [], packages: 0, subpaths: 0, exports: 0, written: false };
   }
   const problems = [...listing.problems];
   const entries: Entry[] = [];
@@ -111,6 +119,7 @@ export async function checkContractTags(
   if (!read.ok) {
     return {
       problems: [...problems, read.problem],
+      surface: [],
       packages: packages.length,
       subpaths: 0,
       exports: 0,
@@ -148,7 +157,11 @@ export async function checkContractTags(
   } else {
     problems.push(...compareReference(root, reference));
   }
-  return { problems, packages: packages.length, subpaths: entries.length, exports: exportCount, written };
+  const surface = entries.map((entry) => ({
+    specifier: entry.specifier,
+    exports: bySpecifier.get(entry.specifier) ?? [],
+  }));
+  return { problems, surface, packages: packages.length, subpaths: entries.length, exports: exportCount, written };
 }
 
 // A subpath maps to a JavaScript file whose declarations sit beside it, or to a flat object of conditions that names

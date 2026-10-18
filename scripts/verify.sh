@@ -105,9 +105,12 @@ npx --no-install tsc -b && echo "ok: types check" || failed
 
 step "tests"
 # The runner's summary is read, not only its exit code: a run that finds no test file exits 0 and reports nothing.
+# The adversarial records of the same run are kept for the "adversarial catalogue" step, after the build.
 test_log=$(mktemp)
-npm test > "$test_log" 2>&1
+adversarial_records=$(mktemp)
+YALTAAN_ADVERSARIAL_RECORDS=1 npm test > "$test_log" 2>&1
 test_status=$?
+grep '^adversarial-record ' "$test_log" > "$adversarial_records"
 grep -E '^ℹ (tests|pass|fail|cancelled|skipped|todo) ' "$test_log"
 tests=$(sed -n 's/^ℹ tests \([0-9]*\)$/\1/p' "$test_log")
 fails=$(sed -n 's/^ℹ fail \([0-9]*\)$/\1/p' "$test_log")
@@ -136,6 +139,11 @@ step "contract tags"
 # After the build: the check reads the declarations and the modules each package publishes under dist/, and compares
 # the reference under docs/reference/ with what their tags give.
 node scripts/check-contract-tags.ts || failed
+
+step "adversarial catalogue"
+# After the build and the tests: every export that runs declares each category, as the test run recorded it.
+node scripts/check-adversarial.ts "$adversarial_records" || failed
+rm -f "$adversarial_records"
 
 step "import sizes"
 # After the build: the library's scenarios bundle what the packages publish.

@@ -22,7 +22,7 @@
   "scripts": {
     "verify": "bash scripts/verify.sh",
     "typecheck": "tsc -b",
-    "test": "node --import ./scripts/test-env.ts --test --test-reporter=spec \"**/*.test.ts\"",
+    "test": "node --import ./scripts/test-env.ts --test --test-reporter=@yaltaan/testing/reporter \"**/*.test.ts\"",
     "format": "prettier --write .",
     "format:check": "prettier --check ."
   },
