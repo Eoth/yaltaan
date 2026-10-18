@@ -23,5 +23,8 @@ test('a tarball without its manifest or its licence is refused', () => {
 });
 
 test('the packages of this repository pack only allowed files', () => {
-  assert.deepEqual(checkRepositoryPackageContents(repositoryRoot).problems, []);
+  const verdict = checkRepositoryPackageContents(repositoryRoot);
+  assert.deepEqual(verdict.problems, []);
+  // The internal test package is never packed.
+  assert.ok(!verdict.packages.includes('packages/testing'), String(verdict.packages));
 });

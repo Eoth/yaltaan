@@ -1,0 +1,19 @@
+{
+  "name": "@yaltaan/testing",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Test support of the Yaltaan packages: the shared adversarial catalogue. Never published.",
+  "license": "MIT",
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "files": [
+    "src/",
+    "!src/**/*.test.ts"
+  ],
+  "engines": {
+    "node": ">=22.18"
+  }
+}
