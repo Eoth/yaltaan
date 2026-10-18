@@ -235,6 +235,12 @@ core ← temporal
 core ← schema ← rules ← form ← angular | react | vue
 ```
 
+Internal packages, never published and outside the graph, imported by test files only ([ADR 0013](docs/adr/0013-adversarial-catalogue-on-fast-check.md)); no package lists one among its `dependencies` or `peerDependencies`, and the checks of published packages (contract tags, package contents, import sizes, production file size) skip them:
+
+```text
+testing
+```
+
 Nothing points upward. Adapters never depend on one another. A package may depend on every package below it in its chain; each edge is a `dependencies` entry of its package.json, at the exact version of the workspace package, and the code imports nothing its manifest does not declare.
 
 Concerns that get no package of their own:
@@ -491,7 +497,7 @@ Out of the plan. Reopened only by a decision record with: an optimized JavaScrip
 
 ### 10.1 Shared adversarial catalogue
 
-One catalogue, implemented as shared fast-check generators (`adversarial.*`):
+One catalogue, implemented as shared fast-check generators (`adversarial.*`) in the internal package `@yaltaan/testing` ([ADR 0013](docs/adr/0013-adversarial-catalogue-on-fast-check.md)):
 
 | Category | Examples |
 |---|---|
@@ -502,7 +508,7 @@ One catalogue, implemented as shared fast-check generators (`adversarial.*`):
 | Callbacks | that throw, that mutate the input, that mutate the collection during iteration |
 | Async | already-aborted signal, abort just before or just after resolution, concurrency 0, 1 or very high, configuration change while running |
 
-Each public export declares the categories that concern it (or "N/A" with a reason). CI checks that the declaration exists and that the matching tests run. "Every domain must test its adversarial cases" thus becomes checkable.
+Each public export that runs (a function, a constant that can be called, a class) declares, in its test file, each of the six categories: a check run against every named case and against random ones, "N/A" with a reason, or "deferred" while the export is `@experimental`. The verification gate reads the declarations from the events of the test run and fails on an export without one, a declaration that names no export, a check that failed or did not run, and a `@stable` export that defers a category. "Every domain must test its adversarial cases" thus becomes checkable.
 
 ### 10.2 Properties
 
@@ -535,7 +541,8 @@ Requiring every criterion from a function's first day amounts to shipping nothin
 | API, types, contract tags (§5.6) | yes | yes |
 | Nominal and boundary tests | yes | yes |
 | Bundle budget met | yes | yes |
-| Adversarial catalogue declared and tested | no | yes |
+| Adversarial categories declared (§10.1) | yes | yes |
+| Adversarial categories tested | no | yes |
 | Property tests | no | yes, if it has invariants |
 | Benchmark | no | yes, if it is a hot path |
 | Complete documentation, including "what it does not do" | no | yes |

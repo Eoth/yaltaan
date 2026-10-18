@@ -1,7 +1,7 @@
 # ADR 0013 — Shared adversarial catalogue on fast-check
 
 - Date: 2026-10-19
-- Status: proposed — recommendation, awaiting the owner
+- Status: accepted
 
 ## Context
 
@@ -33,14 +33,14 @@ On 2026-10-19, Ubuntu 26.04 x64, Node 24.21.0, npm 11.19.0, in a scratch folder 
 
 ## Decision
 
-**Recommendation, to validate**: option 2, with the rules below.
+Option 2, with the rules below.
 
 - **The dependency**: `fast-check` at an exact version in the root `devDependencies`, beside the other development tools, so the manifest rule "zero third-party dependency in a package" stays unconditional. It is never a dependency of a published package and is imported by test files only, through `@yaltaan/testing`, which re-exports it: one import point, one version.
 - **The package**: `packages/testing`, named `@yaltaan/testing`, never published. §6 of ARCHITECTURE.md gains an "internal packages" line beside the graph, which is the single list the checks read. An internal package is outside the graph and is skipped by the contract tag, package contents and import size checks; the graph check then requires that no other package lists it in `dependencies` or `peerDependencies` and that no built production module imports it. Its own tests run in the gate like any other.
 - **One generator per category**: `adversarial.boundary`, `.structures`, `.hostile`, `.unicode`, `.callbacks`, `.async`. Each holds named cases, a label and a factory that builds a fresh value on each call (a frozen object, a cycle, a Proxy or an aborted signal must not leak from one test to the next), and an arbitrary that yields every named case before its random ones. A test of the package checks that each category yields the named cases of §10.1, by label.
 - **The declaration lives in the export's test file**, as one call per export that names the package subpath and the export and lists the six categories, each with a check run against the category's cases, or with "N/A" and a reason. The declaration and its evidence are then one object: a category cannot be declared as covered without the code that covers it. Rejected: a published `@adversarial` JSDoc tag beside the contract tags of §5.6. It would show the categories in the reference documentation, but it changes a shared contract, adds bytes to every published declaration file, and states a coverage that a later deleted test would leave standing.
-- **Experimental and stable**, which reconciles §10.5 with the definition of done. **Recommendation, to validate**: every export declares its six categories from its first day, so the analysis is never skipped; while it is `@experimental`, a category that concerns it may be marked "deferred" (concerned, not yet tested), which the gate counts and prints; once `@stable`, a deferred category fails. §10.5 then splits its row in two: "adversarial categories declared" (yes, yes) and "adversarial categories tested" (no, yes).
-- **What the gate checks**, from the events of the test run itself, so that a declaration in a file the runner never loaded counts as missing: every export read by the contract tag adapter has exactly one declaration; every declaration names an existing export; every check ran at least one case of its category; no `@stable` export has a deferred category. The export list and the stability levels come from the contract tag reading (ADR 0012), not from a second list.
+- **Experimental and stable**, which reconciles §10.5 with the definition of done: every export that runs declares its six categories from its first day, so the analysis is never skipped; while it is `@experimental`, a category that concerns it may be marked "deferred" (concerned, not yet tested), which the gate counts and prints; once `@stable`, a deferred category fails. §10.5 then splits its row in two: "adversarial categories declared" (yes, yes) and "adversarial categories tested" (no, yes).
+- **What the gate checks**, from the events of the test run itself, so that a declaration in a file the runner never loaded counts as missing: every export that runs (a function, a constant that can be called, a class: the exports that carry the whole contract under ADR 0012) has exactly one declaration, while an export that never runs (a constant that cannot be called, an interface, a type alias) has nothing to attack and declares nothing; every declaration names an existing export; every check ran at least one case of its category; no `@stable` export has a deferred category. The export list and the stability levels come from the contract tag reading (ADR 0012), not from a second list.
 
 ## Consequences
 
