@@ -1,7 +1,8 @@
 // Checks the dependency graph between the workspace packages, from three readings that must agree:
 //
 // - the manifests, the only source of edges: the `@yaltaan/*` names in "dependencies" and "peerDependencies", each
-//   allowed by the graph that ARCHITECTURE.md §6 draws;
+//   allowed by the graph that ARCHITECTURE.md §6 draws; an internal package listed there beside the graph declares
+//   none and no package declares it, so test support code never reaches what is published;
 // - the built JavaScript under each package's dist/, which bundlers and runtimes load: every import names a declared
 //   package through a subpath it exports, or a file of the same package; no barrel re-exports another package; the
 //   body of a module only declares;
@@ -17,6 +18,7 @@ import { createRequire } from 'node:module';
 import path from 'node:path';
 
 import { NPM_SCOPE } from './check-manifests.ts';
+import { readInternalPackages, textBlockAfter } from './lib/internal-packages.ts';
 import { readModule } from './lib/module-rules.ts';
 import { PackageIndex, relativePosix, splitBareSpecifier } from './lib/packages.ts';
 import {
@@ -59,15 +61,12 @@ export interface GraphVerdict {
  * `a ← b ← c | d`: every package of a link may depend on every package of the link before it.
  */
 export function parseAllowedGraph(markdown: string): GraphRead {
-  const lines = markdown.split('\n');
-  const heading = lines.findIndex((line) => line.startsWith(GRAPH_HEADING));
-  const open = heading === -1 ? -1 : lines.findIndex((line, index) => index > heading && line.startsWith('```'));
-  const close = open === -1 ? -1 : lines.findIndex((line, index) => index > open && line.startsWith('```'));
-  if (lines[open] !== '```text' || close === -1) {
+  const block = textBlockAfter(markdown, GRAPH_HEADING);
+  if (!block.ok) {
     return { ok: false, problem: `${GRAPH_DOCUMENT}: no \`text\` block after the line "${GRAPH_HEADING}…"` };
   }
   const direct = new Map<string, Set<string>>();
-  for (const line of lines.slice(open + 1, close)) {
+  for (const line of block.lines) {
     if (line.trim() === '') {
       continue;
     }
@@ -135,6 +134,16 @@ export function checkDependencyGraph(root: string): GraphVerdict {
   if (!graphRead.ok) {
     return { problems: [...problems, graphRead.problem], ...empty };
   }
+  const internalRead = readInternalPackages(root);
+  if (!internalRead.ok) {
+    return { problems: [...problems, internalRead.problem], ...empty };
+  }
+  const internal = internalRead.names;
+  for (const name of internal) {
+    if (graphRead.graph.has(name)) {
+      problems.push(`${GRAPH_DOCUMENT}: ${name} is both in the graph and an internal package`);
+    }
+  }
   const views = new Map<string, PackageView>();
   for (const workspacePackage of listing.packages) {
     const read = readJson(root, `${workspacePackage.dir}/package.json`);
@@ -147,7 +156,11 @@ export function checkDependencyGraph(root: string): GraphVerdict {
   let modules = 0;
   let builds = 0;
   for (const view of views.values()) {
-    problems.push(...checkDeclaredEdges(view, views, graphRead.graph));
+    if (internal.has(view.folder)) {
+      problems.push(...checkInternalPackage(view));
+      continue;
+    }
+    problems.push(...checkDeclaredEdges(view, views, graphRead.graph, internal));
     const built = checkBuiltModules(view, views);
     problems.push(...built.problems);
     modules += built.modules;
@@ -182,7 +195,22 @@ function viewOf(workspacePackage: WorkspacePackage, manifest: unknown): PackageV
   };
 }
 
-function checkDeclaredEdges(view: PackageView, views: ReadonlyMap<string, PackageView>, graph: AllowedGraph): string[] {
+// Test support code reaches a test file through the workspace link that npm makes for every package, never through
+// an edge: an edge would put it in the installed tree of every user.
+function checkInternalPackage(view: PackageView): string[] {
+  return [...view.declared].map(
+    (name) =>
+      `${view.dir}/package.json: declares ${name}, but an internal package of ${GRAPH_DOCUMENT} §6 depends on ` +
+      'no package',
+  );
+}
+
+function checkDeclaredEdges(
+  view: PackageView,
+  views: ReadonlyMap<string, PackageView>,
+  graph: AllowedGraph,
+  internal: ReadonlySet<string>,
+): string[] {
   const allowed = graph.get(view.folder);
   if (allowed === undefined) {
     return [
@@ -200,6 +228,11 @@ function checkDeclaredEdges(view: PackageView, views: ReadonlyMap<string, Packag
       problems.push(`${view.dir}/package.json: declares ${name}, which is not a package of the workspace`);
     } else if (target === view) {
       problems.push(`${view.dir}/package.json: declares a dependency on itself`);
+    } else if (internal.has(target.folder)) {
+      problems.push(
+        `${view.dir}/package.json: declares ${name}, an internal package of ${GRAPH_DOCUMENT} §6, which test files ` +
+          'import through the workspace and nothing published depends on',
+      );
     } else if (!allowed.has(target.folder)) {
       problems.push(`${view.dir}/package.json: declares ${name}, but ${describeAllowed(view.folder, allowed)}`);
     }

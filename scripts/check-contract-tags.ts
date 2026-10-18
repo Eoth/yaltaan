@@ -7,6 +7,8 @@
 // keys of the module namespace Node loads from the same subpath: a reading that misses exports fails instead of
 // passing on less than the package publishes.
 //
+// Internal packages (ARCHITECTURE.md §6) publish nothing and are skipped.
+//
 // Runs after the build. The reference under docs/reference/ is compared byte for byte with what the tags give;
 // `--update` rewrites it, and only when every tag passes.
 //
@@ -19,6 +21,7 @@ import { NPM_SCOPE } from './check-manifests.ts';
 import { REFERENCE_DIR, renderReference, type ReferencedPackage } from './lib/contract-reference.ts';
 import { judgeExport, type PublicExport } from './lib/contract-tags.ts';
 import { readDeclarations } from './lib/declarations.ts';
+import { readInternalPackages } from './lib/internal-packages.ts';
 import { relativePosix } from './lib/packages.ts';
 import {
   describeError,
@@ -58,10 +61,14 @@ export async function checkContractTags(
     return { problems: [rootRead.problem], packages: 0, subpaths: 0, exports: 0, written: false };
   }
   const listing = listWorkspacePackages(root, rootRead.value);
+  const internal = readInternalPackages(root);
+  if (!internal.ok) {
+    return { problems: [internal.problem], packages: 0, subpaths: 0, exports: 0, written: false };
+  }
   const problems = [...listing.problems];
   const entries: Entry[] = [];
   const packages: { readonly folder: string; readonly name: string }[] = [];
-  for (const workspacePackage of listing.packages) {
+  for (const workspacePackage of listing.packages.filter((candidate) => !internal.names.has(candidate.name))) {
     const name = `${NPM_SCOPE}/${workspacePackage.name}`;
     packages.push({ folder: workspacePackage.name, name });
     const read = readJson(root, `${workspacePackage.dir}/package.json`);

@@ -121,6 +121,34 @@ function assertOneProblem(problems: readonly string[], fragment: string): void {
   assert.ok(problems[0]?.includes(fragment), `"${problems[0]}" does not contain "${fragment}"`);
 }
 
+const INTERNAL_TESTING = {
+  'packages/testing/package.json': JSON.stringify({ name: '@yaltaan/testing', private: true, type: 'module' }),
+  'packages/testing/src/index.ts': 'export const cases: readonly unknown[] = [];\n',
+};
+
+test('an internal package sits outside the graph and is not read as a built package', () => {
+  assert.deepEqual(problemsOf(INTERNAL_TESTING), []);
+});
+
+test('no package declares an internal package, and an internal package declares none', () => {
+  assertOneProblem(
+    problemsOf({ ...INTERNAL_TESTING, 'packages/core/package.json': manifest('core', ['testing']) }),
+    'packages/core/package.json: declares @yaltaan/testing, an internal package of ARCHITECTURE.md §6',
+  );
+  assertOneProblem(
+    problemsOf({ ...INTERNAL_TESTING, 'packages/testing/package.json': manifest('testing', ['core']) }),
+    'packages/testing/package.json: declares @yaltaan/core, but an internal package of ARCHITECTURE.md §6 depends ' +
+      'on no package',
+  );
+});
+
+test('a package cannot be both in the graph and internal', () => {
+  const architecture = ARCHITECTURE.replace('```text\ntesting\n```', '```text\ntesting\ncore\n```');
+  assert.notEqual(architecture, ARCHITECTURE);
+  const problems = problemsOf({ 'ARCHITECTURE.md': architecture });
+  assert.ok(problems.includes('ARCHITECTURE.md: core is both in the graph and an internal package'), String(problems));
+});
+
 // A build configuration that only lists files: the fixture has no compiler of its own, the check runs this
 // repository's.
 const BUILD_CONFIG = JSON.stringify({

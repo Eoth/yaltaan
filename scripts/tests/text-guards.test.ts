@@ -72,9 +72,16 @@ test('comment hygiene: dates, roadmap references and ticket identifiers are refu
   assert.equal(status({ 'a.sh': '#!/usr/bin/env bash\n# written 2026-10-12\n' }, COMMENTS), 1);
 });
 
+// The guard reads the internal packages through the repository's own reader, which the fixture carries.
 function sizeFixture(extra: Readonly<Record<string, string>>): Record<string, string> {
-  const caps = fs.readFileSync(path.join(repositoryRoot, 'docs/file-size-caps.tsv'), 'utf8');
-  return { 'docs/file-size-caps.tsv': caps, ...extra };
+  const read = (relative: string): string => fs.readFileSync(path.join(repositoryRoot, relative), 'utf8');
+  return {
+    'docs/file-size-caps.tsv': read('docs/file-size-caps.tsv'),
+    'scripts/lib/internal-packages.ts': read('scripts/lib/internal-packages.ts'),
+    'scripts/lib/workspace.ts': read('scripts/lib/workspace.ts'),
+    'ARCHITECTURE.md': 'Internal packages:\n\n```text\ntesting\n```\n',
+    ...extra,
+  };
 }
 
 test('file size: production files stay within 1200 lines and hold no test', () => {
@@ -83,6 +90,15 @@ test('file size: production files stay within 1200 lines and hold no test', () =
   assert.equal(status(sizeFixture({ 'packages/core/src/a.ts': lines(1201) }), SIZE), 1);
   assert.equal(status(sizeFixture({ 'packages/core/src/a.test.ts': lines(1500) }), SIZE), 0);
   assert.equal(status(sizeFixture({ 'packages/core/src/a.ts': "describe('x', () => {});\n" }), SIZE), 1);
+});
+
+test('file size: an internal package holds test support code, which is not production', () => {
+  const support = {
+    'packages/testing/src/declare.ts': "test('x', () => {});\n" + 'export const x = 1;\n'.repeat(1500),
+  };
+  assert.equal(status(sizeFixture(support), SIZE), 0);
+  assert.equal(status(sizeFixture({ ...support, 'ARCHITECTURE.md': '# No internal package\n' }), SIZE), 1);
+  assert.equal(status(sizeFixture({ ...support, 'ARCHITECTURE.md': 'Internal packages:\n\ntesting\n' }), SIZE), 1);
 });
 
 test('roadmap tickets: a number opened twice, or open and closed, is refused', () => {

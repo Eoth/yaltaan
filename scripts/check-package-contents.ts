@@ -1,12 +1,15 @@
 // Checks what `npm pack` would put in each workspace package's tarball, as npm itself computes it: only the manifest,
 // the README, the licence and the built output under dist/ (JavaScript, declarations and their source maps). Sources,
 // tests and fixtures never ship: they weigh on every install and can leak what was never meant to be public.
+// Internal packages (ARCHITECTURE.md §6) are never packed and are skipped.
 //
 // Usage: node scripts/check-package-contents.ts
 import { spawnSync } from 'node:child_process';
 import type { SpawnSyncReturns } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
+
+import { readInternalPackages } from './lib/internal-packages.ts';
 import {
   describeError,
   isJsonObject,
@@ -92,9 +95,14 @@ export function checkRepositoryPackageContents(root: string): ContentsVerdict {
   if (!rootRead.ok) {
     return { problems: [rootRead.problem], packages: [] };
   }
+  const internal = readInternalPackages(root);
+  if (!internal.ok) {
+    return { problems: [internal.problem], packages: [] };
+  }
   const listing = listWorkspacePackages(root, rootRead.value);
+  const published = listing.packages.filter((workspacePackage) => !internal.names.has(workspacePackage.name));
   const problems = [...listing.problems];
-  for (const workspacePackage of listing.packages) {
+  for (const workspacePackage of published) {
     const packed = listPackedFiles(workspacePackage.path, workspacePackage.dir);
     problems.push(...(packed.ok ? checkPackedFiles(packed.paths, workspacePackage.dir) : [packed.problem]));
     // npm does not copy the repository's licence into a workspace package: each keeps its own copy, which must not
@@ -104,7 +112,7 @@ export function checkRepositoryPackageContents(root: string): ContentsVerdict {
       problems.push(`${workspacePackage.dir}/LICENSE differs from the repository's LICENSE: copy it again`);
     }
   }
-  return { problems, packages: listing.packages.map((workspacePackage) => workspacePackage.dir) };
+  return { problems, packages: published.map((workspacePackage) => workspacePackage.dir) };
 }
 
 function runNpmPack(cwd: string): SpawnSyncReturns<string> {

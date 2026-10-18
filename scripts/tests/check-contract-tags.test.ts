@@ -274,6 +274,22 @@ test('a package whose exports carry their contract passes, and its reference is 
   assert.deepEqual(order, ['Box', 'LIMIT', 'Pair', 'double', 'omit', 'twice', 'half']);
 });
 
+test('an internal package, which publishes nothing, is skipped', async () => {
+  const root = await editedCopy((copy) => {
+    fs.writeFileSync(path.join(copy, 'ARCHITECTURE.md'), 'Internal packages:\n\n```text\ntesting\n```\n');
+    fs.mkdirSync(path.join(copy, 'packages/testing/src'), { recursive: true });
+    fs.writeFileSync(path.join(copy, 'packages/testing/package.json'), '{ "name": "@yaltaan/testing" }\n');
+    fs.writeFileSync(path.join(copy, 'packages/testing/src/index.ts'), 'export const cases = [];\n');
+  });
+  const verdict = await checkContractTags(root);
+  assert.deepEqual(verdict.problems, []);
+  assert.equal(verdict.packages, 1);
+  // Without the list, the package is read as a published one, which fails instead of passing unread.
+  fs.rmSync(path.join(root, 'ARCHITECTURE.md'));
+  const unlisted = (await checkContractTags(root)).problems;
+  assert.ok(unlisted.includes('packages/testing: has src/ but no dist/: build it before this check'), String(unlisted));
+});
+
 test('the reference is the same, byte for byte, on two runs and on two machines', async () => {
   const first = await editedCopy(() => {});
   const once = readReference(first);

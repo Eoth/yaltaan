@@ -284,6 +284,15 @@ test('a package stays private while its version is 0.0.0', () => {
   assertOneProblem(checkPackageManifest(without(validPackage(), 'version'), dir), '"version" must be a string');
 });
 
+test('an internal package stays private whatever its version', () => {
+  const dir = 'packages/testing';
+  const released = { ...validPackage('testing'), version: '1.0.0' };
+  assert.deepEqual(checkPackageManifest(released, dir, true), []);
+  assertOneProblem(checkPackageManifest(without(released, 'private'), dir, true), 'an internal package is never');
+  assertOneProblem(checkPackageManifest({ ...released, private: false }, dir, true), 'an internal package is never');
+  assert.deepEqual(checkPackageManifest({ ...released, private: false }, dir), []);
+});
+
 test('every violation of a package manifest is reported, each with the file and the field', () => {
   const problems = checkPackageManifest(
     { ...validPackage(), sideEffects: true, license: 'ISC', dependencies: { tslib: '2.8.1' } },

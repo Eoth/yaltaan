@@ -11,8 +11,9 @@
 #
 # Production: every `.ts`, `.mts`, `.cts`, `.js` or `.mjs` file under packages/ but declaration files (`.d.ts`),
 # tests (`*.test.*`, anything under a `test/` or `tests/` folder), benchmarks (`bench/`) and test data (`fixtures/`),
-# so that a new location counts by default. Lines are counted as an editor numbers them: a last line without a line
-# ending counts, CRLF counts once.
+# so that a new location counts by default. An internal package (ARCHITECTURE.md §6) holds test support code that no
+# package ships: like a test, it is not production. Lines are counted as an editor numbers them: a last line without a
+# line ending counts, CRLF counts once.
 #
 # Tests live in their own files: a production line that opens a test (`describe(`, `it(`, `test(`, `suite(`, with
 # or without `.only`, `.skip`, `.todo` or `.each`) would ship the test code, and its imports, to every user.
@@ -63,6 +64,10 @@ production=(
   ':(exclude,glob)**/test/**' ':(exclude,glob)**/tests/**' ':(exclude,glob)**/bench/**'
   ':(exclude,glob)**/fixtures/**'
 )
+internal=$(node scripts/lib/internal-packages.ts) || exit 1
+for name in $internal; do
+  production+=(":(exclude,glob)packages/$name/**")
+done
 
 tmp=$(mktemp -d) || exit 1
 trap 'rm -rf "$tmp"' EXIT

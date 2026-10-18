@@ -1,7 +1,9 @@
 // Checks the package.json files of the workspace: the root, which only holds development tools, and every workspace
 // package, which must stay publishable as an ESM module with zero runtime dependency and an explicit public surface.
+// An internal package (ARCHITECTURE.md §6) follows the same rules and stays private whatever its version.
 //
 // Usage: node scripts/check-manifests.ts
+import { readInternalPackages } from './lib/internal-packages.ts';
 import {
   isJsonObject,
   listWorkspacePackages,
@@ -70,8 +72,9 @@ export function checkRootManifest(manifest: unknown): string[] {
 /**
  * Problems of a workspace package's package.json, each prefixed with the file name. `dir` is the package folder from
  * the repository root, with forward slashes (`packages/core`); its last segment is the expected package name.
+ * `internal` marks a package that is never published.
  */
-export function checkPackageManifest(manifest: unknown, dir: string): string[] {
+export function checkPackageManifest(manifest: unknown, dir: string, internal = false): string[] {
   const file = `${dir}/package.json`;
   if (!isJsonObject(manifest)) {
     return [`${file}: not a JSON object`];
@@ -133,6 +136,8 @@ export function checkPackageManifest(manifest: unknown, dir: string): string[] {
   const version = manifest['version'];
   if (typeof version !== 'string') {
     fail('"version" must be a string');
+  } else if (internal && manifest['private'] !== true) {
+    fail('"private" must be true: an internal package is never published, whatever its version');
   } else if (version === '0.0.0' && manifest['private'] !== true) {
     fail('"private" must be true while "version" is "0.0.0": nothing is published before the release workflow');
   }
@@ -152,12 +157,18 @@ export function checkRepositoryManifests(root: string): ManifestsVerdict {
     return { problems: [rootRead.problem], packages: [] };
   }
   const problems = checkRootManifest(rootRead.value);
+  const internal = readInternalPackages(root);
+  if (!internal.ok) {
+    problems.push(internal.problem);
+  }
+  const internalNames = internal.ok ? internal.names : new Set<string>();
   const listing = listWorkspacePackages(root, rootRead.value);
   problems.push(...listing.problems);
   const manifests = new Map<string, JsonObject>();
   for (const workspacePackage of listing.packages) {
     const read = readJson(root, `${workspacePackage.dir}/package.json`);
-    problems.push(...(read.ok ? checkPackageManifest(read.value, workspacePackage.dir) : [read.problem]));
+    const isInternal = internalNames.has(workspacePackage.name);
+    problems.push(...(read.ok ? checkPackageManifest(read.value, workspacePackage.dir, isInternal) : [read.problem]));
     if (read.ok && isJsonObject(read.value)) {
       manifests.set(workspacePackage.dir, read.value);
     }
