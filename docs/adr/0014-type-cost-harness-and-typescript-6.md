@@ -1,7 +1,7 @@
 # ADR 0014 — Type-cost harness and TypeScript 6.0 as a development dependency
 
 - Date: 2026-10-19
-- Status: proposed — recommendation, awaiting the owner
+- Status: accepted (by the owner, 2026-10-19, on the recommendation)
 
 ## Context
 
@@ -45,7 +45,7 @@ On 2026-10-19, Ubuntu 26.04 x64, 20 logical processors, Node 24.21.0, npm 11.19.
 
 ## Decision
 
-Recommendation, to validate: option 2, under these rules.
+Option 2, under these rules.
 
 - **The dependency**: `@typescript/typescript6` at exactly 6.0.2 in the root `devDependencies`, reached only by the type-cost harness and the type tests, under its `tsc6` command or its module; no package of the workspace depends on it.
 - **What the gate measures**: under both compilers, with and without `exactOptionalPropertyTypes`, the instantiation count of the reference project and of one fixture per public type; these counts are deterministic, so one pass suffices and any count above its ceiling fails the gate. Ceilings are written per compiler in one versioned file under `bench/types/`.

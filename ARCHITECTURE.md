@@ -440,7 +440,7 @@ aggregate(arrayPath, fn, check)  when(discriminantPath, cases)  withContext(ctx 
 ## 8. TypeScript
 
 - Reference compiler: TypeScript 7, the native compiler, GA since July 2026 (7.0.2). Supported versions (ADR 0006): TypeScript 6.0 and 7.x, because Angular template tooling stays on TypeScript 6.0. Dropping a version line is a major release.
-- TypeScript 7.0 ships without a compiler API. Tools that need one (such as the contract-tag lint of §5.6) run on `@typescript/typescript6`, the full 6.0 API installable side by side, or on their own parser.
+- TypeScript 7.0 ships without a stable compiler API. The contract-tag check of §5.6 reads its `unstable/sync` entry point through one adapter ([ADR 0012](docs/adr/0012-contract-tag-checker.md)); the type-cost harness and the type tests also run TypeScript 6.0, from `@typescript/typescript6` installed beside 7 under the command `tsc6` ([ADR 0014](docs/adr/0014-type-cost-harness-and-typescript-6.md)).
 - Library settings: `strict`, `exactOptionalPropertyTypes`, `noUncheckedIndexedAccess`, `isolatedDeclarations` (explicit public return types: a stable API, and declaration files that are fast to produce).
 - Also `verbatimModuleSyntax` and `erasableSyntaxOnly`: sources and tests run directly through Node's type stripping, which requires type-only imports to say so, and Node 26 removed the transform of non-erasable syntax (`enum`, runtime `namespace`, parameter properties), so such syntax could never run there.
 - Public types are tested in a consumer project with and without `exactOptionalPropertyTypes`.
@@ -448,8 +448,8 @@ aggregate(arrayPath, fn, check)  when(discriminantPath, cases)  withContext(ctx 
 **Type-cost budget**: an API with perfect types that badly slows down the type check of a large project is defective.
 
 - A reference project, produced by a script (about 2,000 files), uses `Path<T>` and schema and form inference intensively.
-- Measured on every pull request through `--extendedDiagnostics`: check time, instantiations, memory (TypeScript 7 prints all three).
-- At most +10 % check time compared to the same project without the library, and a ceiling of instantiations per public type set when the harness is calibrated; both are hypotheses to calibrate by measurement. A regression blocks.
+- Measured by the verification gate through `--extendedDiagnostics`: check time, instantiations, memory, under TypeScript 6.0 and 7, with and without `exactOptionalPropertyTypes` ([ADR 0014](docs/adr/0014-type-cost-harness-and-typescript-6.md)). Instantiation counts are deterministic: they are recorded, and compared with a ceiling per public type and per compiler, since the two compilers count differently.
+- At most +10 % check time compared to the same project without the library, judged under TypeScript 7 on the median of five interleaved passes, with the spread printed; the ceilings and the +10 % are hypotheses to calibrate by measurement. A regression blocks.
 - Rules: bounded recursion; named interfaces rather than deep intersections; the number of generated paths is capped, with an explicit degradation beyond the cap.
 
 **Type tests**: type-equality assertions in the style of `expectTypeOf`, and `@ts-expect-error` fixtures. Expected compile errors are tested, and their readability is reviewed.
