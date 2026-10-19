@@ -149,6 +149,10 @@ step "import sizes"
 # After the build: the library's scenarios bundle what the packages publish.
 node scripts/size-report.ts || failed
 
+step "type cost"
+# After the build: the usages of the reference project import the declarations the packages publish.
+node scripts/type-cost.ts || failed
+
 step "package contents"
 node scripts/check-package-contents.ts || failed
 

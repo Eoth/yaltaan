@@ -1,0 +1,5 @@
+# Instantiation ceilings of the type-cost harness (scripts/type-cost.ts): the most instantiations a usage of
+# bench/types/usages/ may add to a fixture of the reference project, under each compiler, with and without
+# exactOptionalPropertyTypes. A decision record sets each ceiling, and only a new one changes it; the basis is the
+# measurement or the reference it was calibrated against.
+usage	compiler	instantiations	basis

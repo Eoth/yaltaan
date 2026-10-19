@@ -1,0 +1,8 @@
+# Instantiations of the type-check of each subject of scripts/type-cost.ts, under each compiler and option set
+# (exact: exactOptionalPropertyTypes on). Written by `node scripts/type-cost.ts --update`, never by hand: the gate
+# fails on any difference, and the commit that records one explains it.
+subject	compiler	options	instantiations
+reference	ts7	exact	110220
+reference	ts7	loose	110224
+reference	ts6	exact	110055
+reference	ts6	loose	110056
