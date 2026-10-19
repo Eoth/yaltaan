@@ -1,6 +1,7 @@
 // Checks package-lock.json, the exact list of code that `npm ci` installs: every locked package comes from the public
 // npm registry with a SHA-512 checksum, under an allowed licence, and runs no install script unless allowed by name;
-// the lockfile also records the same development tools as package.json.
+// no two packages at the top of node_modules ship a command of the same name; the lockfile also records the same
+// development tools as package.json.
 //
 // Usage: node scripts/check-lockfile.ts
 import {
@@ -79,15 +80,23 @@ export function checkLockfile(lock: unknown, rootManifest: unknown, policy: Lock
 
   const usedLicenses = new Set<string>();
   const usedInstallScripts = new Set<string>();
+  const commands = new Map<string, string[]>();
   for (const [location, entry] of Object.entries(packages)) {
-    if (location === '' || isWorkspaceDir(location)) {
+    if (location === '' || !isJsonObject(entry)) {
+      if (location !== '') {
+        fail(`packages["${location}"] is not an object`);
+      }
+      continue;
+    }
+    if (isWorkspaceDir(location) || (entry['link'] !== true && isTopLevel(location))) {
+      for (const command of commandNames(entry, location)) {
+        commands.set(command, [...(commands.get(command) ?? []), location]);
+      }
+    }
+    if (isWorkspaceDir(location)) {
       continue;
     }
     const where = `packages["${location}"]`;
-    if (!isJsonObject(entry)) {
-      fail(`${where} is not an object`);
-      continue;
-    }
     if (entry['link'] === true) {
       if (!isWorkspaceDir(entry['resolved'])) {
         fail(`${where} links to ${JSON.stringify(entry['resolved'])}: only a workspace package may be linked`);
@@ -121,6 +130,17 @@ export function checkLockfile(lock: unknown, rootManifest: unknown, policy: Lock
     }
   }
 
+  for (const [command, owners] of commands) {
+    if (owners.length > 1) {
+      fail(
+        `${[...owners]
+          .sort()
+          .map((owner) => `packages["${owner}"]`)
+          .join(' and ')} ship the command "${command}": npm links ` +
+          'one of them in node_modules/.bin, the other silently loses; keep only one at the top of node_modules',
+      );
+    }
+  }
   for (const license of policy.licenses) {
     if (!usedLicenses.has(license)) {
       fail(`licence ${license} is allowed but no locked package carries it: remove the stale allowance`);
@@ -216,6 +236,23 @@ function nameFromLocation(location: string): string {
   return index === -1 ? location : location.slice(index + marker.length);
 }
 
+// npm links the commands of every package placed at `node_modules/<name>` (a dependency of a dependency included, once
+// hoisted there), and of every workspace package; a package nested under another one has its commands linked nowhere.
+function isTopLevel(location: string): boolean {
+  const name = location.startsWith('node_modules/') ? location.slice('node_modules/'.length) : '';
+  return name !== '' && !name.includes('/node_modules/') && /^(@[^/]+\/)?[^/@][^/]*$/.test(name);
+}
+
+// "bin" is a map from command to file, or one file for a command named after the package without its scope.
+function commandNames(entry: Readonly<Record<string, unknown>>, location: string): string[] {
+  const bin = entry['bin'];
+  if (typeof bin === 'string') {
+    const name = typeof entry['name'] === 'string' ? entry['name'] : nameFromLocation(location);
+    return [name.slice(name.lastIndexOf('/') + 1)];
+  }
+  return isJsonObject(bin) ? Object.keys(bin) : [];
+}
+
 // npm ci installs what the lockfile says, not what package.json says: if the two disagree on a tool, the version that
 // was reviewed in package.json is not the one that runs.
 function compareRootDevDependencies(rootEntry: unknown, rootManifest: unknown): string[] {
@@ -243,6 +280,7 @@ if (import.meta.main) {
   const verdict = checkRepositoryLockfile(repositoryRoot);
   report(
     verdict.problems,
-    `${verdict.entries} lockfile entries: registry sources, sha512 checksums, allowed licences and install scripts.`,
+    `${verdict.entries} lockfile entries: registry sources, sha512 checksums, allowed licences, install scripts, ` +
+      'one package per command.',
   );
 }

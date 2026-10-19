@@ -53,8 +53,8 @@ function lockfile(changes: Json = {}): Json {
       os: ['darwin'],
       hasInstallScript: true,
     }),
-    'node_modules/prettier': registryEntry('prettier', '3.9.9', 'MIT'),
-    'node_modules/typescript': registryEntry('typescript', '7.0.2', 'Apache-2.0'),
+    'node_modules/prettier': registryEntry('prettier', '3.9.9', 'MIT', { bin: { prettier: 'bin/prettier.cjs' } }),
+    'node_modules/typescript': registryEntry('typescript', '7.0.2', 'Apache-2.0', { bin: { tsc: 'bin/tsc' } }),
     'node_modules/undici-types': registryEntry('undici-types', '6.21.0', 'MIT'),
     'packages/core': { name: '@yaltaan/core', version: '0.0.0', license: 'MIT' },
     ...changes,
@@ -176,6 +176,26 @@ test('workspace packages are skipped, any other link is refused, nested dependen
     checkLockfile(lockfile({ 'node_modules/prettier': 'prettier@3.9.9' }), rootManifest()),
     'not an object',
   );
+});
+
+test('no two packages at the top of node_modules ship the same command', () => {
+  // TypeScript 6.0, hoisted as a dependency of its wrapper, replaced the `tsc` of TypeScript 7 in node_modules/.bin.
+  const typescript6 = registryEntry('typescript', '6.0.3', 'Apache-2.0', {
+    name: 'typescript',
+    bin: { tsc: 'bin/tsc', tsserver: 'bin/tsserver' },
+  });
+  const hoisted = { 'node_modules/@typescript/old': typescript6 };
+  assertOneProblem(
+    checkLockfile(lockfile(hoisted), rootManifest()),
+    'packages["node_modules/@typescript/old"] and packages["node_modules/typescript"] ship the command "tsc"',
+  );
+  const nested = { 'node_modules/@typescript/typescript6/node_modules/@typescript/old': typescript6 };
+  assert.deepEqual(checkLockfile(lockfile(nested), rootManifest()), []);
+  // A "bin" given as one file is a command named after the package, without its scope.
+  const single = { 'node_modules/@other/tsc': registryEntry('@other/tsc', '1.0.0', 'MIT', { bin: 'cli.js' }) };
+  assertOneProblem(checkLockfile(lockfile(single), rootManifest()), 'ship the command "tsc"');
+  const workspace = { 'packages/core': { name: '@yaltaan/core', version: '0.0.0', bin: { prettier: 'x.js' } } };
+  assertOneProblem(checkLockfile(lockfile(workspace), rootManifest()), 'packages["packages/core"]');
 });
 
 test('a root manifest whose workspaces cannot be read is reported', () => {

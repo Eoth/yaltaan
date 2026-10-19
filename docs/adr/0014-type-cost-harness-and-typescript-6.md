@@ -1,7 +1,7 @@
 # ADR 0014 — Type-cost harness and TypeScript 6.0 as a development dependency
 
 - Date: 2026-10-19
-- Status: accepted (by the owner, 2026-10-19, on the recommendation)
+- Status: accepted (by the owner, 2026-10-19, on the recommendation); its statement that the wrapper leaves `tsc` untouched is corrected by [ADR 0015](0015-shallow-install-strategy.md)
 
 ## Context
 
