@@ -29,7 +29,7 @@ Tranche verticale d'abord : la colonne vertébrale (§5 d'`ARCHITECTURE.md`) se 
 
 | # | Lot | Tickets, dans l'ordre | Sortie |
 |---|---|---|---|
-| 1 | 0 — Outillage | T0.1, T0.2, T0.7, T0.6, T0.5, T0.3, T0.4, T0.8, T0.9 | Un paquet vide qui passe toute la CI ; budgets calibrés contre les références. |
+| 1 | 0 — Outillage | T0.1, T0.2, T0.7, T0.6, T0.5, T0.3, T0.4 a, b, T0.8, T0.9 | Un paquet vide qui passe toute la CI ; budgets calibrés contre les références. |
 | 2 | 1 — Colonne vertébrale | T1.1, T1.3, T1.2, T1.5, T1.4, T0.14, T1.6 a, T1.6 b | Contrats v0 (`Result`, `Issue`, `Path`, `equal`, nœud réactif), propriétés testées. |
 | 3 | 2 — Tranche verticale | T2.1, T2.2, T2.3, T2.4 a, b, c, T2.5, T0.13, T0.15, T2.6, T0.10, T2.7 | Formulaire pilote de bout en bout, mesures, **ADR go/no-go de `form`**, gel des contrats ; première version expérimentale publiée avec provenance. |
 | 4 | 3 — Données | T3.1, T3.2, T3.3 a, b, T3.4, T3.5, T3.6 a, b, c, T3.7 a, b, T3.8 | Modules `@experimental`. |
@@ -87,10 +87,10 @@ Une décision réservée au propriétaire (nom, licence, API publique, contrat t
 
 #### T0.4 — Benchmarks et départage A/B au nombre d'instructions
 - **Pourquoi** : les runners partagés sont bruités et un écart de quelques pourcents ne se juge pas au chronomètre ; un chemin chaud doit se départager de façon reproductible.
-- **Faire** : harnais de benchmark (mitata ou tinybench, choisi par ADR) natif / meilleure référence / Yaltaan, jeux de données seedés (micro, réaliste, pathologique), publication complète (CPU, OS, runtime et version, commande, échauffement, itérations, dispersion p50/p99) ; méthode de départage A/B déterministe (comptage d'instructions sous Callgrind dans WSL avec un V8 rendu déterministe, ou autre méthode prouvée), script `scripts/perf-count.sh <A> <B>` qui compare le parent exact et le commit ; octets alloués par opération sur les chemins chauds.
+- **Faire** : (a) scénarios seedés dans `bench/perf/` (natif / meilleure référence, puis Yaltaan dès son premier chemin chaud ; jeux micro, réaliste, pathologique), chaque côté vérifié égal aux autres par un test ; départage A/B déterministe : comptage d'instructions sous Callgrind avec un V8 rendu déterministe, travail par appel isolé du démarrage, script `scripts/perf-count.sh <A> <B>` qui compare le parent exact et le commit et produit le tableau du message de commit ; (b) harnais chronométré (mitata, tinybench ou rien, choisi par ADR, dépendance soumise au propriétaire) sur les mêmes scénarios, publication complète (CPU, OS, runtime et version, commande, échauffement, itérations, dispersion p50/p99) ; octets alloués par opération sur les chemins chauds.
 - **Où** : `bench/perf/`, `scripts/`.
-- **Accepté si** : deux comptages du même commit égaux, ou leur écart mesuré et pris comme seuil ; une régression fabriquée (+5 % de travail) détectée ; méthode et seuils écrits par ADR.
-- **Taille** M (L si la détermination de V8 l'exige : découper) · **Prio** P1 · **Dépend de** T0.1
+- **Accepté si** : (a) deux comptages du même commit égaux, ou leur écart mesuré et pris comme seuil ; une régression fabriquée (+5 % de travail) détectée ; méthode et seuils écrits par ADR ; (b) ADR du harnais accepté par le propriétaire ; deux exécutions publient tous les champs ; octets alloués par opération affichés pour chaque scénario.
+- **Taille** M → (a) M, (b) S · **Prio** P1 · **Dépend de** T0.1 ; (b) décision §3 (harnais chronométré)
 
 #### T0.8 — Baseline de plateforme vérifiée
 - **Pourquoi** : « la plateforme le fait » ne vaut que si c'est vrai sur toute la baseline, et une API qui y entre doit faire retirer la fonction équivalente.
