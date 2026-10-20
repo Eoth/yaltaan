@@ -43,7 +43,7 @@ A verdict from an in-house checker counts only once a second, independent method
   - type tests: the inference expected, and the compilation errors expected with `@ts-expect-error`, their messages read for clarity;
   - bundle checks: import leaks between packages, side effects, size budgets;
   - type-checking cost, measured on a reference project with and without the library, within a budget;
-  - benchmarks on hot paths, comparing native code, the best reference library and Yaltaan, with the method published;
+  - benchmarks on hot paths, comparing native code, the best reference library and Yaltaan, with the method published: a scenario per hot path in `bench/perf/scenarios/`, seeded datasets (micro, realistic, pathological), every side returning the same value; a change to a hot path counts its instructions against the parent of its first commit with `scripts/perf-count.sh <A> <B>` (Callgrind, valgrind installed) and puts the table in the message of its last commit;
   - adapters tested on real components.
 
 ## Dependency policy

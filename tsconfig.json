@@ -5,5 +5,5 @@
     "allowImportingTsExtensions": true,
     "types": ["node"]
   },
-  "include": ["scripts/**/*.ts", "packages/testing/src/**/*.ts"]
+  "include": ["scripts/**/*.ts", "bench/perf/**/*.ts", "packages/testing/src/**/*.ts"]
 }
