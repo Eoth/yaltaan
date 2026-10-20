@@ -474,7 +474,7 @@ A scenario's bundle holds code only from the packages the scenario imports and t
 
 ### 9.2 Benchmarks
 
-- Tool: mitata or tinybench. Runtimes: Node LTS, Bun, Deno; browsers through Playwright for the critical hot paths.
+- Tool: a harness written in the repository, with no dependency: samples of batched calls lasting at least 10 µs each, the empty loop timed in the same run and subtracted ([ADR 0017](docs/adr/0017-timed-benchmark-harness.md)). Runtimes: Node LTS, Bun, Deno; browsers through Playwright for the critical hot paths.
 - Mandatory comparison: native / best reference library / Yaltaan.
 - Seeded datasets: micro, realistic, pathological (deep, wide, very large).
 - Published with: CPU, OS, runtime and version, command, dataset, warmup, iterations, dispersion (p50, p99, spread).
