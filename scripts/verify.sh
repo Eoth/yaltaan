@@ -123,6 +123,19 @@ if [ "$test_status" != 0 ] || [ "${tests:-0}" -eq 0 ] || [ "${fails:-1}" != 0 ] 
 fi
 rm -f "$test_log"
 
+step "timed harness, alone"
+# The harness's timing checks read a clock: run beside the other test files, they would read their load. They run
+# here, after the test run, alone, and are judged by the runner's summary like the test run.
+timing_log=$(mktemp)
+node --test bench/perf/time.serial-test.ts > "$timing_log" 2>&1
+timing_status=$?
+grep -E '^ℹ (tests|pass|fail) ' "$timing_log"
+if [ "$timing_status" != 0 ] || ! grep -q '^ℹ pass [1-9]' "$timing_log" || ! grep -q '^ℹ fail 0$' "$timing_log"; then
+  grep -E -A20 '^✖ failing tests:' "$timing_log" | head -40
+  failed
+fi
+rm -f "$timing_log"
+
 step "build"
 built=0
 for config in packages/*/tsconfig.build.json; do
