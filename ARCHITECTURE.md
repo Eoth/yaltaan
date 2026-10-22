@@ -477,9 +477,9 @@ A scenario's bundle holds code only from the packages the scenario imports and t
 - Tool: a harness written in the repository, with no dependency: samples of batched calls lasting at least 10 µs each, the empty loop timed in the same run and subtracted ([ADR 0017](docs/adr/0017-timed-benchmark-harness.md)). Runtimes: Node LTS, Bun, Deno; browsers through Playwright for the critical hot paths.
 - Mandatory comparison: native / best reference library / Yaltaan.
 - Seeded datasets: micro, realistic, pathological (deep, wide, very large).
-- Published with: CPU, OS, runtime and version, command, dataset, warmup, iterations, dispersion (p50, p99, spread).
+- Published with: CPU, OS, power source, runtime and version, command, dataset, warmup, iterations, loop floor, dispersion (p50, p99, minimum, maximum, margin of error, spread across passes) ([ADR 0018](docs/adr/0018-allocations-and-passes-of-the-timed-harness.md)).
 - Regression detection: shared machines are noisy, hence instruction counting. `scripts/perf-count.sh <A> <B>` counts one call of every scenario of `bench/perf/scenarios/` at both commits under Callgrind, with V8 made deterministic, and calls a change of more than 0.10 % of the instructions per call more or less work ([ADR 0016](docs/adr/0016-instruction-count-for-ab-decisions.md)). More work on a hot path is explained in the message of the commit that brings it, or fixed by a separate commit; above 5 % it blocks, unless a decision record documents it.
-- Allocations: bytes allocated per operation on the hot paths (heap snapshots, `--trace-gc`).
+- Allocations: bytes allocated per operation on the hot paths: heap growth over windows of calls with no collection (median of five), checked through the collector's accounting ([ADR 0018](docs/adr/0018-allocations-and-passes-of-the-timed-harness.md)).
 
 ### 9.3 Levers, in order
 
