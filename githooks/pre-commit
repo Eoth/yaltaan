@@ -11,6 +11,7 @@ bash scripts/check-text-format.sh --cached
 bash scripts/check-comment-hygiene.sh --cached
 bash scripts/check-file-size.sh --cached
 bash scripts/check-roadmap-tickets.sh --cached
+node scripts/check-roadmap-progress.ts --cached
 bash scripts/check-executable-scripts.sh
 
 # A clone may add checks of its own, never versioned, in .git/hooks/pre-commit.local.

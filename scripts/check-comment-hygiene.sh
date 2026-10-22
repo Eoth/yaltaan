@@ -35,8 +35,11 @@ trap 'rm -rf "$tmp"' EXIT
 self_exclude=(
   ':(exclude)scripts/check-comment-hygiene.sh'
   ':(exclude)scripts/check-roadmap-tickets.sh'
+  ':(exclude)scripts/check-roadmap-progress.ts'
+  ':(exclude)scripts/lib/roadmap-progress.ts'
   ':(exclude)scripts/tests/check-comment-hygiene.test.ts'
   ':(exclude)scripts/tests/check-roadmap-tickets.test.ts'
+  ':(exclude)scripts/tests/roadmap-progress.test.ts'
 )
 
 # git grep keeps the lines that may hold a violation anywhere; awk then judges only their comment part.

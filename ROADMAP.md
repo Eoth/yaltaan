@@ -27,16 +27,18 @@ Outillage de développement (empreinte installée, à ne laisser croître que pa
 
 Tranche verticale d'abord : la colonne vertébrale (§5 d'`ARCHITECTURE.md`) se valide de bout en bout sur un formulaire réel avant d'être gelée, puis les domaines s'élargissent. Un ticket découpé (a, b, c) prend une itération par étape.
 
-| # | Lot | Tickets, dans l'ordre | Sortie |
-|---|---|---|---|
-| 1 | 0 — Outillage | T0.1, T0.2, T0.7, T0.6, T0.5, T0.3, T0.4 a, b, T0.8, T0.9 | Un paquet vide qui passe toute la CI ; budgets calibrés contre les références. |
-| 2 | 1 — Colonne vertébrale | T1.1, T1.3, T1.2, T1.5, T1.4, T0.14, T1.6 a, T1.6 b | Contrats v0 (`Result`, `Issue`, `Path`, `equal`, nœud réactif), propriétés testées. |
-| 3 | 2 — Tranche verticale | T2.1, T2.2, T2.3, T2.4 a, b, c, T2.5, T0.13, T0.15, T2.6, T0.10, T2.7 | Formulaire pilote de bout en bout, mesures, **ADR go/no-go de `form`**, gel des contrats ; première version expérimentale publiée avec provenance. |
-| 4 | 3 — Données | T3.1, T3.2, T3.3 a, b, T3.4, T3.5, T3.6 a, b, c, T3.7 a, b, T3.8 | Modules `@experimental`. |
-| 5 | 4 — Temporal | T4.1, T4.2, T4.3, T4.4 | Tests sur l'implémentation native et sur le polyfill recommandé. |
-| 6 | 5 — Schéma et règles complets | T5.1 a, b, T5.2, T5.3, T5.4, T5.5, T5.6, T5.7 | Interopérabilité Standard Schema vérifiée avec au moins deux moteurs tiers. |
-| 7 | 6 — Formulaire complet (si go) | T6.1, T6.2, T6.3, T6.4, T6.5, T6.6 | Second projet pilote. |
-| 8 | 7 — Durcissement | T0.11, T0.12, T7.1, T7.2, T7.3, T7.4, T7.5 | 1.0 = uniquement des modules `@stable`. |
+**Avancement** : 7 étapes closes sur 67 ; prochaine : T0.4 b.
+
+| # | Lot | Tickets, dans l'ordre | Avancement | Sortie |
+|---|---|---|---|---|
+| 1 | 0 — Outillage | T0.1, T0.2, T0.7, T0.6, T0.5, T0.3, T0.4 a, b, T0.8, T0.9 | 7 / 10 clos ; prochain : T0.4 b | Un paquet vide qui passe toute la CI ; budgets calibrés contre les références. |
+| 2 | 1 — Colonne vertébrale | T1.1, T1.3, T1.2, T1.5, T1.4, T0.14, T1.6 a, T1.6 b | 0 / 8 clos ; prochain : T1.1 | Contrats v0 (`Result`, `Issue`, `Path`, `equal`, nœud réactif), propriétés testées. |
+| 3 | 2 — Tranche verticale | T2.1, T2.2, T2.3, T2.4 a, b, c, T2.5, T0.13, T0.15, T2.6, T0.10, T2.7 | 0 / 12 clos ; prochain : T2.1 | Formulaire pilote de bout en bout, mesures, **ADR go/no-go de `form`**, gel des contrats ; première version expérimentale publiée avec provenance. |
+| 4 | 3 — Données | T3.1, T3.2, T3.3 a, b, T3.4, T3.5, T3.6 a, b, c, T3.7 a, b, T3.8 | 0 / 12 clos ; prochain : T3.1 | Modules `@experimental`. |
+| 5 | 4 — Temporal | T4.1, T4.2, T4.3, T4.4 | 0 / 4 clos ; prochain : T4.1 | Tests sur l'implémentation native et sur le polyfill recommandé. |
+| 6 | 5 — Schéma et règles complets | T5.1 a, b, T5.2, T5.3, T5.4, T5.5, T5.6, T5.7 | 0 / 8 clos ; prochain : T5.1 a | Interopérabilité Standard Schema vérifiée avec au moins deux moteurs tiers. |
+| 7 | 6 — Formulaire complet (si go) | T6.1, T6.2, T6.3, T6.4, T6.5, T6.6 | 0 / 6 clos ; prochain : T6.1 | Second projet pilote. |
+| 8 | 7 — Durcissement | T0.11, T0.12, T7.1, T7.2, T7.3, T7.4, T7.5 | 0 / 7 clos ; prochain : T0.11 | 1.0 = uniquement des modules `@stable`. |
 
 `core/async` et `core/cache` (`ARCHITECTURE.md` §7.6, §7.7) n'avaient pas de phase : ils entrent au lot 3 (T3.7, T3.8). Si la tranche verticale montre que la validation asynchrone du formulaire en a besoin plus tôt, T3.7 a remonte avant T2.4 c.
 

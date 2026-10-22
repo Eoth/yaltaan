@@ -87,6 +87,7 @@ bash scripts/check-file-size.sh || failed
 
 step "roadmap tickets"
 bash scripts/check-roadmap-tickets.sh || failed
+node scripts/check-roadmap-progress.ts || failed
 
 step "executable scripts"
 bash scripts/check-executable-scripts.sh || failed
