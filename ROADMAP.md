@@ -25,22 +25,24 @@ Outillage de développement (empreinte installée, à ne laisser croître que pa
 
 ## 2. Ordre d'exécution
 
-Tranche verticale d'abord : la colonne vertébrale (§5 d'`ARCHITECTURE.md`) se valide de bout en bout sur un formulaire réel avant d'être gelée, puis les domaines s'élargissent. Un ticket découpé (a, b, c) prend une itération par étape.
+Une version utilisable d'abord (décision du propriétaire du 2026-10-23, §3) : la 0.1.0 livre `@yaltaan/core`, les utilitaires que les équipes recodent, sur les contrats de §5 d'`ARCHITECTURE.md` ; la 0.2.0 ajoute schéma et règles, validés sur le formulaire pilote ; la 0.3.0 le formulaire et Angular. L'outillage qui reste attend d'être utile. Les contrats se gèlent après le pilote (T2.7), pas avant. Une itération peut prendre deux tickets S ou M d'un même domaine.
 
-**Avancement** : 8 étapes closes sur 67 ; prochaine : T0.8.
+**Avancement** : 8 étapes closes sur 68 ; prochaine : T1.1.
 
 | # | Lot | Tickets, dans l'ordre | Avancement | Sortie |
 |---|---|---|---|---|
-| 1 | 0 — Outillage | T0.1, T0.2, T0.7, T0.6, T0.5, T0.3, T0.4 a, b, T0.8, T0.9 | 8 / 10 clos ; prochain : T0.8 | Un paquet vide qui passe toute la CI ; budgets calibrés contre les références. |
-| 2 | 1 — Colonne vertébrale | T1.1, T1.3, T1.2, T1.5, T1.4, T0.14, T1.6 a, T1.6 b | 0 / 8 clos ; prochain : T1.1 | Contrats v0 (`Result`, `Issue`, `Path`, `equal`, nœud réactif), propriétés testées. |
-| 3 | 2 — Tranche verticale | T2.1, T2.2, T2.3, T2.4 a, b, c, T2.5, T0.13, T0.15, T2.6, T0.10, T2.7 | 0 / 12 clos ; prochain : T2.1 | Formulaire pilote de bout en bout, mesures, **ADR go/no-go de `form`**, gel des contrats ; première version expérimentale publiée avec provenance. |
-| 4 | 3 — Données | T3.1, T3.2, T3.3 a, b, T3.4, T3.5, T3.6 a, b, c, T3.7 a, b, T3.8 | 0 / 12 clos ; prochain : T3.1 | Modules `@experimental`. |
-| 5 | 4 — Temporal | T4.1, T4.2, T4.3, T4.4 | 0 / 4 clos ; prochain : T4.1 | Tests sur l'implémentation native et sur le polyfill recommandé. |
-| 6 | 5 — Schéma et règles complets | T5.1 a, b, T5.2, T5.3, T5.4, T5.5, T5.6, T5.7 | 0 / 8 clos ; prochain : T5.1 a | Interopérabilité Standard Schema vérifiée avec au moins deux moteurs tiers. |
-| 7 | 6 — Formulaire complet (si go) | T6.1, T6.2, T6.3, T6.4, T6.5, T6.6 | 0 / 6 clos ; prochain : T6.1 | Second projet pilote. |
-| 8 | 7 — Durcissement | T0.11, T0.12, T7.1, T7.2, T7.3, T7.4, T7.5 | 0 / 7 clos ; prochain : T0.11 | 1.0 = uniquement des modules `@stable`. |
+| 1 | 0 — Outillage | T0.1, T0.2, T0.7, T0.6, T0.5, T0.3, T0.4 a, b | 8 / 8 clos, terminé | Paquets vides qui passent toute la CI ; taille, coût des types, instructions et temps mesurés. |
+| 2 | 0.1.0 — `@yaltaan/core` utilisable | T1.1, T1.3, T1.2, T1.5, T3.1, T3.2, T3.3 a, T3.5, T3.4, T0.10 | 0 / 10 clos ; prochain : T1.1 | `Result`, `Issue`, `Path`, `equal`, objets et accès par chemin, collections, nombres, chaînes ; version 0.1.0 étiquetée, archive vérifiée, publiée sur npm dès que l'organisation `@yaltaan` est réservée. |
+| 3 | 0.2.0 — Schéma et règles sur le pilote | T2.1 a, b, T2.2, T2.3, T1.4 | 0 / 5 clos ; prochain : T2.1 a | Schéma Standard Schema minimal et règles relationnelles, scénarios du pilote verts sans `form`. |
+| 4 | 0.3.0 — Formulaire et Angular | T0.14, T1.6 a, T1.6 b, T2.4 a, b, c, T2.5, T2.6, T2.7 | 0 / 9 clos ; prochain : T0.14 | Pilote de bout en bout dans Angular, mesures, **ADR go/no-go de `form`**, gel des contrats. |
+| 5 | Outillage reporté | T0.8, T0.9, T0.13, T0.15 | 0 / 4 clos ; prochain : T0.8 | Selon le besoin réel des versions précédentes. |
+| 6 | 3 — Données (suite) | T3.3 b, T3.6 a, b, c, T3.7 a, b, T3.8 | 0 / 7 clos ; prochain : T3.3 b | Modules `@experimental`. |
+| 7 | 4 — Temporal | T4.1, T4.2, T4.3, T4.4 | 0 / 4 clos ; prochain : T4.1 | Tests sur l'implémentation native et sur le polyfill recommandé. |
+| 8 | 5 — Schéma et règles complets | T5.1 a, b, T5.2, T5.3, T5.4, T5.5, T5.6, T5.7 | 0 / 8 clos ; prochain : T5.1 a | Interopérabilité Standard Schema vérifiée avec au moins deux moteurs tiers. |
+| 9 | 6 — Formulaire complet (si go) | T6.1, T6.2, T6.3, T6.4, T6.5, T6.6 | 0 / 6 clos ; prochain : T6.1 | Second projet pilote. |
+| 10 | 7 — Durcissement | T0.11, T0.12, T7.1, T7.2, T7.3, T7.4, T7.5 | 0 / 7 clos ; prochain : T0.11 | 1.0 = uniquement des modules `@stable`. |
 
-`core/async` et `core/cache` (`ARCHITECTURE.md` §7.6, §7.7) n'avaient pas de phase : ils entrent au lot 3 (T3.7, T3.8). Si la tranche verticale montre que la validation asynchrone du formulaire en a besoin plus tôt, T3.7 a remonte avant T2.4 c.
+`core/async` et `core/cache` (`ARCHITECTURE.md` §7.6, §7.7) n'avaient pas de phase : ils entrent au lot 3 (T3.7, T3.8). Si le formulaire montre que sa validation asynchrone en a besoin plus tôt, T3.7 a remonte avant T2.4 c.
 
 ## 3. Décisions produit et architecture
 
@@ -65,7 +67,8 @@ Une décision réservée au propriétaire (nom, licence, API publique, contrat t
 | Installation `shallow` (ADR 0015) | Comment garder `tsc` à TypeScript 7 quand une dépendance de dépendance livre une commande du même nom ? | **Décidé (choix technique interne)** : `install-strategy=shallow` dans `.npmrc` : seules les dépendances directes sont en tête de `node_modules`, seules leurs commandes sont liées ; `@typescript/old` (alias de `typescript@6.0.3`, dépendance de `@typescript/typescript6`) s'installe sous l'enveloppe. Constat du 2026-10-19 en stratégie par défaut : `npx tsc -v` → 6.0.3, la porte aurait construit avec TypeScript 6.0 et passé. Garde ajoutée au contrôle du verrou : deux paquets en tête de `node_modules` qui livrent la même commande font échouer la porte. Écartés : appeler TypeScript 7 par son fichier partout (`npx tsc` d'un terminal resterait faux) ; `install-strategy=linked` (expérimental dans npm 11). |
 | Harnais chronométré (ADR 0017) | Avec quel outil chronométrer les scénarios de `bench/perf/` pour la publication du §9.2 d'`ARCHITECTURE.md` (le départage A/B reste au comptage d'instructions, ADR 0016) ? | **Acté par le propriétaire le 2026-10-20, contre la recommandation (tinybench 6.2.2)** : **aucune dépendance**, un harnais écrit dans `bench/perf/` sur `process.hrtime.bigint()`, à ces conditions : échantillons groupés (un échantillon dure au moins 10 µs, taille du lot publiée), boucle vide chronométrée dans la même exécution et soustraite, plancher publié ; ses tests vérifient qu'une fonction vide lit moins d'une nanoseconde et qu'un travail double lit entre 1,8 et 2,2 fois le temps ; seconde lecture une fois par tinybench et mitata dans une copie jetable, jamais dans le verrou. Mesure du 2026-10-20 : une copie d'objet lue 9-10 ns par mitata, 9,1 à 9,5 ns par tinybench groupé, 34-35 ns par un premier chronomètre maison sans soustraction. Écartés : tinybench (recommandé : 1 paquet, 87 315 octets, MIT, provenance vérifiée, actif) ; mitata 1.0.34 (aucune version depuis le 2025-02-04, un seul mainteneur, sans provenance). |
 | Octets alloués et passes du harnais chronométré (ADR 0018) | Comment lire les octets alloués par appel (Node 24 n'a pas de compteur), et que doivent vérifier les tests du harnais ? | **Décidé (choix technique interne)** : croissance du tas sur des fenêtres de N appels sans collecte (jeune génération de 64 Mo, collectes vues par `v8.GCProfiler`), sept fenêtres, deux jetées, médiane des cinq publiée avec la plus petite et la plus grande ; recoupée dans un autre processus par la comptabilité du ramasse-miettes (collectes laissées faire, croissance plus octets libérés), et une fois hors des fichiers suivis par l'échantillonneur du tas de V8 (0 à 1,8 % d'écart, 7,7 % sur le schéma valibot). Trois passes par défaut, dispersion entre passes, alimentation et gouverneur publiés. Tests ajoutés à ceux de l'ADR 0017, qui restent verts avec des lots d'un appel : échantillon médian d'au moins 10 µs, fonction plancher lue à moins d'un tiers du plancher ; travail double lu sur la passe la plus rapide. |
-| Projet pilote | Quel formulaire réel pour la tranche verticale ? | **À fournir par le propriétaire** : un formulaire métier réel d'une application Angular qu'il connaît (multi-étapes, tableau dynamique, requis conditionnel, validation serveur), anonymisé et reproduit dans `examples/` ; à défaut, un formulaire administratif public et documenté de même complexité. Bloque T2.1. |
+| Projet pilote | Quel formulaire réel pour la tranche verticale ? | **Acté par le propriétaire le 2026-10-23** : son formulaire métier réel est sur un poste professionnel dont il ne peut rien sortir ; le pilote est donc imaginé dans le dépôt, de même complexité (multi-étapes, tableau dynamique, requis conditionnels, règles entre champs, validation serveur), dans `examples/pilot/` (T2.1 a, à relire par le propriétaire). |
+| Version 0.1.0 | Faut-il finir l'outillage et la tranche verticale avant une première version ? | **Acté par le propriétaire le 2026-10-23** : non. Après huit itérations sans code de librairie, viser vite une 0.1.0 utilisable (`@yaltaan/core`), puis 0.2.0 (schéma, règles, pilote) et 0.3.0 (formulaire, Angular). L'outillage, les ADR et les tickets non urgents attendent un besoin réel ; les règles de qualité (tests, porte verte, taille mesurée) restent. |
 
 ## 4. Non-objectifs (exclusions motivées)
 
@@ -192,11 +195,11 @@ Une décision réservée au propriétaire (nom, licence, API publique, contrat t
 ### Lot 2 — Tranche verticale
 
 #### T2.1 — Formulaire pilote et ses scénarios
-- **Pourquoi** : la tranche se juge sur un formulaire réel, pas sur un exemple écrit pour elle.
-- **Faire** : reproduire le formulaire choisi (§3, projet pilote) : multi-étapes, tableau dynamique, requis conditionnel, validation serveur ; écrire ses scénarios d'acceptation en tests avant le code de la tranche.
+- **Pourquoi** : la tranche se juge sur un formulaire de la complexité d'un vrai, pas sur un exemple écrit pour une fonction.
+- **Faire** : (a) écrire le pilote (§3, projet pilote) : étapes, champs, tableau dynamique, requis conditionnels, règles entre champs, validation serveur, et ses scénarios d'acceptation en données (entrée, issues attendues avec code et chemin) ; (b) les mêmes scénarios en tests exécutables dès que `schema` existe, chacun rouge avant la tranche.
 - **Où** : `examples/pilot/`.
-- **Accepté si** : scénarios relus par le propriétaire ; chacun rouge avant la tranche.
-- **Taille** S · **Prio** P0 · **Dépend de** décision §3 (projet pilote)
+- **Accepté si** : (a) chaque règle et chaque issue d'un scénario cite un champ du pilote par son chemin, scénarios relus par le propriétaire ; (b) chaque scénario vu rouge, puis vert avec T2.2 et T2.3.
+- **Taille** M → (a) S, (b) S · **Prio** P0 · **Dépend de** (b) T2.2
 
 #### T2.2 — Schéma minimal conforme Standard Schema v1
 - **Pourquoi** : premier domaine branché sur `Result`, `Issue` et `Path`, et porte d'entrée vers les moteurs tiers.
