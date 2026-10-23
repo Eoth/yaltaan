@@ -3,6 +3,7 @@
 # basis is the reference scenario a budget was calibrated against, or "hypothesis" until one is measured.
 scenario	brotli	basis
 yaltaan/core-omit	150	references/es-toolkit-omit
+yaltaan/core-parse-path	750	references/es-toolkit-to-path
 yaltaan/core-result	150	hypothesis
 yaltaan/core-ten-primitives	1000	references/es-toolkit-ten-primitives
 yaltaan/core-reactive	1000	references/preact-signals
