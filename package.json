@@ -22,7 +22,8 @@
   "scripts": {
     "verify": "bash scripts/verify.sh",
     "typecheck": "tsc -b",
-    "test": "node --import ./scripts/test-env.ts --test --test-reporter=@yaltaan/testing/reporter \"**/*.test.ts\"",
+    "build": "bash scripts/build.sh",
+    "test": "bash scripts/test.sh",
     "format": "prettier --write .",
     "format:check": "prettier --check ."
   },

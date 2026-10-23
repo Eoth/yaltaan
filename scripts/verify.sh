@@ -137,13 +137,9 @@ fi
 rm -f "$timing_log"
 
 step "build"
-built=0
-for config in packages/*/tsconfig.build.json; do
-  [ -f "$config" ] || continue
-  built=$((built + 1))
-  npx --no-install tsc -b "$config" || failed
-done
-[ "$built" = 0 ] && echo "ok (not applicable: no package has sources yet)"
+# The test run above built every package from nothing already; built again here so that this step judges the build on
+# its own, whatever the test run did.
+bash scripts/build.sh || failed
 
 step "dependency graph"
 # After the build: the check reads the modules each package publishes under dist/, and what each build compiles.
