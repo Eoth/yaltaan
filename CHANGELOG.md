@@ -5,3 +5,7 @@ All notable changes to the Yaltaan packages are documented in this file. The for
 No entry predates the first published version; user-visible changes only.
 
 ## [Unreleased]
+
+### Added
+
+- `@yaltaan/core/result`: the `Result<T, E>` type, a read-only object discriminated by `ok`, and the free functions `ok`, `err`, `mapResult` and `unwrapOr` (`@experimental`).

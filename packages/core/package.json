@@ -7,6 +7,10 @@
   "type": "module",
   "sideEffects": false,
   "exports": {
+    "./result": {
+      "types": "./dist/result/index.d.ts",
+      "default": "./dist/result/index.js"
+    },
     "./package.json": "./package.json"
   },
   "files": [

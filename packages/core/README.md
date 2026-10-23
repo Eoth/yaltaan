@@ -2,9 +2,9 @@
 
 The shared contracts and data primitives of Yaltaan. The other packages build on them, and they depend on nothing.
 
-**Empty today**: the package holds no code yet, is private and is not published.
+**Not published yet**: the package is private until its first release. Every export is `@experimental`: it may change in a minor version until the contracts are frozen.
 
-It will hold one sub-path per domain, each imported on its own (`@yaltaan/core/result`), so that an application ships only what it imports:
+It holds one sub-path per domain, each imported on its own (`@yaltaan/core/result`), so that an application ships only what it imports. Available today: `result`. The others are planned:
 
 | Sub-path | Holds |
 |---|---|
@@ -22,6 +22,24 @@ It will hold one sub-path per domain, each imported on its own (`@yaltaan/core/r
 | `reactive` | Reactive nodes: lazy, glitch-free derived values behind the `get` and `subscribe` contract of React's `useSyncExternalStore`. |
 
 Zero runtime dependencies. ESM only, `"sideEffects": false`.
+
+## `result`
+
+An expected failure is a value, not an exception: a function that can fail returns a `Result`, and `ok` tells the two sides apart.
+
+```ts
+import { err, mapResult, ok, unwrapOr, type Result } from '@yaltaan/core/result';
+
+const parseAge = (text: string): Result<number, 'not_a_number'> => {
+  const age = Number(text);
+  return Number.isInteger(age) ? ok(age) : err('not_a_number');
+};
+
+const nextYear = mapResult(parseAge('41'), (age) => age + 1); // { ok: true, value: 42 }
+unwrapOr(parseAge('forty'), 0); // 0
+```
+
+The contract of each export is in the [reference](../../docs/reference/core.md).
 
 ## License
 
