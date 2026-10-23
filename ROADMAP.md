@@ -27,7 +27,7 @@ Outillage de développement (empreinte installée, à ne laisser croître que pa
 
 Une version utilisable d'abord (décision du propriétaire du 2026-10-23, §3) : la 0.1.0 livre `@yaltaan/core`, les utilitaires que les équipes recodent, sur les contrats de §5 d'`ARCHITECTURE.md` ; la 0.2.0 ajoute schéma et règles, validés sur le formulaire pilote ; la 0.3.0 le formulaire et Angular. L'outillage qui reste attend d'être utile. Les contrats se gèlent après le pilote (T2.7), pas avant. Une itération peut prendre deux tickets S ou M d'un même domaine.
 
-**Avancement** : 9 étapes closes sur 68 ; prochaine : T1.3.
+**Avancement** : 9 étapes closes sur 69 ; prochaine : T1.3.
 
 | # | Lot | Tickets, dans l'ordre | Avancement | Sortie |
 |---|---|---|---|---|
@@ -35,7 +35,7 @@ Une version utilisable d'abord (décision du propriétaire du 2026-10-23, §3) :
 | 2 | 0.1.0 — `@yaltaan/core` utilisable | T1.1, T1.3, T1.2, T1.5, T3.1, T3.2, T3.3 a, T3.5, T3.4, T0.10 | 1 / 10 clos ; prochain : T1.3 | `Result`, `Issue`, `Path`, `equal`, objets et accès par chemin, collections, nombres, chaînes ; version 0.1.0 étiquetée, archive vérifiée, publiée sur npm dès que l'organisation `@yaltaan` est réservée. |
 | 3 | 0.2.0 — Schéma et règles sur le pilote | T2.1 a, b, T2.2, T2.3, T1.4 | 0 / 5 clos ; prochain : T2.1 a | Schéma Standard Schema minimal et règles relationnelles, scénarios du pilote verts sans `form`. |
 | 4 | 0.3.0 — Formulaire et Angular | T0.14, T1.6 a, T1.6 b, T2.4 a, b, c, T2.5, T2.6, T2.7 | 0 / 9 clos ; prochain : T0.14 | Pilote de bout en bout dans Angular, mesures, **ADR go/no-go de `form`**, gel des contrats. |
-| 5 | Outillage reporté | T0.8, T0.9, T0.13, T0.15 | 0 / 4 clos ; prochain : T0.8 | Selon le besoin réel des versions précédentes. |
+| 5 | Outillage reporté | T0.16, T0.8, T0.9, T0.13, T0.15 | 0 / 5 clos ; prochain : T0.16 | Selon le besoin réel des versions précédentes. |
 | 6 | 3 — Données (suite) | T3.3 b, T3.6 a, b, c, T3.7 a, b, T3.8 | 0 / 7 clos ; prochain : T3.3 b | Modules `@experimental`. |
 | 7 | 4 — Temporal | T4.1, T4.2, T4.3, T4.4 | 0 / 4 clos ; prochain : T4.1 | Tests sur l'implémentation native et sur le polyfill recommandé. |
 | 8 | 5 — Schéma et règles complets | T5.1 a, b, T5.2, T5.3, T5.4, T5.5, T5.6, T5.7 | 0 / 8 clos ; prochain : T5.1 a | Interopérabilité Standard Schema vérifiée avec au moins deux moteurs tiers. |
@@ -147,6 +147,13 @@ Une décision réservée au propriétaire (nom, licence, API publique, contrat t
 - **Où** : `scripts/type-cost.ts`.
 - **Accepté si** : mêmes comptes que la méthode actuelle sur chaque usage ; étape ≤ 10 s avec tous les usages de la tranche verticale, mesurée sur plusieurs passes.
 - **Taille** S · **Prio** P2 · **Dépend de** T1.4
+
+#### T0.16 — Caractères invisibles et de contrôle bidirectionnel écrits en clair dans le code
+- **Pourquoi** : un contrôle bidirectionnel (U+202A à U+202E, U+2066 à U+2069) ou un caractère invisible (U+200B à U+200D, U+2060, U+FEFF) écrit en clair dans un fichier suivi rend le code relu différent du code exécuté (classe « Trojan Source », CVE-2021-42574) ; `packages/testing/src/unicode.ts` et `catalogue.test.ts` en contiennent aujourd'hui dans des chaînes, et aucun contrôle de la porte ne les voit.
+- **Faire** : écrire ces caractères en échappement (`\u202E`) dans les deux fichiers ; ajouter le refus de ces points de code au contrôle du format des textes (`scripts/check-text-format.sh`), avec un test qui le voit rouge.
+- **Où** : `packages/testing/src/`, `scripts/check-text-format.sh`, `scripts/tests/text-guards.test.ts`.
+- **Accepté si** : la porte échoue sur un fichier suivi qui contient l'un de ces caractères en clair ; aucun n'en contient ; catalogue Unicode inchangé (mêmes cas, mêmes chaînes à l'exécution).
+- **Taille** S · **Prio** P1 · **Dépend de** —
 
 ### Lot 1 — Colonne vertébrale
 
