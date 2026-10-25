@@ -4,7 +4,7 @@
 scenario	brotli	basis
 yaltaan/core-equal	1750	references/es-toolkit-is-equal
 yaltaan/core-issue	550	hypothesis
-yaltaan/core-omit	150	references/es-toolkit-omit
+yaltaan/core-omit	600	references/es-toolkit-compat-omit
 yaltaan/core-parse-path	750	references/es-toolkit-to-path
 yaltaan/core-result	150	hypothesis
 yaltaan/core-ten-primitives	1000	references/es-toolkit-ten-primitives

@@ -2,10 +2,11 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { isDeepStrictEqual } from 'node:util';
 
-import { DEEP, declareAdversarial, fc, HostileError } from '@yaltaan/testing';
+import { assertType, DEEP, declareAdversarial, fc, HostileError, type Equal } from '@yaltaan/testing';
 import { Temporal } from 'temporal-polyfill';
 
-import { equal, type EqualOptions } from './index.ts';
+import type { UntypedMask } from '../object/index.ts';
+import { equal, type EqualMasks, type EqualOptions } from './index.ts';
 
 const SUBPATH = '@yaltaan/core/equal';
 const SAME_VALUE: EqualOptions = { equality: 'SameValue' };
@@ -335,6 +336,104 @@ test('equal agrees with Node isDeepStrictEqual on JSON data', () => {
     }),
     { numRuns: 500 },
   );
+});
+
+interface Order {
+  readonly id: string;
+  readonly updatedAt: string;
+  readonly customer: { readonly name: string; readonly email?: string };
+  readonly lines: readonly { readonly id: number; readonly sku: string; readonly quantity: number }[];
+}
+
+const saved: Order = {
+  id: 'o-1',
+  updatedAt: '2026-10-01',
+  customer: { name: 'Ada' },
+  lines: [{ id: 1, sku: 'a', quantity: 2 }],
+};
+
+test('omit compares every field but those a mask names, at any depth and in each element of an array', () => {
+  const current: Order = { ...saved, id: 'o-2', updatedAt: '2026-10-25', lines: [{ id: 9, sku: 'a', quantity: 2 }] };
+  assert.equal(equal(saved, current), false);
+  assert.equal(equal(saved, current, { omit: { id: true, updatedAt: true, lines: { id: true } } }), true);
+  assert.equal(equal(saved, current, { omit: { id: true, updatedAt: true } }), false);
+  assert.equal(equal(saved, { ...current, customer: { name: 'Bob' } }, { omit: { id: true, updatedAt: true } }), false);
+  // A field omitted on one side only is not compared either: the key sets compared are the same.
+  assert.equal(equal({ a: 1, b: 2 }, { a: 1 }, { omit: { b: true } }), true);
+  assert.equal(equal({ a: 1, b: 2 } as unknown, { a: 1 }, { omit: { c: true } }), false);
+});
+
+test('pick compares only the fields a mask names; a field both lack is equal, one that only one has differs', () => {
+  const current: Order = { ...saved, updatedAt: 'later', customer: { name: 'Ada', email: 'a@b.c' } };
+  assert.equal(equal(saved, current, { pick: { id: true, lines: { sku: true } } }), true);
+  assert.equal(equal(saved, current, { pick: { customer: { name: true } } }), true);
+  assert.equal(equal(saved, current, { pick: { customer: { email: true } } }), false);
+  assert.equal(equal(saved, { ...saved }, { pick: { customer: { email: true } } }), true);
+  assert.equal(equal(saved, current, { pick: { customer: true } }), false);
+  assert.equal(equal([saved], [current], { pick: { id: true } }), true);
+  assert.equal(equal([saved], [current, current], { pick: { id: true } }), false);
+});
+
+test('a mask walks into records and arrays only: under any other value, it compares the value whole', () => {
+  const left = { map: new Map([['k', { a: 1, b: 1 }]]), at: new Date(0) };
+  const right = { map: new Map([['k', { a: 1, b: 2 }]]), at: new Date(0) };
+  assert.equal(equal(left, right, { omit: { map: { b: true } } as UntypedMask }), false);
+  assert.equal(equal(left, right, { omit: { map: true } }), true);
+  assert.equal(equal(left, right, { pick: { at: true } }), true);
+});
+
+test('the memory of pairs is kept per mask: a pair equal under one mask is compared again under another', () => {
+  // Past 64 pairs, pairs are remembered. `shared` is reached first under the mask that omits `x`, where it equals
+  // `other`, then under no mask at all, where it differs; one memory for both would answer true.
+  const padding = (): object[] => Array.from({ length: 70 }, (_, index) => ({ index }));
+  const shared = { x: 1, y: 1 };
+  const other = { x: 2, y: 1 };
+  const left = { whole: shared, masked: shared, padding: padding() };
+  const right = { whole: other, masked: other, padding: padding() };
+  assert.equal(equal(left, right, { omit: { masked: { x: true } } }), false);
+  assert.equal(equal(left, right, { omit: { masked: { x: true }, whole: { x: true } } }), true);
+  // A mask that refers to itself compares two cyclic values without looping.
+  const mask: { stamp: true; next?: unknown } = { stamp: true };
+  mask.next = mask;
+  const a: Record<string, unknown> = { stamp: 1, value: 'v' };
+  a['next'] = a;
+  const b: Record<string, unknown> = { stamp: 2, value: 'v' };
+  b['next'] = b;
+  assert.equal(equal(a, b, { omit: mask as UntypedMask }), true);
+  assert.equal(equal(a, { ...b, value: 'w', next: b }, { omit: mask as UntypedMask }), false);
+});
+
+test('masks: both at once, or one that is not a mask, is a TypeError', () => {
+  assert.throws(() => equal({ a: 1 }, { a: 1 }, { pick: { a: true }, omit: { a: true } }), TypeError);
+  for (const mask of [null, 1, 'a', [], new Map()]) {
+    assert.throws(() => equal({ a: 1 }, { a: 2 }, { omit: mask as never }), TypeError, String(mask));
+  }
+  assert.throws(() => equal({ a: { b: 1 } }, { a: { b: 1 } }, { pick: { a: false } as never }), TypeError);
+  // The same value is equal to itself whatever the mask, before any mask entry is read.
+  assert.equal(equal(saved, saved, { pick: { id: false } as never }), true);
+});
+
+test('types: a mask names only fields of the first value, at every depth', () => {
+  assertType<
+    Equal<
+      EqualMasks<{ readonly a: { readonly b: number } }>['pick'],
+      { readonly a?: true | { readonly b?: true } } | undefined
+    >
+  >();
+  const settings: EqualOptions = { equality: 'SameValue' };
+  assert.equal(equal(saved, saved, settings), true);
+  const typed: EqualOptions & EqualMasks<Order> = { omit: { updatedAt: true } };
+  assert.equal(equal(saved, saved, typed), true);
+  // Checked by the compiler only: each call is wrong, and is never made.
+  const wrong = (): void => {
+    // @ts-expect-error a misspelt field
+    equal(saved, saved, { omit: { updatedat: true } });
+    // @ts-expect-error a misspelt field beside a correct one, in the elements of an array
+    equal(saved, saved, { pick: { lines: { sku: true, quantty: true } } });
+    // @ts-expect-error a number has no field
+    equal(1, 1, { pick: { a: true } });
+  };
+  assert.equal(typeof wrong, 'function');
 });
 
 // A value of any category: equal to itself and to its copy, in both directions, or what a hostile object throws.

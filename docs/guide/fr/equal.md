@@ -1,6 +1,6 @@
 # Égalité profonde : deux valeurs contiennent-elles les mêmes données ?
 
-`import { equal, type EqualOptions } from '@yaltaan/core/equal';`
+`import { equal, type EqualOptions, type EqualMasks } from '@yaltaan/core/equal';`
 
 ## Le problème
 
@@ -62,6 +62,22 @@ equal({ [id]: 1 }, { [id]: 2 }, { symbols: true }); // → false
 - `equality: 'SameValue'` compare les primitives comme `Object.is`, donc `0` et `-0` diffèrent (utile pour une valeur qui servira de diviseur).
 - `symbols: true` compare aussi les clés symboles propres et énumérables des objets simples ; par défaut elles sont ignorées, comme par toutes les fonctions d'objet de Yaltaan.
 
+## Comparer seulement certains champs
+
+La valeur d'un formulaire diffère souvent de sa copie enregistrée seulement par des champs que personne ne modifie : un identifiant attribué par le serveur, une date `updatedAt`. `omit` nomme les champs jamais comparés, `pick` les seuls comparés, avec les masques de [`@yaltaan/core/object`](object.md) : `true` pour un champ, un masque imbriqué pour entrer dedans, et un masque posé sur un tableau s'applique à chaque élément.
+
+```ts
+import { equal } from '@yaltaan/core/equal';
+
+const saved = { id: 1, updatedAt: '2026-10-01', name: 'Ada', lines: [{ id: 7, sku: 'a' }] };
+const current = { id: 1, updatedAt: '2026-10-25', name: 'Ada', lines: [{ id: 8, sku: 'a' }] };
+equal(saved, current); // → false
+equal(saved, current, { omit: { updatedAt: true, lines: { id: true } } }); // → true
+equal(saved, current, { pick: { name: true, lines: { sku: true } } }); // → true
+```
+
+Le compilateur vérifie chaque champ du masque contre le type de la première valeur, à toute profondeur : `{ omit: { updatedat: true } }` ne compile pas, et votre éditeur propose les vrais champs pendant la saisie. Avec `pick`, un champ absent des deux valeurs est égal, et un champ présent d'un seul côté diffère. Passez l'une des deux options, jamais les deux. Un masque n'entre que dans les objets simples et les tableaux : sous une `Map`, une date ou une instance de classe, il compare la valeur entière.
+
 ## Les structures qui se contiennent elles-mêmes
 
 Deux valeurs sont égales quand les parcourir côte à côte ne trouve jamais de différence. Une structure qui se désigne elle-même se compare donc sans boucler à l'infini, et une branche partagée par plusieurs endroits n'est comparée qu'une fois.
@@ -86,4 +102,4 @@ Les structures très profondes (des dizaines de milliers de niveaux) se comparen
 
 ## Ce que ça coûte
 
-`equal` seul pèse moins de 1 Ko, minifié et compressé par brotli. Comparer deux petites valeurs (les données d'un formulaire) n'alloue aucune table en mémoire ; une table des paires déjà comparées n'apparaît qu'au-delà de quelques dizaines d'objets, là où elle commence à faire gagner du temps.
+`equal` seul pèse environ 1,3 Ko minifié et compressé par brotli, masques compris. Comparer deux petites valeurs (les données d'un formulaire) n'alloue aucune table en mémoire ; une table des paires déjà comparées n'apparaît qu'au-delà de quelques dizaines d'objets, là où elle commence à faire gagner du temps.

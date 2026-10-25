@@ -4,18 +4,18 @@ The shared contracts and data primitives of Yaltaan. The other packages build on
 
 **Not published yet**: the package is private until its first release. Every export is `@experimental`: it may change in a minor version until the contracts are frozen.
 
-It holds one sub-path per domain, each imported on its own (`@yaltaan/core/result`), so that an application ships only what it imports. Available today: `result`, `issue`, `path` and `equal`. The others are planned:
+It holds one sub-path per domain, each imported on its own (`@yaltaan/core/result`), so that an application ships only what it imports. Available today: `result`, `issue`, `path`, `equal` and `object` (selection by mask). The others are planned:
 
 | Sub-path | Holds |
 |---|---|
 | `result` | `Result<T, E>`, a read-only object discriminated by `ok`, and free functions over it. |
 | `issue` | `Issue`, the one shape of every expected failure: a stable namespaced code, a `Path` and parameters, never a message. |
 | `path` | `Path` and its segments, including a key segment that follows an array element when it moves; a text form at the boundaries only. |
-| `object` | Picking, omitting and merging properties, and reading and updating by `Path` with structural sharing. |
+| `object` | Picking, omitting and redacting fields by a mask the compiler checks; merging, and reading and updating by `Path` with structural sharing, are planned. |
 | `collection` | What arrays and iterators lack natively: grouping by a unique key, top-k, multi-key sorting, chunks and windows. |
 | `string` | Length and truncation by grapheme, slugs, detection of invisible and bidirectional control characters. |
 | `number` | Strict parsing to a `Result`, named rounding modes, exact conversions between `number` and `bigint`. |
-| `equal` | Configurable deep equality. |
+| `equal` | Configurable deep equality, on all fields or on those a mask selects. |
 | `diff` | Diffs and patches addressed by `Path`. |
 | `async` | Timeouts, retries, concurrency limits, debouncing and throttling, each cancellable by an `AbortSignal`, with an injectable clock. |
 | `cache` | Bounded caches, whose maximum size is mandatory, and memoization. |
@@ -76,9 +76,25 @@ import { equal } from '@yaltaan/core/equal';
 
 equal({ tags: ['a'], at: new Date(0) }, { at: new Date(0), tags: ['a'] }); // → true
 equal(new Set([{ id: 1 }]), new Set([{ id: 1 }])); // → false
+equal({ id: 1, name: 'Ada' }, { id: 2, name: 'Ada' }, { omit: { id: true } }); // → true
 ```
 
 `Map` keys and `Set` elements are matched as `has` matches them, by SameValueZero. A hole in an array differs from `undefined`, as a missing key differs from one that holds `undefined`. The walk keeps its own stack and the pairs it has met: cycles end, a branch shared by several places is compared once, and depth costs no call stack.
+
+## `object`
+
+A mask names fields the way the value nests them: `true` takes a field whole, a nested mask walks into it, a mask on an array applies to each element. The compiler checks each key against the type of the value, at every depth, and types the result.
+
+```ts
+import { omit, pick, redact } from '@yaltaan/core/object';
+
+const user = { name: 'Ada', password: 's3cret', lines: [{ sku: 'a', price: 3 }] };
+omit(user, { password: true, lines: { price: true } }); // → { name: 'Ada', lines: [{ sku: 'a' }] }
+pick(user, { name: true }); // → { name: 'Ada' }
+redact(user, { password: true }); // → { name: 'Ada', password: '***', lines: [{ sku: 'a', price: 3 }] }
+```
+
+Only plain objects and arrays are walked; anything else is taken whole. A copy keeps the prototype of its record (`Object.prototype` or `null`), a `"__proto__"` key stays a key, a getter is read once and only when its field is kept, and symbol keys count only with `{ symbols: true }`.
 
 How to use each sub-path, in English and in French: the [guide](../../docs/guide/README.md). The contract of each export is in the [reference](../../docs/reference/core.md).
 

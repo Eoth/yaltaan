@@ -1,6 +1,6 @@
 # Deep equality: do two values hold the same data?
 
-`import { equal, type EqualOptions } from '@yaltaan/core/equal';`
+`import { equal, type EqualOptions, type EqualMasks } from '@yaltaan/core/equal';`
 
 ## The problem
 
@@ -62,6 +62,22 @@ equal({ [id]: 1 }, { [id]: 2 }, { symbols: true }); // → false
 - `equality: 'SameValue'` compares primitives as `Object.is` does, so `0` and `-0` differ (useful for a value that is divided by later).
 - `symbols: true` compares the own enumerable symbol keys of plain objects too; by default they are ignored, as by every object function of Yaltaan.
 
+## Comparing only some fields
+
+A form's value often differs from its saved copy only in fields nobody edits: an id the server assigns, an `updatedAt` stamp. `omit` names the fields never compared, `pick` the only ones compared, with the masks of [`@yaltaan/core/object`](object.md): `true` for a field, a nested mask to walk into it, and a mask on an array applies to each element.
+
+```ts
+import { equal } from '@yaltaan/core/equal';
+
+const saved = { id: 1, updatedAt: '2026-10-01', name: 'Ada', lines: [{ id: 7, sku: 'a' }] };
+const current = { id: 1, updatedAt: '2026-10-25', name: 'Ada', lines: [{ id: 8, sku: 'a' }] };
+equal(saved, current); // → false
+equal(saved, current, { omit: { updatedAt: true, lines: { id: true } } }); // → true
+equal(saved, current, { pick: { name: true, lines: { sku: true } } }); // → true
+```
+
+The compiler checks each field of the mask against the type of the first value, at every depth: `{ omit: { updatedat: true } }` does not compile, and your editor offers the real fields as you type. Under `pick`, a field that both values lack is equal, and one that only one value has differs. Pass one of the two, never both. A mask walks into plain objects and arrays only: under a `Map`, a date or a class instance, it compares the value whole.
+
 ## Structures that contain themselves
 
 Two values are equal when walking them side by side never finds a difference. A structure that refers to itself is therefore compared without looping forever, and a branch that several places share is compared once.
@@ -86,4 +102,4 @@ Very deep structures (tens of thousands of levels) are compared without overflow
 
 ## What it costs
 
-`equal` alone weighs under 1 kB minified and compressed with brotli. Comparing two small values (a form's worth of data) allocates no memory table; a table of the pairs already compared appears only past a few dozen objects, where it starts saving time.
+`equal` alone weighs about 1.3 kB minified and compressed with brotli, masks included. Comparing two small values (a form's worth of data) allocates no memory table; a table of the pairs already compared appears only past a few dozen objects, where it starts saving time.
