@@ -3,6 +3,8 @@ import { test } from 'node:test';
 
 import { assertType, CallbackError, declareAdversarial, fc, HostileError, type Equal } from '@yaltaan/testing';
 
+import { liveCodes } from '../../../../scripts/check-issue-codes.ts';
+
 import {
   checkWritablePath,
   formatPath,
@@ -251,6 +253,11 @@ test('the example of the README runs', () => {
   assert.deepEqual(formatPath(['lines', 2, 'unit price']), { ok: true, value: 'lines[2]["unit price"]' });
   const write = checkWritablePath(['__proto__', 'isAdmin']);
   assert.equal(write.ok ? undefined : write.error.code, 'path.forbidden_segment');
+});
+
+test('the codes this module produces are the path codes of the registry of the package', () => {
+  const registered = [...liveCodes('core')].filter((code) => code.startsWith('path.'));
+  assert.deepEqual(registered.toSorted(), CODES.toSorted());
 });
 
 // A check that may only fail by the hostile object's own error: reading the options can hit a throwing getter.

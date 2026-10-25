@@ -150,7 +150,8 @@ interface Issue {
 - The same shape everywhere: schemas, parsers, rules, forms, imported server errors.
 - The core produces no message. The application provides a formatter `(issue) => string`, and that is where i18n lives. A minimal English formatter is provided as a recipe.
 - Codes are a public SemVer contract, listed in a documented registry per package.
-- Conversion to the Standard Schema issue format (`message` + `path`) is provided at the boundary.
+- Conversion to the Standard Schema issue format (`message` + `path`) is provided at the boundary, both ways. A `{ key }` segment leaves as the element's current index, given by a caller's `resolveKey`, or the path stops before it; an issue read from another validator gets the code `issue.external` ([ADR 0019](docs/adr/0019-issue-and-code-registry.md)).
+- Each package's registry is `docs/issue-codes/<package>.md`; the gate compares it with the published declarations and with every committed version of itself, so a code is never deleted or renamed unseen ([ADR 0019](docs/adr/0019-issue-and-code-registry.md)).
 
 ### 5.3 `Path`
 

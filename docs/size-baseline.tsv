@@ -14,6 +14,8 @@ references/temporal-polyfill	esbuild	57158	19793	17851	27300b9b8508605f
 references/temporal-polyfill	rollup	57911	19849	17876	705b0870ad76d476
 references/valibot-login	esbuild	3472	1408	1285	bbd0d9439e42b90b
 references/valibot-login	rollup	3354	1371	1254	7e92d1ca736dfefc
+yaltaan/core-issue	esbuild	1072	580	487	4e3e828ba9784eb9
+yaltaan/core-issue	rollup	1096	592	498	7879e301a9213d01
 yaltaan/core-parse-path	esbuild	1260	718	639	b908885c6f439a46
 yaltaan/core-parse-path	rollup	1272	720	637	32a8c9059a48d577
 yaltaan/core-result	esbuild	209	144	122	bc01613afe908f27

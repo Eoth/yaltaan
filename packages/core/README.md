@@ -4,7 +4,7 @@ The shared contracts and data primitives of Yaltaan. The other packages build on
 
 **Not published yet**: the package is private until its first release. Every export is `@experimental`: it may change in a minor version until the contracts are frozen.
 
-It holds one sub-path per domain, each imported on its own (`@yaltaan/core/result`), so that an application ships only what it imports. Available today: `result` and `path`. The others are planned:
+It holds one sub-path per domain, each imported on its own (`@yaltaan/core/result`), so that an application ships only what it imports. Available today: `result`, `issue` and `path`. The others are planned:
 
 | Sub-path | Holds |
 |---|---|
@@ -35,8 +35,8 @@ const parseAge = (text: string): Result<number, 'not_a_number'> => {
   return Number.isInteger(age) ? ok(age) : err('not_a_number');
 };
 
-const nextYear = mapResult(parseAge('41'), (age) => age + 1); // { ok: true, value: 42 }
-unwrapOr(parseAge('forty'), 0); // 0
+mapResult(parseAge('41'), (age) => age + 1); // → { ok: true, value: 42 }
+unwrapOr(parseAge('forty'), 0); // → 0
 ```
 
 ## `path`
@@ -46,12 +46,26 @@ Inside the library a path is an array of segments: property names, array indexes
 ```ts
 import { checkWritablePath, formatPath, parsePath } from '@yaltaan/core/path';
 
-parsePath('lines[2]["unit price"]'); // { ok: true, value: ['lines', 2, 'unit price'] }
-formatPath(['lines', 2, 'unit price']); // { ok: true, value: 'lines[2]["unit price"]' }
-checkWritablePath(['__proto__', 'isAdmin']); // { ok: false, error: { code: 'path.forbidden_segment', … } }
+parsePath('lines[2]["unit price"]'); // → { ok: true, value: ['lines', 2, 'unit price'] }
+formatPath(['lines', 2, 'unit price']); // → { ok: true, value: 'lines[2]["unit price"]' }
+checkWritablePath(['__proto__', 'isAdmin']).ok; // → false
 ```
 
 The text form has one spelling per path: a name where the key is an ASCII identifier, an index in brackets, any other key as a JSON string in brackets (`["a.b"]`, `["3"]`, `["prénom"]`, `[""]`), so that every runtime reads and writes the same text whatever its Unicode version. `parsePath` reads untrusted text: 4,096 code units and 64 segments at most by default, a time linear in the length, and an issue that says where the text breaks the grammar, never a guess. A symbol or a `{ key }` segment has no text form: `formatPath` returns the issue `path.not_textual`. Before writing through a path that came from outside, `checkWritablePath` refuses `__proto__`, `constructor` and `prototype`.
+
+## `issue`
+
+Every expected failure of the library is an `Issue`: a stable code, a `Path` and parameters, never a message. The application formats it, and converts it at the Standard Schema boundary, in both directions.
+
+```ts
+import { fromStandardIssue, toStandardIssue } from '@yaltaan/core/issue';
+
+const issue = fromStandardIssue({ message: 'Too short', path: [{ key: 'name' }] });
+issue.path; // → ['name']
+toStandardIssue(issue, { format: (held) => `${held.code}` }); // → { message: 'issue.external', path: ['name'] }
+```
+
+The codes the package produces are listed in its [registry](../../docs/issue-codes/core.md).
 
 The contract of each export is in the [reference](../../docs/reference/core.md).
 

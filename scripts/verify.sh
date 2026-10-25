@@ -150,6 +150,11 @@ step "contract tags"
 # the reference under docs/reference/ with what their tags give.
 node scripts/check-contract-tags.ts || failed
 
+step "issue codes"
+# After the build: the check reads the codes the published declarations hold, and every committed version of each
+# registry under docs/issue-codes/.
+node scripts/check-issue-codes.ts || failed
+
 step "adversarial catalogue"
 # After the build and the tests: every export that runs declares each category, as the test run recorded it.
 node scripts/check-adversarial.ts "$adversarial_records" || failed

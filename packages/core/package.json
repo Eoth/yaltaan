@@ -7,6 +7,10 @@
   "type": "module",
   "sideEffects": false,
   "exports": {
+    "./issue": {
+      "types": "./dist/issue/index.d.ts",
+      "default": "./dist/issue/index.js"
+    },
     "./path": {
       "types": "./dist/path/index.d.ts",
       "default": "./dist/path/index.js"
