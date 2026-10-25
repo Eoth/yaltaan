@@ -1,9 +1,15 @@
 // Dropping keys from an object: the platform's entries round trip against es-toolkit, the reference of the size
-// harness for the same primitive.
+// harness for the same primitive, and Yaltaan's omit by a mask.
+import { omit as omitByMask } from '@yaltaan/core/object';
 import { omit } from 'es-toolkit';
 import { seededRandom, user, word, type PerfScenario } from '../scenario.ts';
 
 const secrets = ['password', 'token'] as const;
+const secretMask = { password: true, token: true } as const;
+
+function maskOf(keys: readonly string[]): Record<string, true> {
+  return Object.fromEntries(keys.map((key) => [key, true] as const));
+}
 
 function nativeOmit(object: object, keys: readonly string[]): Record<string, unknown> {
   return Object.fromEntries(Object.entries(object).filter(([key]) => !keys.includes(key)));
@@ -35,6 +41,10 @@ const scenario: PerfScenario = {
       const record = user(seededRandom(1), 0);
       return () => omit(record, secrets);
     },
+    'yaltaan/micro': () => {
+      const record = user(seededRandom(1), 0);
+      return () => omitByMask(record, secretMask);
+    },
     'native/realistic': () => {
       const random = seededRandom(2);
       const records = Array.from({ length: 100 }, (_, i) => user(random, i));
@@ -45,6 +55,11 @@ const scenario: PerfScenario = {
       const records = Array.from({ length: 100 }, (_, i) => user(random, i));
       return () => records.map((record) => omit(record, secrets));
     },
+    'yaltaan/realistic': () => {
+      const random = seededRandom(2);
+      const records = Array.from({ length: 100 }, (_, i) => user(random, i));
+      return () => omitByMask(records, secretMask);
+    },
     'native/pathological': () => {
       const { object, keys } = wideObject();
       return () => nativeOmit(object, keys);
@@ -52,6 +67,11 @@ const scenario: PerfScenario = {
     'es-toolkit/pathological': () => {
       const { object, keys } = wideObject();
       return () => omit(object, keys);
+    },
+    'yaltaan/pathological': () => {
+      const { object, keys } = wideObject();
+      const mask = maskOf(keys);
+      return () => omitByMask(object, mask);
     },
   },
 };
