@@ -7,6 +7,10 @@
   "type": "module",
   "sideEffects": false,
   "exports": {
+    "./equal": {
+      "types": "./dist/equal/index.d.ts",
+      "default": "./dist/equal/index.js"
+    },
     "./issue": {
       "types": "./dist/issue/index.d.ts",
       "default": "./dist/issue/index.js"

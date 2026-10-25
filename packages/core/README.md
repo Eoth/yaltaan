@@ -4,7 +4,7 @@ The shared contracts and data primitives of Yaltaan. The other packages build on
 
 **Not published yet**: the package is private until its first release. Every export is `@experimental`: it may change in a minor version until the contracts are frozen.
 
-It holds one sub-path per domain, each imported on its own (`@yaltaan/core/result`), so that an application ships only what it imports. Available today: `result`, `issue` and `path`. The others are planned:
+It holds one sub-path per domain, each imported on its own (`@yaltaan/core/result`), so that an application ships only what it imports. Available today: `result`, `issue`, `path` and `equal`. The others are planned:
 
 | Sub-path | Holds |
 |---|---|
@@ -66,6 +66,19 @@ toStandardIssue(issue, { format: (held) => `${held.code}` }); // → { message: 
 ```
 
 The codes the package produces are listed in its [registry](../../docs/issue-codes/core.md).
+
+## `equal`
+
+Deep equality, by SameValueZero (or `Object.is` with `equality: 'SameValue'`): plain objects by their own enumerable string keys in any order, arrays, `Map`, `Set`, `Date`, typed arrays, and Temporal objects through their `equals`; anything else, class instances included, by identity.
+
+```ts
+import { equal } from '@yaltaan/core/equal';
+
+equal({ tags: ['a'], at: new Date(0) }, { at: new Date(0), tags: ['a'] }); // → true
+equal(new Set([{ id: 1 }]), new Set([{ id: 1 }])); // → false
+```
+
+`Map` keys and `Set` elements are matched as `has` matches them, by SameValueZero. A hole in an array differs from `undefined`, as a missing key differs from one that holds `undefined`. The walk keeps its own stack and the pairs it has met: cycles end, a branch shared by several places is compared once, and depth costs no call stack.
 
 How to use each sub-path, in English and in French: the [guide](../../docs/guide/README.md). The contract of each export is in the [reference](../../docs/reference/core.md).
 
