@@ -9,19 +9,13 @@ function nativeEqual(a: unknown, b: unknown): boolean {
   return JSON.stringify(a) === JSON.stringify(b);
 }
 
-/** `count` users and a copy of them, built apart from the same seed; the last copy, when `differ`, has another city. */
-function pair(seed: number, count: number, differ: boolean): readonly [UserRecord[], UserRecord[]] {
+/** `count` users and a copy of them, built apart from the same seed. */
+function pair(seed: number, count: number): readonly [UserRecord[], UserRecord[]] {
   const build = (): UserRecord[] => {
     const random = seededRandom(seed);
     return Array.from({ length: count }, (_, i) => user(random, i));
   };
-  const left = build();
-  const right = build();
-  const last = right[count - 1];
-  if (differ && last !== undefined) {
-    right[count - 1] = { ...last, address: { ...last.address, city: `${last.address.city}x` } };
-  }
-  return [left, right];
+  return [build(), build()];
 }
 
 const sides = {
@@ -32,11 +26,11 @@ const sides = {
 
 const datasets = {
   // One record of a form, equal to its saved copy.
-  micro: () => pair(1, 1, false).map((users) => users[0]),
+  micro: () => pair(1, 1).map((users) => users[0]),
   // A page of 100 records, equal.
-  realistic: () => pair(2, 100, false),
-  // A table of 1 000 records whose last one differs deep inside: every value is reached before the answer.
-  pathological: () => pair(3, 1000, true),
+  realistic: () => pair(2, 100),
+  // A table of 1 000 records, equal: every side reaches every value before it answers, whatever order it walks in.
+  pathological: () => pair(3, 1000),
 } as const;
 
 const variants: Record<string, PerfVariant> = {};
