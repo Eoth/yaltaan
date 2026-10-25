@@ -27,12 +27,12 @@ Outillage de développement (empreinte installée, à ne laisser croître que pa
 
 Une version utilisable d'abord (décision du propriétaire du 2026-10-23, §3) : la 0.1.0 livre `@yaltaan/core`, les utilitaires que les équipes recodent, sur les contrats de §5 d'`ARCHITECTURE.md` ; la 0.2.0 ajoute schéma et règles, validés sur le formulaire pilote ; la 0.3.0 le formulaire et Angular. L'outillage qui reste attend d'être utile. Les contrats se gèlent après le pilote (T2.7), pas avant. Une itération peut prendre deux tickets S ou M d'un même domaine.
 
-**Avancement** : 12 étapes closes sur 70 ; prochaine : T3.1.
+**Avancement** : 12 étapes closes sur 71 ; prochaine : T3.1 a.
 
 | # | Lot | Tickets, dans l'ordre | Avancement | Sortie |
 |---|---|---|---|---|
 | 1 | 0 — Outillage | T0.1, T0.2, T0.7, T0.6, T0.5, T0.3, T0.4 a, b | 8 / 8 clos, terminé | Paquets vides qui passent toute la CI ; taille, coût des types, instructions et temps mesurés. |
-| 2 | 0.1.0 — `@yaltaan/core` utilisable | T1.1, T1.3, T1.2, T1.5, T3.1, T3.2, T3.3 a, T3.5, T3.4, T0.10 | 4 / 10 clos ; prochain : T3.1 | `Result`, `Issue`, `Path`, `equal`, objets et accès par chemin, collections, nombres, chaînes ; version 0.1.0 étiquetée, archive vérifiée, publiée sur npm dès que l'organisation `@yaltaan` est réservée. |
+| 2 | 0.1.0 — `@yaltaan/core` utilisable | T1.1, T1.3, T1.2, T1.5, T3.1 a, b, T3.2, T3.3 a, T3.5, T3.4, T0.10 | 4 / 11 clos ; prochain : T3.1 a | `Result`, `Issue`, `Path`, `equal`, objets et accès par chemin, collections, nombres, chaînes ; version 0.1.0 étiquetée, archive vérifiée, publiée sur npm dès que l'organisation `@yaltaan` est réservée. |
 | 3 | 0.2.0 — Schéma et règles sur le pilote | T2.1 a, b, T2.2, T2.3, T1.4 | 0 / 5 clos ; prochain : T2.1 a | Schéma Standard Schema minimal et règles relationnelles, scénarios du pilote verts sans `form`. |
 | 4 | 0.3.0 — Formulaire et Angular | T0.14, T1.6 a, T1.6 b, T2.4 a, b, c, T2.5, T2.6, T2.7 | 0 / 9 clos ; prochain : T0.14 | Pilote de bout en bout dans Angular, mesures, **ADR go/no-go de `form`**, gel des contrats. |
 | 5 | Outillage reporté | T0.16, T0.8, T0.9, T0.13, T0.15 | 0 / 5 clos ; prochain : T0.16 | Selon le besoin réel des versions précédentes. |
@@ -228,10 +228,10 @@ Une décision réservée au propriétaire (nom, licence, API publique, contrat t
 
 #### T3.1 — `core/object`
 - **Pourquoi** : `pick`, `omit`, `merge` et consorts sont réécrits dans chaque application, avec des comportements flous sur les prototypes et les getters.
-- **Faire** : `pick`, `omit`, `merge` (stratégie explicite pour les tableaux), `mapKeys`, `mapValues`, `defaults`, `redact` ; objets *plain* et tableaux seulement, le reste opaque avec sa table de support ; propriétés propres énumérables à clé texte (symboles en option) ; getters lus une fois, exception propagée.
+- **Faire** : (a) un masque de champs typé, imbriqué, partagé (`{ password: true, address: { geo: true } }`, contrôlé par le compilateur à chaque niveau, tableaux compris), `pick`, `omit`, `redact` par masque, et les options `pick`/`omit` d'`equal` (comparer seulement certains champs, ou tous sauf certains) ; (b) `merge` (stratégie explicite pour les tableaux), `mapKeys`, `mapValues`, `defaults`. Objets *plain* et tableaux seulement, le reste opaque avec sa table de support ; propriétés propres énumérables à clé texte (symboles en option) ; getters lus une fois, exception propagée.
 - **Où** : `packages/core/src/object/`.
-- **Accepté si** : invariants d'`ARCHITECTURE.md` §7.1 en propriétés ; aucune pollution de prototype (fuzz).
-- **Taille** M · **Prio** P1 · **Dépend de** T1.3, T1.5
+- **Accepté si** : invariants d'`ARCHITECTURE.md` §7.1 en propriétés ; aucune pollution de prototype (fuzz) ; (a) un champ absent du type est une erreur de compilation, à toute profondeur ; scénario de taille `core-omit` dans son budget ; (b) scénario `core-ten-primitives` dès que T3.3 a et T3.5 livrent les autres primitives.
+- **Taille** L → (a) M, (b) M · **Prio** P1 · **Dépend de** T1.3, T1.5
 
 #### T3.2 — Accès et mise à jour par `Path`
 - **Pourquoi** : la mise à jour localisée avec partage structurel est le vrai besoin derrière le clone profond.
