@@ -267,6 +267,7 @@ Each domain is described by its scope, its decisions, what it does not do, and i
 - Only plain objects (prototype `Object.prototype` or `null`) and arrays are traversed. `Map`, `Set`, `Date`, Temporal objects, typed arrays and class instances are opaque unless the function declares support for them. Each function publishes its support table.
 - Own enumerable string-keyed properties by default; symbols opt-in.
 - Getters are read once; an exception thrown by a getter is propagated, never swallowed.
+- Fields are selected by a mask shaped like the value (`{ password: true, address: { geo: true } }`): `true` takes a field whole, a nested mask walks into it, a mask on an array applies to each element. One type, `Mask<T>`, checked key by key against `T` at every depth, serves `pick`, `omit`, `redact` and `equal` ([ADR 0021](docs/adr/0021-field-masks.md)).
 - `set`/`update` on a missing path: a `Result` error by default; creation is opt-in (`createMissing: 'object' | 'array-if-numeric'`).
 - The `InPlace` variants throw an explicit `TypeError` on a frozen, sealed or non-extensible object.
 
@@ -314,6 +315,7 @@ Each domain is described by its scope, its decisions, what it does not do, and i
 **Decisions**
 
 - Configurable deep `equal`: SameValueZero or `Object.is`; the supported special types are listed (`Map`, `Set`, `Date`, typed arrays, Temporal objects through their `equals`); cycles are detected.
+- `equal` compares only the fields a `pick` mask names, or all but those an `omit` mask names, with the masks of §7.1; its memory of compared pairs is kept per mask.
 - The patch format uses `Path` (no JSON Pointer internally). Conversion to and from RFC 6902 is provided at the boundary.
 - Array diff by index or by key (a key function), producing `move` operations.
 - Invertible patches are opt-in (`reversible: true` records the old values).
