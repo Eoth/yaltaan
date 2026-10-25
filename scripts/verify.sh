@@ -102,7 +102,9 @@ step "format"
 npx --no-install prettier --check . || failed
 
 step "types"
-npx --no-install tsc -b && echo "ok: types check" || failed
+# Files outside the packages (examples, recipes) import them by name, through what they publish under dist/: built from
+# nothing first, so that the check never reads a dist/ that a fresh clone lacks or an earlier build left stale.
+bash scripts/build.sh > /dev/null && npx --no-install tsc -b && echo "ok: types check" || failed
 
 step "tests"
 # The runner's summary is read, not only its exit code: a run that finds no test file exits 0 and reports nothing.
