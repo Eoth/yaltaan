@@ -67,7 +67,7 @@ toStandardIssue(issue, { format: (held) => `${held.code}` }); // → { message: 
 
 The codes the package produces are listed in its [registry](../../docs/issue-codes/core.md).
 
-The contract of each export is in the [reference](../../docs/reference/core.md).
+How to use each sub-path, in English and in French: the [guide](../../docs/guide/README.md). The contract of each export is in the [reference](../../docs/reference/core.md).
 
 ## License
 

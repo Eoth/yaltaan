@@ -155,6 +155,10 @@ step "issue codes"
 # registry under docs/issue-codes/.
 node scripts/check-issue-codes.ts || failed
 
+step "documentation examples"
+# After the build: the examples import the packages as an application does, from what they publish under dist/.
+node scripts/check-doc-examples.ts || failed
+
 step "adversarial catalogue"
 # After the build and the tests: every export that runs declares each category, as the test run recorded it.
 node scripts/check-adversarial.ts "$adversarial_records" || failed
