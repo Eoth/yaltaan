@@ -4,14 +4,14 @@ The shared contracts and data primitives of Yaltaan. The other packages build on
 
 **Not published yet**: the package is private until its first release. Every export is `@experimental`: it may change in a minor version until the contracts are frozen.
 
-It holds one sub-path per domain, each imported on its own (`@yaltaan/core/result`), so that an application ships only what it imports. Available today: `result`, `issue`, `path`, `equal` and `object` (selection by mask). The others are planned:
+It holds one sub-path per domain, each imported on its own (`@yaltaan/core/result`), so that an application ships only what it imports. Available today: `result`, `issue`, `path`, `equal` and `object` (selection by mask, merging, defaults, mapping). The others are planned:
 
 | Sub-path | Holds |
 |---|---|
 | `result` | `Result<T, E>`, a read-only object discriminated by `ok`, and free functions over it. |
 | `issue` | `Issue`, the one shape of every expected failure: a stable namespaced code, a `Path` and parameters, never a message. |
 | `path` | `Path` and its segments, including a key segment that follows an array element when it moves; a text form at the boundaries only. |
-| `object` | Picking, omitting and redacting fields by a mask the compiler checks; merging, and reading and updating by `Path` with structural sharing, are planned. |
+| `object` | Picking, omitting and redacting fields by a mask the compiler checks; deep merging, defaults, mapping values and keys; reading and updating by `Path` with structural sharing is planned. |
 | `collection` | What arrays and iterators lack natively: grouping by a unique key, top-k, multi-key sorting, chunks and windows. |
 | `string` | Length and truncation by grapheme, slugs, detection of invisible and bidirectional control characters. |
 | `number` | Strict parsing to a `Result`, named rounding modes, exact conversions between `number` and `bigint`. |
@@ -92,6 +92,16 @@ const user = { name: 'Ada', password: 's3cret', lines: [{ sku: 'a', price: 3 }] 
 omit(user, { password: true, lines: { price: true } }); // → { name: 'Ada', lines: [{ sku: 'a' }] }
 pick(user, { name: true }); // → { name: 'Ada' }
 redact(user, { password: true }); // → { name: 'Ada', password: '***', lines: [{ sku: 'a', price: 3 }] }
+```
+
+`merge` lays overrides over a base at every depth, with an explicit strategy for arrays; `defaults` fills what a value lacks; `mapValues` and `mapKeys` map one record into another, types kept.
+
+```ts
+import { defaults, mapValues, merge } from '@yaltaan/core/object';
+
+merge({ retry: { count: 3, delay: 100 } }, { retry: { delay: 500 } }, { arrays: 'replace' }); // → { retry: { count: 3, delay: 500 } }
+defaults({ retry: { count: 5 } }, { retry: { count: 3, delay: 100 } }); // → { retry: { count: 5, delay: 100 } }
+mapValues({ apples: 3, pears: 5 }, (count) => count * 2); // → { apples: 6, pears: 10 }
 ```
 
 Only plain objects and arrays are walked; anything else is taken whole. A copy keeps the prototype of its record (`Object.prototype` or `null`), a `"__proto__"` key stays a key, a getter is read once and only when its field is kept, and symbol keys count only with `{ symbols: true }`.

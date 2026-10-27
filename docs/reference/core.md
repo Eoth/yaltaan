@@ -271,6 +271,58 @@ toStandardIssue({ code: 'a.b', path: ['x'] }, { format: (i) => i.code }) // { me
 
 ## `@yaltaan/core/object`
 
+### `ArrayStrategy`
+
+A type.
+
+How `merge` combines two arrays at the same place: `'replace'` takes the second whole, `'concat'` joins both.
+
+```ts
+export type ArrayStrategy = 'replace' | 'concat';
+```
+
+| Contract | Value |
+|---|---|
+| `@since` | 0.1 |
+| `@experimental` | yes |
+
+### `Defaulted`
+
+A type.
+
+What `defaults(value, fallback)` returns: `D` where `T` is `undefined`, the records merged where both are records, `T` anywhere else.
+
+```ts
+export type Defaulted<T, D> = unknown extends T ? unknown : T extends undefined ? D : T extends readonly unknown[] | Opaque ? T : T extends object ? D extends readonly unknown[] | Opaque ? T : D extends object ? Flat<{
+    [K in keyof T as K extends keyof D ? never : K]: T[K];
+} & Omit<D, keyof T> & {
+    [K in keyof T & keyof D]: Defaulted<T[K], D[K]>;
+}> : T : T;
+```
+
+| Contract | Value |
+|---|---|
+| `@since` | 0.1 |
+| `@experimental` | yes |
+
+### `KeyOptions`
+
+A type.
+
+The option every function of this module takes: which keys of a record count.
+
+```ts
+export interface KeyOptions {
+    /** Whether own enumerable symbol keys of records count too; `false` by default, as for every object function. */
+    readonly symbols?: boolean;
+}
+```
+
+| Contract | Value |
+|---|---|
+| `@since` | 0.1 |
+| `@experimental` | yes |
+
 ### `Mask`
 
 A type.
@@ -301,10 +353,42 @@ A type.
 Options of `pick` and `omit`.
 
 ```ts
-export interface MaskOptions {
-    /** Whether own enumerable symbol keys of records count too; `false` by default, as for every object function. */
-    readonly symbols?: boolean;
+export interface MaskOptions extends KeyOptions {
 }
+```
+
+| Contract | Value |
+|---|---|
+| `@since` | 0.1 |
+| `@experimental` | yes |
+
+### `MergeOptions`
+
+A type.
+
+Options of `merge`. The array strategy has no default: whether a list of overrides replaces or extends the base one is a choice of the caller, and a silent default would make one of them a surprise.
+
+```ts
+export interface MergeOptions<S extends ArrayStrategy> extends KeyOptions {
+    readonly arrays: S;
+}
+```
+
+| Contract | Value |
+|---|---|
+| `@since` | 0.1 |
+| `@experimental` | yes |
+
+### `Merged`
+
+A type.
+
+What `merge(base, overrides, { arrays: S })` returns: `B`, unless both are records (merged field by field) or both arrays joined by `'concat'`. A field `B` declares optional may be missing, so it may hold `A`'s.
+
+```ts
+export type Merged<A, B, S extends ArrayStrategy> = unknown extends A ? unknown : unknown extends B ? unknown : A extends readonly (infer EA)[] ? B extends readonly (infer EB)[] ? S extends 'concat' ? (EA | EB)[] : B : B : A extends Opaque ? B : A extends object ? B extends readonly unknown[] | Opaque ? B : B extends object ? Flat<Omit<A, keyof B> & {
+    [K in keyof B]: K extends keyof A ? {} extends Pick<B, K> ? A[K] | Merged<A[K], Present<B>[K], S> : Merged<A[K], B[K], S> : Present<B>[K];
+}> : B : B;
 ```
 
 | Contract | Value |
@@ -404,6 +488,114 @@ export interface UntypedMask {
 |---|---|
 | `@since` | 0.1 |
 | `@experimental` | yes |
+
+### `defaults`
+
+A function.
+
+`value` with what it lacks taken from `fallback`: `undefined` gives `fallback`, a field that is missing or `undefined` takes the field of `fallback`, at every depth where both are records. As a default in a destructuring, `null` is a value and is kept; arrays are values too, never joined. Fields keep the order of `value`, then those it lacked follow in the order of `fallback`. Neither value is changed; what is not filled is shared.
+
+```ts
+export declare function defaults<T, D>(value: T, fallback: D, options?: KeyOptions): Defaulted<T, D>;
+```
+
+| Contract | Value |
+|---|---|
+| `@pure` | yes |
+| `@sharing` | structural |
+| `@complexity` | O(n) (n = keys of the records both values hold at the same place) |
+| `@throws` | TypeError when `symbols` is not a boolean |
+| `@throws` | what a getter or a Proxy trap throws, unchanged |
+| `@throws` | RangeError when both values are cyclic along the same keys, or deeper than the call stack |
+| `@since` | 0.1 |
+| `@experimental` | yes |
+
+**Example**
+
+```ts
+defaults({ retry: { count: 5 } }, { retry: { count: 3, delay: 9 } }) // { retry: { count: 5, delay: 9 } }
+```
+
+### `mapKeys`
+
+A function.
+
+A copy of `record` whose each field is renamed to what `rename` returns for its key and value. When two fields get the same name, the later one in the order of the record wins, as with `Object.fromEntries`.
+
+```ts
+export declare function mapKeys<T extends object, K extends PropertyKey>(record: T, rename: (key: KeyName<T>, value: T[keyof T]) => K, options?: KeyOptions): Partial<Record<K, T[keyof T]>>;
+```
+
+| Contract | Value |
+|---|---|
+| `@pure` | yes |
+| `@sharing` | structural |
+| `@complexity` | O(n) (n = keys of the record), plus one call of `rename` per key |
+| `@throws` | TypeError when `record` is not a plain object, `rename` returns no property key, or `symbols` is no boolean |
+| `@throws` | what `rename`, a getter or a Proxy trap throws, unchanged |
+| `@since` | 0.1 |
+| `@experimental` | yes |
+
+**Example**
+
+```ts
+mapKeys({ first_name: 'Ada' }, (key) => key.replace('_n', 'N')) // { firstName: 'Ada' }
+```
+
+### `mapValues`
+
+A function.
+
+A copy of `record` whose each field holds what `map` returns for its value and key, in the order of the record. The copy keeps the prototype of the record (a dictionary without prototype stays one).
+
+```ts
+export declare function mapValues<T extends object, U>(record: T, map: (value: T[keyof T], key: KeyName<T>) => U, options?: KeyOptions): {
+    [K in keyof T]: U;
+};
+```
+
+| Contract | Value |
+|---|---|
+| `@pure` | yes |
+| `@sharing` | structural |
+| `@complexity` | O(n) (n = keys of the record), plus one call of `map` per key |
+| `@throws` | TypeError when `record` is not a plain object, or `symbols` not a boolean |
+| `@throws` | what `map`, a getter or a Proxy trap throws, unchanged |
+| `@since` | 0.1 |
+| `@experimental` | yes |
+
+**Example**
+
+```ts
+mapValues({ apples: 3, pears: 5 }, (count) => count * 2) // { apples: 6, pears: 10 }
+```
+
+### `merge`
+
+A function.
+
+`overrides` laid over `base`: two records are merged field by field, at every depth, the fields of `overrides` winning; two arrays are joined or replaced as `arrays` says; anything else is `overrides`, even `undefined`, as a spread `{ ...base, ...overrides }` does one level deep. Neither value is changed; what is not merged is shared.
+
+```ts
+export declare function merge<A, B, S extends ArrayStrategy>(base: A, overrides: B, options: MergeOptions<S>): Merged<A, B, S>;
+```
+
+| Contract | Value |
+|---|---|
+| `@pure` | yes |
+| `@sharing` | structural |
+| `@complexity` | O(n) (n = keys of the records both values hold at the same place), plus the length of joined arrays |
+| `@throws` | TypeError when `arrays` is neither `'replace'` nor `'concat'`, or `symbols` is not a boolean |
+| `@throws` | what a getter or a Proxy trap throws, unchanged |
+| `@throws` | RangeError when both values are cyclic along the same keys, or deeper than the call stack |
+| `@since` | 0.1 |
+| `@experimental` | yes |
+
+**Example**
+
+```ts
+merge({ retry: { count: 3, delay: 100 } }, { retry: { delay: 500 } }, { arrays: 'replace' })
+```
 
 ### `omit`
 

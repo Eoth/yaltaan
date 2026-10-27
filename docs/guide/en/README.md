@@ -18,6 +18,7 @@ flowchart LR
 | [Paths](path.md) | `@yaltaan/core/path` | Name a place in a structure, read and write its text form safely, refuse paths that would pollute a prototype. | Splitting `'a.b[0]'` by hand, `lodash.toPath`. |
 | [Deep equality](equal.md) | `@yaltaan/core/equal` | Tell whether two values hold the same data: objects, arrays, `Map`, `Set`, dates, typed arrays, Temporal objects, cycles included. | `JSON.stringify(a) === JSON.stringify(b)`, `lodash.isEqual`, `util.isDeepStrictEqual` outside Node. |
 | [Selecting fields](object.md) | `@yaltaan/core/object` | Keep, drop or hide fields of an object by a mask the compiler checks, nested records and arrays included, without polluting a prototype. | `lodash.pick`/`omit` with text paths, a loop per array, a log line that leaks a renamed secret. |
+| [Merging and reshaping](reshape.md) | `@yaltaan/core/object` | Lay settings over defaults at every depth, fill missing options, map the values or the keys of a record, with the types kept. | A spread that merges one level, `lodash.merge` that changes its argument, `Object.fromEntries(Object.entries(x).map(…))` that loses the types. |
 | [Issues](issue.md) | `@yaltaan/core/issue` | One error shape for everything, your own messages in your own languages, and the bridge to Standard Schema form engines. | One error format per library, and the glue code between them. |
 
 Every export is `@experimental` until the contracts are frozen: it may change in a minor version, and the [changelog](../../../CHANGELOG.md) says so in bold.
