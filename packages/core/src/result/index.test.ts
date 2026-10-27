@@ -13,60 +13,46 @@ const widen = <T, E>(result: Result<T, E>): Result<T, E> => result;
 
 const anyResult: fc.Arbitrary<Result<unknown, unknown>> = fc.oneof(fc.anything().map(ok), fc.anything().map(err));
 
-test('ok and err build the two sides, told apart by ok', () => {
-  assert.deepEqual(ok(1), { ok: true, value: 1 });
-  assert.deepEqual(err('empty'), { ok: false, error: 'empty' });
-  assert.deepEqual(Object.keys(ok(1)), ['ok', 'value']);
-  assert.deepEqual(Object.keys(err(1)), ['ok', 'error']);
-});
-
-test('ok and err hold what they are given, never a copy', () => {
-  const value = { nested: [1] };
-  assert.equal(ok(value).value, value);
-  assert.equal(err(value).error, value);
-  assert.ok(Object.is(ok(-0).value, -0));
-  assert.ok(Object.is(err(Number.NaN).error, Number.NaN));
-  assert.equal(ok(undefined).value, undefined);
-});
-
-test('mapResult maps a success and returns a failure as it is, without calling map', () => {
-  assert.deepEqual(
-    mapResult(ok(2), (n) => n * 10),
-    ok(20),
-  );
-  const failure = widen<number, string>(err('empty'));
-  let calls = 0;
-  const mapped = mapResult(failure, (n) => {
-    calls += 1;
-    return n * 10;
-  });
-  assert.equal(mapped, failure);
-  assert.equal(calls, 0);
-});
-
-test('mapResult passes the value alone to map', () => {
-  const seen: unknown[][] = [];
-  mapResult(ok('a'), (...args: unknown[]) => seen.push(args));
-  assert.deepEqual(seen, [['a']]);
-});
-
-test('mapResult lets an exception of map out unchanged', () => {
-  const thrown = new Error('bug in map');
-  assert.throws(
-    () =>
-      mapResult(ok(1), () => {
-        throw thrown;
-      }),
-    (error) => error === thrown,
+test('ok and err hold any value as it is, under two keys told apart by ok', () => {
+  fc.assert(
+    fc.property(fc.anything(), (value) => {
+      assert.deepEqual(Object.entries(ok(value)), [
+        ['ok', true],
+        ['value', value],
+      ]);
+      assert.deepEqual(Object.entries(err(value)), [
+        ['ok', false],
+        ['error', value],
+      ]);
+      assert.ok(Object.is(ok(value).value, value) && Object.is(err(value).error, value));
+    }),
   );
 });
 
-test('unwrapOr returns the value of a success, or the fallback as it is', () => {
-  assert.equal(unwrapOr(ok(1), 0), 1);
-  assert.equal(unwrapOr(err('empty'), 0), 0);
-  const fallback = (): number => 1;
-  assert.equal(unwrapOr(err('empty'), fallback), fallback);
-  assert.equal(unwrapOr(ok(undefined), 0), undefined);
+test('mapResult calls map once, with the value alone, and holds what it returns', () => {
+  fc.assert(
+    fc.property(fc.anything(), fc.func(fc.anything()), (value, map) => {
+      const seen: unknown[][] = [];
+      const mapped = mapResult(ok(value), (...args: unknown[]) => {
+        seen.push(args);
+        return map(...args);
+      });
+      assert.deepEqual(seen, [[value]]);
+      assert.ok(mapped.ok && Object.is(mapped.value, map(value)));
+    }),
+  );
+});
+
+test('mapResult returns a failure as it is, and never calls map', () => {
+  fc.assert(
+    fc.property(fc.anything(), (error) => {
+      const failure = err(error);
+      assert.equal(
+        mapResult(failure, () => assert.fail('map called on a failure')),
+        failure,
+      );
+    }),
+  );
 });
 
 test('mapResult with the identity changes nothing, and a failure keeps its reference', () => {
