@@ -27,12 +27,12 @@ Outillage de développement (empreinte installée, à ne laisser croître que pa
 
 Une version utilisable d'abord (décision du propriétaire du 2026-10-23, §3) : la 0.1.0 livre `@yaltaan/core`, les utilitaires que les équipes recodent, sur les contrats de §5 d'`ARCHITECTURE.md` ; la 0.2.0 ajoute schéma et règles, validés sur le formulaire pilote ; la 0.3.0 le formulaire et Angular. L'outillage qui reste attend d'être utile. Les contrats se gèlent après le pilote (T2.7), pas avant. Une itération peut prendre deux tickets S ou M d'un même domaine.
 
-**Avancement** : 13 étapes closes sur 71 ; prochaine : T3.1 b.
+**Avancement** : 14 étapes closes sur 71 ; prochaine : T3.2.
 
 | # | Lot | Tickets, dans l'ordre | Avancement | Sortie |
 |---|---|---|---|---|
 | 1 | 0 — Outillage | T0.1, T0.2, T0.7, T0.6, T0.5, T0.3, T0.4 a, b | 8 / 8 clos, terminé | Paquets vides qui passent toute la CI ; taille, coût des types, instructions et temps mesurés. |
-| 2 | 0.1.0 — `@yaltaan/core` utilisable | T1.1, T1.3, T1.2, T1.5, T3.1 a, b, T3.2, T3.3 a, T3.5, T3.4, T0.10 | 5 / 11 clos ; prochain : T3.1 b | `Result`, `Issue`, `Path`, `equal`, objets et accès par chemin, collections, nombres, chaînes ; version 0.1.0 étiquetée, archive vérifiée, publiée sur npm dès que l'organisation `@yaltaan` est réservée. |
+| 2 | 0.1.0 — `@yaltaan/core` utilisable | T1.1, T1.3, T1.2, T1.5, T3.1 a, b, T3.2, T3.3 a, T3.5, T3.4, T0.10 | 6 / 11 clos ; prochain : T3.2 | `Result`, `Issue`, `Path`, `equal`, objets et accès par chemin, collections, nombres, chaînes ; version 0.1.0 étiquetée, archive vérifiée, publiée sur npm dès que l'organisation `@yaltaan` est réservée. |
 | 3 | 0.2.0 — Schéma et règles sur le pilote | T2.1 a, b, T2.2, T2.3, T1.4 | 0 / 5 clos ; prochain : T2.1 a | Schéma Standard Schema minimal et règles relationnelles, scénarios du pilote verts sans `form`. |
 | 4 | 0.3.0 — Formulaire et Angular | T0.14, T1.6 a, T1.6 b, T2.4 a, b, c, T2.5, T2.6, T2.7 | 0 / 9 clos ; prochain : T0.14 | Pilote de bout en bout dans Angular, mesures, **ADR go/no-go de `form`**, gel des contrats. |
 | 5 | Outillage reporté | T0.16, T0.8, T0.9, T0.13, T0.15 | 0 / 5 clos ; prochain : T0.16 | Selon le besoin réel des versions précédentes. |
@@ -186,7 +186,7 @@ Une décision réservée au propriétaire (nom, licence, API publique, contrat t
 - **Pourquoi** : premier domaine branché sur `Result`, `Issue` et `Path`, et porte d'entrée vers les moteurs tiers.
 - **Faire** : `object`, `string`, `number`, `optional`, `nullable`, `array`, `literal`, union discriminée ; API en fonctions (tree-shaking) ; interface `~standard` (types recopiés, aucune dépendance) ; clés inconnues selon §3 ; clé absente, `undefined` et `null` distincts ; validation qui ne mute jamais l'entrée.
 - **Où** : `packages/schema/`.
-- **Accepté si** : un schéma consommé par `validateStandardSchema` d'Angular et par TanStack Form sans pont ; déterminisme ; budget du schéma de connexion tenu (scénario `yaltaan/schema-login`, 1 500 o, ADR 0010).
+- **Accepté si** : un schéma consommé par `validateStandardSchema` d'Angular et par TanStack Form sans pont ; invariants d'`ARCHITECTURE.md` §7.9 en propriétés fast-check (déterminisme ; une valeur valide relue par son schéma redonne la même valeur, et `parse` est idempotent), plutôt qu'en exemples ; budget du schéma de connexion tenu (scénario `yaltaan/schema-login`, 1 500 o, ADR 0010).
 - **Taille** M · **Prio** P0 · **Dépend de** T1.1, T1.2, T1.3
 
 #### T2.3 — Cinq règles relationnelles
@@ -226,13 +226,6 @@ Une décision réservée au propriétaire (nom, licence, API publique, contrat t
 
 ### Lot 3 — Données
 
-#### T3.1 — `core/object`
-- **Pourquoi** : `pick`, `omit`, `merge` et consorts sont réécrits dans chaque application, avec des comportements flous sur les prototypes et les getters.
-- **Faire** : (a) un masque de champs typé, imbriqué, partagé (`{ password: true, address: { geo: true } }`, contrôlé par le compilateur à chaque niveau, tableaux compris), `pick`, `omit`, `redact` par masque, et les options `pick`/`omit` d'`equal` (comparer seulement certains champs, ou tous sauf certains) ; (b) `merge` (stratégie explicite pour les tableaux), `mapKeys`, `mapValues`, `defaults`. Objets *plain* et tableaux seulement, le reste opaque avec sa table de support ; propriétés propres énumérables à clé texte (symboles en option) ; getters lus une fois, exception propagée.
-- **Où** : `packages/core/src/object/`.
-- **Accepté si** : invariants d'`ARCHITECTURE.md` §7.1 en propriétés ; aucune pollution de prototype (fuzz) ; (a) un champ absent du type est une erreur de compilation, à toute profondeur ; scénario de taille `core-omit` dans son budget ; (b) scénario `core-ten-primitives` dès que T3.3 a et T3.5 livrent les autres primitives, son budget de 1 000 o remesuré (`pick` et `omit` profonds pèsent déjà environ 630 o ensemble, ADR 0021).
-- **Taille** L → (a) M, (b) M · **Prio** P1 · **Dépend de** T1.3, T1.5
-
 #### T3.2 — Accès et mise à jour par `Path`
 - **Pourquoi** : la mise à jour localisée avec partage structurel est le vrai besoin derrière le clone profond.
 - **Faire** : `get`, `set`, `has`, `remove`, `update` ; chemin inexistant → `Result` en erreur, création en option (`createMissing`) ; variantes `…InPlace` seulement si un benchmark les justifie, `TypeError` explicite sur un objet gelé.
@@ -258,7 +251,7 @@ Une décision réservée au propriétaire (nom, licence, API publique, contrat t
 - **Pourquoi** : `parseFloat` accepte n'importe quoi ; les arrondis nommés manquent.
 - **Faire** : `parseNumber` strict (séparateurs explicites, `Result`), `clamp`, `inRange`, `approxEqual`, `round` à modes nommés, conversions `number` ↔ `bigint` exactes ou en erreur.
 - **Où** : `packages/core/src/number/`.
-- **Accepté si** : aucune conversion implicite avec perte ; aller-retour `parseNumber(format(x))` pour les formats déclarés.
+- **Accepté si** : aucune conversion implicite avec perte ; aller-retour `parseNumber(format(x))` pour les formats déclarés ; scénario de taille `core-ten-primitives` (primitives de `object`, `collection` et `number`), son budget de 1 000 o remesuré (`pick` et `omit` profonds pèsent déjà environ 630 o ensemble, ADR 0021 ; `merge`, `defaults`, `mapValues` et `mapKeys` 743 o).
 - **Taille** M · **Prio** P1 · **Dépend de** T1.1
 
 #### T3.6 — `core/diff` et patch
@@ -491,3 +484,4 @@ Une ligne par ticket : `identifiant — commit — résultat mesuré — itérat
 | T1.2 | `fd6a3ce` feat(core): add Issue, its Standard Schema boundary and a registry of codes ; `d37b040` docs(guide): explain each core feature in English and French, examples run | `@yaltaan/core/issue` : `Issue`, `IssueSeverity`, `IssueFormatter`, `StandardIssue`, `StandardPathSegment`, `ExternalIssue`, `ToStandardIssueOptions`, `toStandardIssue` (`{ key }` résolu par `resolveKey` ou chemin coupé avant lui), `fromStandardIssue` (`issue.external`), tous `@experimental` (ADR 0019) ; `PathIssue` est une `Issue` (test de types) ; registre `docs/issue-codes/core.md` (6 codes) et étape « issue codes » : code sans ligne, ligne vivante sans code, ligne committée disparue ou redatée, retrait hors SemVer, chacun vu rouge sur un dépôt factice ; codes vus à l'exécution recoupés avec le registre ; issues d'un vrai schéma valibot 1.5.0 lues avec leurs chemins ; recette de formateur anglais complète par test ; 3 mutations vues rouges (48, 8, 21 échecs) ; scénario `yaltaan/core-issue` 487 / 498 o brotli (507 / 517 avant réduction des messages) pour un budget de 550 o (hypothèse) ; guide anglais et français (`docs/guide/`, 4 pages par langue, schémas Mermaid) et étape « documentation examples » : 27 exemples de 10 documents compilés et exécutés, 59 résultats vérifiés, parité des blocs de code entre langues, 0,13 s ; tests 762 → 946 ; porte verte en 27,7 s. | 1 (M) |
 | T1.5 | `5262537` feat(core): add equal, a deep equality that ends on cycles at any depth | `@yaltaan/core/equal` : `equal`, `EqualOptions` (`equality` SameValueZero ou SameValue, `symbols`), `@experimental` (ADR 0020 : bisimulation, éléments de `Set` et clés de `Map` par SameValueZero, trou ≠ `undefined`, prototypes `Object.prototype` et `null` confondus, Temporal par `equals`, `Duration` champ par champ, autres objets par identité) ; pile explicite (10 000 niveaux), mémoire des paires dès la 64ᵉ (échelle de 60 niveaux, 2^60 chemins, en temps linéaire) ; taille 946 / 948 o brotli (budget 1 750 o, `isEqual` d'es-toolkit 1 162 / 1 166 o) ; propriétés : réflexivité, symétrie, accord avec `Object.is` et avec `isDeepStrictEqual` de Node sur JSON ; catalogue adversarial 48 contrôles, 12 N/A ; tests 946 → 1 030 ; page `equal.md` du guide en anglais et en français (36 exemples, 85 résultats vérifiés) ; T3.9 ouvert (autres types natifs). | 1 (M) |
 | T3.1 a | `0026b44` docs(adr): select fields by a mask shaped like the value, checked by the compiler ; `eddaa02` feat(core): select fields by a typed mask in pick, omit, redact and equal ; `d628b23` test(bench): count Yaltaan's omit by a mask beside es-toolkit and the platform | `@yaltaan/core/object` : `pick`, `omit`, `redact`, `Mask<T>`, `UntypedMask`, `Picked`, `Omitted`, `Redacted`, `MaskOptions`, `RedactOptions` ; `equal` prend `pick`/`omit` (`EqualMasks<T>`), mémoire des paires par masque ; clé fautive refusée par le compilateur à toute profondeur ; taille brotli `core-omit` 532 / 528 o (budget 150 → 600 o, référence profonde es-toolkit `compat` 2 741 o), `core-equal` 946 / 948 → 1 288 / 1 303 o ; instructions sans masque −0,57 % à −0,05 % ; tests 1 030 → 1 253 ; catalogue adversarial 13 exports, 60 contrôles, 18 N/A | 1 (M) |
+| T3.1 b | `960a5b3` feat(core): merge, fill defaults and map records, specified by laws ; `484983b` test(core): state Result by laws over any value instead of hand-picked cases | `@yaltaan/core/object` : `merge` (tableaux `'replace'` ou `'concat'`, sans défaut), `defaults`, `mapValues`, `mapKeys`, `Merged`, `Defaulted`, `ArrayStrategy`, `MergeOptions`, `KeyOptions` ; tests par lois (16 mutations sur 16 attrapées) ; brotli `merge` 523 o (`toMerged` d'es-toolkit 1 446 o), `defaults` 407 o (`defaultsDeep` 463 o), `mapValues` 377 o et `mapKeys` 416 o (es-toolkit 105 et 104 o) ; `Result` : 6 exemples remplacés par 3 lois ; tests 1 253 → 1 547 ; catalogue adversarial 17 exports, 78 contrôles, 24 N/A | 1 (M) |
