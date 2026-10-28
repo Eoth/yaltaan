@@ -26,7 +26,7 @@
 import type { KeySegment, Path, PathIssue } from '../path/index.ts';
 import { checkWritablePath } from '../path/index.ts';
 import { err, ok, type Result } from '../result/index.ts';
-import { blank, isPlainArray, isRecord, keysOf, put } from './mask.ts';
+import { isPlainArray, isRecord, keysOf } from './mask.ts';
 
 /**
  * Why a path designates nothing in a value; `index` is the segment where the walk stopped, `path` the path given.
@@ -71,6 +71,21 @@ export interface WriteOptions extends AccessOptions {
    * the next segment is a number. Never a hole: an index past the end still fails.
    */
   readonly createMissing?: 'object' | 'array-if-numeric';
+}
+
+// The same copy helpers as the selection functions', kept in this module for the reason the shared helpers give.
+/** An empty record with the prototype of `record`, so that a dictionary without prototype stays one. */
+function blank(record: object): Record<PropertyKey, unknown> {
+  return Object.getPrototypeOf(record) === null ? (Object.create(null) as Record<PropertyKey, unknown>) : {};
+}
+
+// A data property, never a setter: assigning "__proto__" on an ordinary object would replace its prototype instead.
+function put(target: Record<PropertyKey, unknown>, key: PropertyKey, value: unknown): void {
+  if (key === '__proto__') {
+    Object.defineProperty(target, key, { value, writable: true, enumerable: true, configurable: true });
+  } else {
+    target[key] = value;
+  }
 }
 
 type Container = Readonly<Record<PropertyKey, unknown>> | readonly unknown[];

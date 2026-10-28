@@ -312,6 +312,11 @@ test('a write never reaches a prototype, and works on frozen data', () => {
   // Reading "__proto__" is no write: an own "__proto__" field is read as any other.
   const own = JSON.parse('{"__proto__": 1}') as unknown;
   assert.deepEqual(get(own, ['__proto__']), { ok: true, value: 1 });
+  // A copy along the path keeps an own "__proto__" field as a field, and its prototype as it was.
+  const copied = set(own, ['b'], 2);
+  assert.ok(copied.ok);
+  assert.equal(Object.getPrototypeOf(copied.value), Object.prototype);
+  assert.deepEqual(Object.getOwnPropertyDescriptor(copied.value, '__proto__')?.value, 1);
 });
 
 test('a getter is read once, only on the path; keyOf and change are called as documented', () => {

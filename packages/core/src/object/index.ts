@@ -37,7 +37,7 @@ export {
   type WriteIssue,
   type WriteOptions,
 } from './access.ts';
-import { blank, checkMask, isPlainArray, isRecord, keysOf, maskEntry, put } from './mask.ts';
+import { checkMask, isPlainArray, isRecord, keysOf, maskEntry } from './mask.ts';
 
 // The values a mask cannot walk into: a mask names them whole. A built-in that has a `Symbol.toStringTag` (Map, Set,
 // typed arrays, Temporal objects, promises) is one, as are dates, regular expressions and functions.
@@ -182,6 +182,20 @@ function symbolsOf(options: KeyOptions): boolean {
     throw new TypeError(`symbols: ${String(symbols)}`);
   }
   return symbols;
+}
+
+/** An empty record with the prototype of `record`, so that a dictionary without prototype stays one. */
+function blank(record: object): Record<PropertyKey, unknown> {
+  return Object.getPrototypeOf(record) === null ? (Object.create(null) as Record<PropertyKey, unknown>) : {};
+}
+
+// A data property, never a setter: assigning "__proto__" on an ordinary object would replace its prototype instead.
+function put(target: Record<PropertyKey, unknown>, key: PropertyKey, value: unknown): void {
+  if (key === '__proto__') {
+    Object.defineProperty(target, key, { value, writable: true, enumerable: true, configurable: true });
+  } else {
+    target[key] = value;
+  }
 }
 
 /** Applies `walk` to each element of an array, holes kept. */
