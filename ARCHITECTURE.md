@@ -515,7 +515,7 @@ Each public export that runs (a function, a constant that can be called, a class
 
 ### 10.2 Properties
 
-With fast-check, where applicable: idempotence, round trip, inverse, conservation, absence of mutation, determinism, stability, associativity, commutativity, monotonicity, consistency with the platform and between equivalent APIs. The invariants listed in §7 are tests, not intentions.
+With fast-check, where applicable: idempotence, round trip, inverse, conservation, absence of mutation, determinism, stability, associativity, commutativity, monotonicity, consistency with the platform and between equivalent APIs. The invariants listed in §7 are tests, not intentions. A function with an equivalent in es-toolkit is also run beside it on the same generated inputs, from its first test ([ADR 0022](docs/adr/0022-es-toolkit-as-a-differential-judge.md)): every disagreement is a defect or a difference the module documents, which the judge reads and checks.
 
 ### 10.3 Race tests
 
