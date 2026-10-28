@@ -27,17 +27,17 @@ Outillage de développement (empreinte installée, à ne laisser croître que pa
 
 Une version utilisable d'abord (décision du propriétaire du 2026-10-23, §3) : la 0.1.0 livre `@yaltaan/core`, les utilitaires que les équipes recodent, sur les contrats de §5 d'`ARCHITECTURE.md` ; la 0.2.0 ajoute schéma et règles, validés sur le formulaire pilote ; la 0.3.0 le formulaire et Angular. L'outillage qui reste attend d'être utile. Les contrats se gèlent après le pilote (T2.7), pas avant. Une itération peut prendre deux tickets S ou M d'un même domaine.
 
-**Avancement** : 14 étapes closes sur 71 ; prochaine : T3.2.
+**Avancement** : 14 étapes closes sur 77 ; prochaine : T0.17.
 
 | # | Lot | Tickets, dans l'ordre | Avancement | Sortie |
 |---|---|---|---|---|
 | 1 | 0 — Outillage | T0.1, T0.2, T0.7, T0.6, T0.5, T0.3, T0.4 a, b | 8 / 8 clos, terminé | Paquets vides qui passent toute la CI ; taille, coût des types, instructions et temps mesurés. |
-| 2 | 0.1.0 — `@yaltaan/core` utilisable | T1.1, T1.3, T1.2, T1.5, T3.1 a, b, T3.2, T3.3 a, T3.5, T3.4, T0.10 | 6 / 11 clos ; prochain : T3.2 | `Result`, `Issue`, `Path`, `equal`, objets et accès par chemin, collections, nombres, chaînes ; version 0.1.0 étiquetée, archive vérifiée, publiée sur npm dès que l'organisation `@yaltaan` est réservée. |
-| 3 | 0.2.0 — Schéma et règles sur le pilote | T2.1 a, b, T2.2, T2.3, T1.4 | 0 / 5 clos ; prochain : T2.1 a | Schéma Standard Schema minimal et règles relationnelles, scénarios du pilote verts sans `form`. |
+| 2 | 0.1.0 — `@yaltaan/core` utilisable | T1.1, T1.3, T1.2, T1.5, T3.1 a, b, T0.17, T3.2, T0.20, T3.3 a, T3.5, T3.4, T0.10 | 6 / 13 clos ; prochain : T0.17 | `Result`, `Issue`, `Path`, `equal`, objets et accès par chemin, collections, nombres, chaînes ; version 0.1.0 étiquetée, archive vérifiée, publiée sur npm dès que l'organisation `@yaltaan` est réservée. |
+| 3 | 0.2.0 — Schéma et règles sur le pilote | T2.1 a, b, T2.8, T2.2, T2.3, T1.4 | 0 / 6 clos ; prochain : T2.1 a | Schéma Standard Schema minimal et règles relationnelles, scénarios du pilote verts sans `form`. |
 | 4 | 0.3.0 — Formulaire et Angular | T0.14, T1.6 a, T1.6 b, T2.4 a, b, c, T2.5, T2.6, T2.7 | 0 / 9 clos ; prochain : T0.14 | Pilote de bout en bout dans Angular, mesures, **ADR go/no-go de `form`**, gel des contrats. |
-| 5 | Outillage reporté | T0.16, T0.8, T0.9, T0.13, T0.15 | 0 / 5 clos ; prochain : T0.16 | Selon le besoin réel des versions précédentes. |
+| 5 | Outillage reporté | T0.18, T0.19, T0.16, T0.8, T0.9, T0.13, T0.15 | 0 / 7 clos ; prochain : T0.18 | Selon le besoin réel des versions précédentes. |
 | 6 | 3 — Données (suite) | T3.3 b, T3.6 a, b, c, T3.7 a, b, T3.8, T3.9 | 0 / 8 clos ; prochain : T3.3 b | Modules `@experimental`. |
-| 7 | 4 — Temporal | T4.1, T4.2, T4.3, T4.4 | 0 / 4 clos ; prochain : T4.1 | Tests sur l'implémentation native et sur le polyfill recommandé. |
+| 7 | 4 — Temporal | T4.5, T4.1, T4.2, T4.3, T4.4 | 0 / 5 clos ; prochain : T4.5 | Tests sur l'implémentation native et sur le polyfill recommandé. |
 | 8 | 5 — Schéma et règles complets | T5.1 a, b, T5.2, T5.3, T5.4, T5.5, T5.6, T5.7 | 0 / 8 clos ; prochain : T5.1 a | Interopérabilité Standard Schema vérifiée avec au moins deux moteurs tiers. |
 | 9 | 6 — Formulaire complet (si go) | T6.1, T6.2, T6.3, T6.4, T6.5, T6.6 | 0 / 6 clos ; prochain : T6.1 | Second projet pilote. |
 | 10 | 7 — Durcissement | T0.11, T0.12, T7.1, T7.2, T7.3, T7.4, T7.5 | 0 / 7 clos ; prochain : T0.11 | 1.0 = uniquement des modules `@stable`. |
@@ -157,6 +157,34 @@ Une décision réservée au propriétaire (nom, licence, API publique, contrat t
 - **Accepté si** : la porte échoue sur un fichier suivi qui contient l'un de ces caractères en clair ; aucun n'en contient ; catalogue Unicode inchangé (mêmes cas, mêmes chaînes à l'exécution).
 - **Taille** S · **Prio** P1 · **Dépend de** —
 
+#### T0.17 — Juge différentiel : es-toolkit face à `@yaltaan/core`
+- **Pourquoi** : les lois fast-check disent ce que nous avons pensé à énoncer ; une implémentation indépendante, déjà la référence de taille, dit ce que nous n'avons pas imaginé, et chaque écart devient un défaut ou une différence écrite.
+- **Faire** : es-toolkit (déjà installé pour le banc, ADR 0009) devient une dépendance de la porte par ADR ; un harnais de comparaison dans `@yaltaan/testing` ; pour chaque fonction livrée qui a un équivalent, une comparaison sur des entrées générées par fast-check ; chaque écart corrigé, ou écrit comme différence voulue dans la doc du module et vérifié par le juge (la différence doit se produire là où la doc la dit, et seulement là).
+- **Où** : `packages/testing/src/`, `packages/core/src/*/`, `docs/adr/`.
+- **Accepté si** : le juge vu rouge sur un défaut volontaire de chaque module comparé ; chaque fonction sans équivalent nommée avec sa raison ; empreinte installée inchangée, mesurée dans `node_modules`.
+- **Taille** S · **Prio** P0 · **Dépend de** T0.5
+
+#### T0.18 — Test de mutation de `core`
+- **Pourquoi** : les mutations faites à la main ne mesurent que celles qu'on a pensé à faire ; un outil de mutation dit ce que les lois tuent vraiment.
+- **Faire** : Stryker (ou un équivalent mesuré, ADR : poids, sous-dépendances, compatibilité avec `node --test` sur des fichiers `.ts`) sur `packages/core/` ; d'abord une mesure des survivants par module ; puis une porte sur le code changé, seuil par ADR.
+- **Où** : `scripts/`, `docs/adr/`.
+- **Accepté si** : survivants comptés par module, chacun tué par une loi ou motivé (mutant équivalent) ; une loi retirée exprès fait apparaître un survivant.
+- **Taille** M · **Prio** P1 · **Dépend de** T0.5
+
+#### T0.19 — Test d'échelle des fonctions de chemin et de fusion
+- **Pourquoi** : un coût quadratique caché ne se voit pas sur une entrée de taille fixe ; le même scénario en n, 2n et 4n le montre.
+- **Faire** : dans `scripts/perf-count.sh` (Callgrind, ADR 0016), un mode qui compte les instructions d'un scénario en n, 2n et 4n et compare les rapports à ce que la complexité annoncée (`@complexity`) prévoit ; d'abord sur `parsePath`, `formatPath`, `merge`, `defaults` et les fonctions de T3.2.
+- **Où** : `scripts/`, `bench/perf/scenarios/`.
+- **Accepté si** : rouge sur une version quadratique fabriquée d'une fonction linéaire ; rapports publiés pour chaque fonction listée ; les scénarios couverts tirés des `@complexity` publiés, pas d'une liste écrite à la main.
+- **Taille** S · **Prio** P1 · **Dépend de** T0.4 a, T3.2
+
+#### T0.20 — Cure des consignes de travail
+- **Pourquoi** : les consignes chargées au départ de chaque itération (2 655 mots le 2026-10-28) répètent des règles que des scripts tiennent déjà ; une règle tenue par un script tient en une ligne qui le nomme.
+- **Faire** : inventaire de chaque règle de l'ancien texte, une ligne chacune avec sa destination (ligne gardée, script, crochet, test, ADR, archive) ; un contrôle vérifie que chaque entrée se retrouve à sa destination ; une règle retirée sans destination va dans une liste soumise au propriétaire.
+- **Où** : consignes locales (non suivies), `CONTRIBUTING.md` si une règle publique y manque.
+- **Accepté si** : la moitié des mots au plus ; aucune règle de l'inventaire sans destination ; effet mesuré sur les dix tickets suivants (mots chargés au départ, tickets clos, écarts constatés), cure défaite si les écarts montent.
+- **Taille** S · **Prio** P1 · **Dépend de** —
+
 ### Lot 1 — Colonne vertébrale
 
 #### T1.4 — `Path<T>` et `PathValue<T, P>` typés
@@ -224,13 +252,20 @@ Une décision réservée au propriétaire (nom, licence, API publique, contrat t
 - **Accepté si** : ADR accepté par le propriétaire.
 - **Taille** S · **Prio** P0 · **Dépend de** T2.6
 
+#### T2.8 — Juges externes du schéma
+- **Pourquoi** : un schéma qui se dit conforme à Standard Schema et cohérent avec les moteurs courants doit être jugé par eux, pas par nos seuls tests.
+- **Faire** : la suite de tests publiée de Standard Schema (si elle existe sous forme exécutable, sinon les exemples de sa spécification) branchée dans la porte ; comparaison différentielle avec valibot (déjà installé pour le banc, ADR 0009 ; en dépendance de test seulement, ADR) sur des entrées et des schémas générés par fast-check : même verdict, mêmes chemins d'issue ; chaque écart corrigé ou écrit comme différence voulue dans la doc du module.
+- **Où** : `packages/schema/`, `packages/testing/src/`, `docs/adr/`.
+- **Accepté si** : le juge vu rouge sur un défaut volontaire ; branché avant le premier schéma livré par T2.2, dès son premier test.
+- **Taille** S · **Prio** P0 · **Dépend de** T0.17
+
 ### Lot 3 — Données
 
 #### T3.2 — Accès et mise à jour par `Path`
 - **Pourquoi** : la mise à jour localisée avec partage structurel est le vrai besoin derrière le clone profond.
 - **Faire** : `get`, `set`, `has`, `remove`, `update` ; chemin inexistant → `Result` en erreur, création en option (`createMissing`) ; variantes `…InPlace` seulement si un benchmark les justifie, `TypeError` explicite sur un objet gelé.
 - **Où** : `packages/core/src/object/`.
-- **Accepté si** : `update(x, p, v => v) === x` ; branches non touchées de même référence ; `get(set(x, p, v), p) === v`.
+- **Accepté si** : `update(x, p, v => v) === x` ; branches non touchées de même référence ; `get(set(x, p, v), p) === v` ; juge de T0.17 contre `get`, `set`, `has`, `unset` et `update` d'es-toolkit (`es-toolkit/compat`) dès le premier test.
 - **Taille** M · **Prio** P1 · **Dépend de** T3.1
 
 #### T3.3 — `core/collection`
@@ -311,6 +346,13 @@ Une décision réservée au propriétaire (nom, licence, API publique, contrat t
 - **Où** : `packages/temporal/`.
 - **Accepté si** : `decode(encode(x))` égal à `x` ; le sous-chemin principal de `temporal` n'embarque rien de `schema` (T0.2).
 - **Taille** S · **Prio** P1 · **Dépend de** T4.2, T5.2
+
+#### T4.5 — Tests Temporal de test262 avant le code de `temporal`
+- **Pourquoi** : le paquet `temporal` s'appuie sur Temporal natif et sur un polyfill ; test262 est le juge officiel de leur comportement, et dit sur quelles implémentations nos fonctions peuvent compter.
+- **Faire** : sous-ensemble de `test/built-ins/Temporal/` de test262 (épinglé à un commit, téléchargé et vérifié par somme, jamais dans le verrou npm) exécuté sur le Temporal natif de Node 26 et sur temporal-polyfill ; écarts publiés par implémentation ; les fonctions de T4.1 à T4.4 n'utilisent que ce qui passe partout, ou documentent la différence.
+- **Où** : `scripts/`, `packages/temporal/`, `docs/adr/`.
+- **Accepté si** : résultats par implémentation versionnés et rejoués à l'identique ; un test test262 rendu faux exprès fait échouer la porte.
+- **Taille** M · **Prio** P1 · **Dépend de** T0.17
 
 ### Lot 5 — Schéma et règles complets
 
