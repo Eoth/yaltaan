@@ -26,6 +26,17 @@
 //     and ignores the second
 //   - defaults: an array is a value, kept whole; es-toolkit fills its missing indexes from the fallback
 //   - mapValues, mapKeys: `symbols: true` maps symbol keys too; es-toolkit never reads them
+export {
+  get,
+  has,
+  remove,
+  set,
+  update,
+  type AccessIssue,
+  type AccessOptions,
+  type WriteIssue,
+  type WriteOptions,
+} from './access.ts';
 import { blank, checkMask, isPlainArray, isRecord, keysOf, maskEntry, put } from './mask.ts';
 
 // The values a mask cannot walk into: a mask names them whole. A built-in that has a `Symbol.toStringTag` (Map, Set,

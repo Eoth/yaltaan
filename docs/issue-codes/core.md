@@ -11,4 +11,6 @@ A row is never deleted: a removed code keeps its row, with the version that remo
 | `path.too_deep` | `maximum` | The text of a path holds more than `maximum` segments. | 0.1 | |
 | `path.not_textual` | `index` | The segment at `index` has no text form: a symbol, a `{ key }` segment, a number that is no index. | 0.1 | |
 | `path.forbidden_segment` | `index`, `segment` | The segment at `index` is `__proto__`, `constructor` or `prototype`, refused for a write. | 0.1 | |
+| `path.missing` | `index` | The value holds nothing at the segment at `index` of the path: a field absent, an index at or past the end or on a hole, no element with that key. | 0.1 | |
+| `path.not_traversable` | `index` | The value at the segment at `index` cannot be walked by it: a primitive, a `Map`, a class instance, a number on a record, a string on an array. | 0.1 | |
 | `issue.external` | `message` | An issue read from another Standard Schema validator; `message` is its message, `cause` the foreign issue. | 0.1 | |

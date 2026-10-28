@@ -15,7 +15,8 @@
 // least a quarter of the inputs must be compared, so that differences drawn too often cannot leave nothing judged.
 //
 // Blind spots: only what the generators draw is compared; an input both libraries mishandle alike passes; and a
-// difference holds wherever its predicate says, so a predicate drawn too wide hides disagreements inside it.
+// difference without `expected` holds wherever its predicate says, so a predicate drawn too wide hides
+// disagreements inside it.
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
@@ -32,8 +33,13 @@ export const HEADING = 'Differences from';
 /** A difference the module documents: `text` is its line of the block, verbatim after the function names. */
 export interface Difference<I> {
   readonly text: string;
-  /** Whether `input` reaches the difference: such an input is not compared. */
+  /** Whether `input` reaches the difference: such an input is not compared as it is. */
   readonly applies: (input: I) => boolean;
+  /**
+   * What ours must return, built from what the reference returned for the same `input`: when given, the difference
+   * is checked to be exactly that, on every input it applies to.
+   */
+  readonly expected?: (theirs: unknown, input: I) => unknown;
 }
 
 /** One function of ours against its equivalent. Each side gets the input as drawn; ours runs first. */
@@ -117,6 +123,10 @@ export function runComparison<I>(title: string, comparison: Comparison<I>): stri
     }
     reached[index]! += 1;
     changed[index]! += isDeepStrictEqual(ours, theirs) ? 0 : 1;
+    const { expected } = differences[index]!;
+    if (expected !== undefined && 'returned' in theirs) {
+      assert.deepStrictEqual(ours, { returned: expected(theirs.returned, input) });
+    }
   });
   const numRuns = comparison.numRuns ?? DEFAULT_RUNS;
   fc.assert(property, { seed: seedOf(title), numRuns });

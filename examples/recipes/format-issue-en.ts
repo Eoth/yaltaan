@@ -13,6 +13,9 @@ const MESSAGES: Readonly<Record<string, (params: Params) => string>> = {
   'path.too_deep': (params) => `This path is too deep: at most ${String(params['maximum'])} steps.`,
   'path.not_textual': () => 'This path cannot be written as text.',
   'path.forbidden_segment': (params) => `"${String(params['segment'])}" cannot be written to.`,
+  'path.missing': (params) => `Nothing is there, from step ${String(params['index'])} of this path on.`,
+  'path.not_traversable': (params) =>
+    `Step ${String(params['index'])} of this path leads through a value it cannot enter.`,
   'issue.external': (params) => String(params['message']),
 };
 

@@ -271,6 +271,45 @@ toStandardIssue({ code: 'a.b', path: ['x'] }, { format: (i) => i.code }) // { me
 
 ## `@yaltaan/core/object`
 
+### `AccessIssue`
+
+A type.
+
+Why a path designates nothing in a value; `index` is the segment where the walk stopped, `path` the path given. - `path.missing`: the container is there, but holds nothing at that segment (a field absent, an index at or past the end or on a hole, no element with that key). - `path.not_traversable`: the value at that point cannot be walked by that segment (a primitive, a `Map`, a class instance, a number on a record, a string on an array).
+
+```ts
+export type AccessIssue = {
+    readonly code: 'path.missing' | 'path.not_traversable';
+    readonly path: Path;
+    readonly params: {
+        readonly index: number;
+    };
+};
+```
+
+| Contract | Value |
+|---|---|
+| `@since` | 0.1 |
+| `@experimental` | yes |
+
+### `AccessOptions`
+
+A type.
+
+Options of every function that reads a value by a path.
+
+```ts
+export interface AccessOptions {
+    /** The stable key of an array element, which a `{ key }` segment is matched against; required by such a segment. */
+    readonly keyOf?: (element: unknown) => unknown;
+}
+```
+
+| Contract | Value |
+|---|---|
+| `@since` | 0.1 |
+| `@experimental` | yes |
+
 ### `ArrayStrategy`
 
 A type.
@@ -489,6 +528,44 @@ export interface UntypedMask {
 | `@since` | 0.1 |
 | `@experimental` | yes |
 
+### `WriteIssue`
+
+A type.
+
+Why a write failed: the path designates nothing, or one of its segments is refused for a write.
+
+```ts
+export type WriteIssue = AccessIssue | Extract<PathIssue, {
+    readonly code: 'path.forbidden_segment';
+}>;
+```
+
+| Contract | Value |
+|---|---|
+| `@since` | 0.1 |
+| `@experimental` | yes |
+
+### `WriteOptions`
+
+A type.
+
+Options of `set` and `update`.
+
+```ts
+export interface WriteOptions extends AccessOptions {
+    /**
+     * Creates what the path misses instead of failing: `'object'` creates records, `'array-if-numeric'` an array where
+     * the next segment is a number. Never a hole: an index past the end still fails.
+     */
+    readonly createMissing?: 'object' | 'array-if-numeric';
+}
+```
+
+| Contract | Value |
+|---|---|
+| `@since` | 0.1 |
+| `@experimental` | yes |
+
 ### `defaults`
 
 A function.
@@ -514,6 +591,58 @@ export declare function defaults<T, D>(value: T, fallback: D, options?: KeyOptio
 
 ```ts
 defaults({ retry: { count: 5 } }, { retry: { count: 3, delay: 9 } }) // { retry: { count: 5, delay: 9 } }
+```
+
+### `get`
+
+A function.
+
+The value at `path` in `value`, or why there is none: a field that holds `undefined` is a value, a missing one is not. An empty path designates `value` itself.
+
+```ts
+export declare function get(value: unknown, path: Path, options?: AccessOptions): Result<unknown, AccessIssue>;
+```
+
+| Contract | Value |
+|---|---|
+| `@pure` | yes |
+| `@sharing` | identity-preserving |
+| `@complexity` | O(d) (d = segments), plus O(n) per `{ key }` segment (n = elements of its array) |
+| `@throws` | TypeError when `path` is not an array, `keyOf` is not a function, or a `{ key }` segment meets no `keyOf` |
+| `@throws` | what a getter, a Proxy trap or `keyOf` throws, unchanged |
+| `@since` | 0.1 |
+| `@experimental` | yes |
+
+**Example**
+
+```ts
+get({ lines: [{ qty: 2 }] }, ['lines', 0, 'qty']) // { ok: true, value: 2 }
+```
+
+### `has`
+
+A function.
+
+Whether `path` designates a value in `value`: `get(value, path, options).ok`.
+
+```ts
+export declare function has(value: unknown, path: Path, options?: AccessOptions): boolean;
+```
+
+| Contract | Value |
+|---|---|
+| `@pure` | yes |
+| `@sharing` | identity-preserving |
+| `@complexity` | O(d) (d = segments), plus O(n) per `{ key }` segment (n = elements of its array) |
+| `@throws` | TypeError when `path` is not an array, `keyOf` is not a function, or a `{ key }` segment meets no `keyOf` |
+| `@throws` | what a getter, a Proxy trap or `keyOf` throws, unchanged |
+| `@since` | 0.1 |
+| `@experimental` | yes |
+
+**Example**
+
+```ts
+has({ note: undefined }, ['note']) // true
 ```
 
 ### `mapKeys`
@@ -679,6 +808,84 @@ export declare function redact<T, const M extends Mask<T>, const R = '***'>(valu
 
 ```ts
 redact({ card: { number: '4970 1012', expiry: '12/29' } }, { card: { number: true } })
+```
+
+### `remove`
+
+A function.
+
+A copy of `value` without what `path` designates: a field is dropped, an array element spliced out (the elements after it move down one index). A missing path fails, an empty one too: a value cannot be removed from itself.
+
+```ts
+export declare function remove<T>(value: T, path: Path, options?: AccessOptions): Result<T, WriteIssue>;
+```
+
+| Contract | Value |
+|---|---|
+| `@pure` | yes |
+| `@sharing` | structural |
+| `@complexity` | O(d + w) (d = segments, w = keys and elements of the containers copied along the path) |
+| `@throws` | TypeError when `path` is not an array, `keyOf` is not a function, or a `{ key }` segment meets no `keyOf` |
+| `@throws` | what a getter, a Proxy trap or `keyOf` throws, unchanged |
+| `@since` | 0.1 |
+| `@experimental` | yes |
+
+**Example**
+
+```ts
+remove({ tags: ['a', 'b', 'c'] }, ['tags', 1]) // { ok: true, value: { tags: ['a', 'c'] } }
+```
+
+### `set`
+
+A function.
+
+A copy of `value` where `path` holds `next`; the records and arrays along the path are copied, everything else is shared, and `value` is returned itself when `path` already holds `next` (`Object.is`). The last segment may be new (a field, or the index equal to the length of an array); any other missing segment fails, unless `createMissing`. The result is typed as `value`: the caller vouches that the write keeps its shape.
+
+```ts
+export declare function set<T>(value: T, path: Path, next: unknown, options?: WriteOptions): Result<T, WriteIssue>;
+```
+
+| Contract | Value |
+|---|---|
+| `@pure` | yes |
+| `@sharing` | structural |
+| `@complexity` | O(d + w) (d = segments, w = keys and elements of the containers copied along the path) |
+| `@throws` | TypeError when `path` is not an array, an option has the wrong type, or a `{ key }` segment meets no `keyOf` |
+| `@throws` | what a getter, a Proxy trap or `keyOf` throws, unchanged |
+| `@since` | 0.1 |
+| `@experimental` | yes |
+
+**Example**
+
+```ts
+set({ user: { name: 'Ada' } }, ['user', 'name'], 'Grace')
+```
+
+### `update`
+
+A function.
+
+A copy of `value` where `path` holds what `change` returns for its current value, copied as `set` does; `value` itself when `change` returns the current value (`Object.is`). A missing path fails, unless `createMissing`, which calls `change` with `undefined`.
+
+```ts
+export declare function update<T>(value: T, path: Path, change: (current: unknown) => unknown, options?: WriteOptions): Result<T, WriteIssue>;
+```
+
+| Contract | Value |
+|---|---|
+| `@pure` | yes |
+| `@sharing` | structural |
+| `@complexity` | O(d + w) (d = segments, w = keys and elements of the containers copied along the path) |
+| `@throws` | TypeError when `path` is not an array, an option has the wrong type, or a `{ key }` segment meets no `keyOf` |
+| `@throws` | what `change`, a getter, a Proxy trap or `keyOf` throws, unchanged |
+| `@since` | 0.1 |
+| `@experimental` | yes |
+
+**Example**
+
+```ts
+update({ count: 1 }, ['count'], (n) => (n as number) + 1) // { ok: true, value: { count: 2 } }
 ```
 
 ## `@yaltaan/core/path`

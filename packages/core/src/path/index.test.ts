@@ -4,6 +4,7 @@ import { test } from 'node:test';
 import { assertType, CallbackError, declareAdversarial, fc, HostileError, type Equal } from '@yaltaan/testing';
 
 import { liveCodes } from '../../../../scripts/check-issue-codes.ts';
+import type { AccessIssue } from '../object/index.ts';
 
 import {
   checkWritablePath,
@@ -255,9 +256,16 @@ test('the example of the README runs', () => {
   assert.equal(write.ok ? undefined : write.error.code, 'path.forbidden_segment');
 });
 
-test('the codes this module produces are the path codes of the registry of the package', () => {
+// The codes of reading and writing a value by a path, in the object module, keyed so that the compiler checks the
+// list is whole.
+const ACCESS_CODES: { readonly [Code in AccessIssue['code']]: true } = {
+  'path.missing': true,
+  'path.not_traversable': true,
+};
+
+test('the codes of this module and of the path functions of object are the path codes of the registry', () => {
   const registered = [...liveCodes('core')].filter((code) => code.startsWith('path.'));
-  assert.deepEqual(registered.toSorted(), CODES.toSorted());
+  assert.deepEqual(registered.toSorted(), [...CODES, ...Object.keys(ACCESS_CODES)].toSorted());
 });
 
 // A check that may only fail by the hostile object's own error: reading the options can hit a throwing getter.

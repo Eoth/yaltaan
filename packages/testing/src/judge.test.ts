@@ -94,3 +94,27 @@ test('runComparison throws when less than a quarter of the inputs are compared',
     /only \d+ of 1000 inputs compared/,
   );
 });
+
+test('runComparison checks a difference against what it says ours returns, when it says so', () => {
+  const doubled = {
+    text: 'doubled',
+    applies: (n: number) => n > 0,
+    expected: (theirs: unknown) => (theirs as number) * 2,
+  };
+  runComparison('expected', {
+    input: integers,
+    ours: (n) => (n > 0 ? 2 * n : n),
+    theirs: (n) => n,
+    differences: [doubled],
+  });
+  assert.throws(
+    () =>
+      runComparison('unexpected', {
+        input: integers,
+        ours: (n) => (n > 0 ? 3 * n : n),
+        theirs: (n) => n,
+        differences: [doubled],
+      }),
+    /Property failed/,
+  );
+});
