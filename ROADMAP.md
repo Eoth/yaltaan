@@ -27,16 +27,16 @@ Outillage de développement (empreinte installée, à ne laisser croître que pa
 
 Une version utilisable d'abord (décision du propriétaire du 2026-10-23, §3) : la 0.1.0 livre `@yaltaan/core`, les utilitaires que les équipes recodent, sur les contrats de §5 d'`ARCHITECTURE.md` ; la 0.2.0 ajoute schéma et règles, validés sur le formulaire pilote ; la 0.3.0 le formulaire et Angular. L'outillage qui reste attend d'être utile. Les contrats se gèlent après le pilote (T2.7), pas avant. Une itération peut prendre deux tickets S ou M d'un même domaine.
 
-**Avancement** : 15 étapes closes sur 77 ; prochaine : T3.2.
+**Avancement** : 16 étapes closes sur 79 ; prochaine : T0.20.
 
 | # | Lot | Tickets, dans l'ordre | Avancement | Sortie |
 |---|---|---|---|---|
 | 1 | 0 — Outillage | T0.1, T0.2, T0.7, T0.6, T0.5, T0.3, T0.4 a, b | 8 / 8 clos, terminé | Paquets vides qui passent toute la CI ; taille, coût des types, instructions et temps mesurés. |
-| 2 | 0.1.0 — `@yaltaan/core` utilisable | T1.1, T1.3, T1.2, T1.5, T3.1 a, b, T0.17, T3.2, T0.20, T3.3 a, T3.5, T3.4, T0.10 | 7 / 13 clos ; prochain : T3.2 | `Result`, `Issue`, `Path`, `equal`, objets et accès par chemin, collections, nombres, chaînes ; version 0.1.0 étiquetée, archive vérifiée, publiée sur npm dès que l'organisation `@yaltaan` est réservée. |
+| 2 | 0.1.0 — `@yaltaan/core` utilisable | T1.1, T1.3, T1.2, T1.5, T3.1 a, b, T0.17, T3.2, T0.20, T3.3 a, T3.5, T3.4, T0.10 | 8 / 13 clos ; prochain : T0.20 | `Result`, `Issue`, `Path`, `equal`, objets et accès par chemin, collections, nombres, chaînes ; version 0.1.0 étiquetée, archive vérifiée, publiée sur npm dès que l'organisation `@yaltaan` est réservée. |
 | 3 | 0.2.0 — Schéma et règles sur le pilote | T2.1 a, b, T2.8, T2.2, T2.3, T1.4 | 0 / 6 clos ; prochain : T2.1 a | Schéma Standard Schema minimal et règles relationnelles, scénarios du pilote verts sans `form`. |
 | 4 | 0.3.0 — Formulaire et Angular | T0.14, T1.6 a, T1.6 b, T2.4 a, b, c, T2.5, T2.6, T2.7 | 0 / 9 clos ; prochain : T0.14 | Pilote de bout en bout dans Angular, mesures, **ADR go/no-go de `form`**, gel des contrats. |
-| 5 | Outillage reporté | T0.18, T0.19, T0.16, T0.8, T0.9, T0.13, T0.15 | 0 / 7 clos ; prochain : T0.18 | Selon le besoin réel des versions précédentes. |
-| 6 | 3 — Données (suite) | T3.3 b, T3.6 a, b, c, T3.7 a, b, T3.8, T3.9 | 0 / 8 clos ; prochain : T3.3 b | Modules `@experimental`. |
+| 5 | Outillage reporté | T0.18, T0.19, T0.21, T0.16, T0.8, T0.9, T0.13, T0.15 | 0 / 8 clos ; prochain : T0.18 | Selon le besoin réel des versions précédentes. |
+| 6 | 3 — Données (suite) | T3.3 b, T3.10, T3.6 a, b, c, T3.7 a, b, T3.8, T3.9 | 0 / 9 clos ; prochain : T3.3 b | Modules `@experimental`. |
 | 7 | 4 — Temporal | T4.5, T4.1, T4.2, T4.3, T4.4 | 0 / 5 clos ; prochain : T4.5 | Tests sur l'implémentation native et sur le polyfill recommandé. |
 | 8 | 5 — Schéma et règles complets | T5.1 a, b, T5.2, T5.3, T5.4, T5.5, T5.6, T5.7 | 0 / 8 clos ; prochain : T5.1 a | Interopérabilité Standard Schema vérifiée avec au moins deux moteurs tiers. |
 | 9 | 6 — Formulaire complet (si go) | T6.1, T6.2, T6.3, T6.4, T6.5, T6.6 | 0 / 6 clos ; prochain : T6.1 | Second projet pilote. |
@@ -179,6 +179,13 @@ Une décision réservée au propriétaire (nom, licence, API publique, contrat t
 - **Accepté si** : la moitié des mots au plus ; aucune règle de l'inventaire sans destination ; effet mesuré sur les dix tickets suivants (mots chargés au départ, tickets clos, écarts constatés), cure défaite si les écarts montent.
 - **Taille** S · **Prio** P1 · **Dépend de** —
 
+#### T0.21 — Comptage d'instructions : variantes natives qui bougent sans changement de leur code
+- **Pourquoi** : un verdict A/B ne vaut que si une variante qui n'exécute rien de nous reste à « same work » ; le 2026-10-28, `equal` `native/realistic` (Node `util.isDeepStrictEqual` seul) passe de 1 427 732 à 1 551 433 instructions par appel (+8,664 %, reproduit à l'identique) entre `ce7724c` et `53d7d6f`, et `omit` `native/pathological` −0,257 %, quand seuls nos modules chargés à côté ont changé.
+- **Faire** : trouver ce que compte la variante en plus (collecte du ramasse-miettes dans la fenêtre comptée, compilation, emplacement du tas), par la sortie de Callgrind par fonction ; isoler les variantes l'une de l'autre (processus, collecte forcée avant la fenêtre, ou soustraction mesurée) ; puis une garde : une variante native hors de « same work » rend le comptage non concluant au lieu de juger les autres.
+- **Où** : `scripts/perf-count.ts`, `scripts/lib/perf-count.ts`, `bench/perf/`.
+- **Accepté si** : `ce7724c` contre `53d7d6f` donne « same work » sur chaque variante native ; un changement fabriqué de nos seuls modules qui déplace une variante native fait sortir le comptage en « non concluant ».
+- **Taille** S · **Prio** P1 · **Dépend de** T0.4 a
+
 ### Lot 1 — Colonne vertébrale
 
 #### T1.4 — `Path<T>` et `PathValue<T, P>` typés
@@ -255,13 +262,6 @@ Une décision réservée au propriétaire (nom, licence, API publique, contrat t
 
 ### Lot 3 — Données
 
-#### T3.2 — Accès et mise à jour par `Path`
-- **Pourquoi** : la mise à jour localisée avec partage structurel est le vrai besoin derrière le clone profond.
-- **Faire** : `get`, `set`, `has`, `remove`, `update` ; chemin inexistant → `Result` en erreur, création en option (`createMissing`) ; variantes `…InPlace` seulement si un benchmark les justifie, `TypeError` explicite sur un objet gelé.
-- **Où** : `packages/core/src/object/`.
-- **Accepté si** : `update(x, p, v => v) === x` ; branches non touchées de même référence ; `get(set(x, p, v), p) === v` ; juge de T0.17 contre `get`, `set`, `has`, `unset` et `update` d'es-toolkit (`es-toolkit/compat`) dès le premier test.
-- **Taille** M · **Prio** P1 · **Dépend de** T3.1
-
 #### T3.3 — `core/collection`
 - **Pourquoi** : seulement ce qui manque au natif (`ARCHITECTURE.md` §7.2).
 - **Faire** : (a) `partition`, `indexBy`, `countBy`, `uniqueBy`, `minBy`/`maxBy`, `topK` (tas), `sortBy` multicritère, `intersectionBy`/`differenceBy`, `paginate` ; (b) `chunk`, `window`, `zip` paresseux sur itérables (générateurs, sans dépendre des assistants d'itérateurs tant qu'ils sont hors baseline), `mapConcurrent`.
@@ -310,6 +310,13 @@ Une décision réservée au propriétaire (nom, licence, API publique, contrat t
 - **Où** : `packages/core/src/equal/`, `docs/guide/{en,fr}/equal.md`.
 - **Accepté si** : chaque type listé est comparé par contenu ou porte sa raison dans le tableau de support ; budget de 1 750 o tenu ; mêmes propriétés que T1.5 (réflexivité, symétrie).
 - **Taille** S · **Prio** P2 · **Dépend de** T1.5
+
+#### T3.10 — Chemins typés : `Path<T>` et `PathValue<T, P>`
+- **Pourquoi** : `get` rend `unknown` et `set`, `update`, `remove` le type de leur entrée sans suivre le chemin (ADR 0023) ; `ARCHITECTURE.md` §5.3 promet des chemins typés, à profondeur bornée, qui rendraient ces types exacts.
+- **Faire** : `Path<T>` (les chemins d'un `T`, profondeur bornée à 8, mesurée) et `PathValue<T, P>` ; surcharges typées de `get`, `set`, `update`, `remove` quand le chemin est littéral, repli explicite vers le chemin non typé au-delà ; coût des types mesuré (T0.3).
+- **Où** : `packages/core/src/path/`, `packages/core/src/object/access.ts`.
+- **Accepté si** : un segment mal orthographié dans un chemin littéral est une erreur de compilation ; `get(x, ['a', 0])` typé comme `x.a[0]` ; coût des types dans son seuil, nombre d'instanciations par usage publié.
+- **Taille** M · **Prio** P1 · **Dépend de** T3.2
 
 ### Lot 4 — Temporal
 
@@ -522,3 +529,4 @@ Une ligne par ticket : `identifiant — commit — résultat mesuré — itérat
 | T3.1 a | `0026b44` docs(adr): select fields by a mask shaped like the value, checked by the compiler ; `eddaa02` feat(core): select fields by a typed mask in pick, omit, redact and equal ; `d628b23` test(bench): count Yaltaan's omit by a mask beside es-toolkit and the platform | `@yaltaan/core/object` : `pick`, `omit`, `redact`, `Mask<T>`, `UntypedMask`, `Picked`, `Omitted`, `Redacted`, `MaskOptions`, `RedactOptions` ; `equal` prend `pick`/`omit` (`EqualMasks<T>`), mémoire des paires par masque ; clé fautive refusée par le compilateur à toute profondeur ; taille brotli `core-omit` 532 / 528 o (budget 150 → 600 o, référence profonde es-toolkit `compat` 2 741 o), `core-equal` 946 / 948 → 1 288 / 1 303 o ; instructions sans masque −0,57 % à −0,05 % ; tests 1 030 → 1 253 ; catalogue adversarial 13 exports, 60 contrôles, 18 N/A | 1 (M) |
 | T3.1 b | `960a5b3` feat(core): merge, fill defaults and map records, specified by laws ; `484983b` test(core): state Result by laws over any value instead of hand-picked cases | `@yaltaan/core/object` : `merge` (tableaux `'replace'` ou `'concat'`, sans défaut), `defaults`, `mapValues`, `mapKeys`, `Merged`, `Defaulted`, `ArrayStrategy`, `MergeOptions`, `KeyOptions` ; tests par lois (16 mutations sur 16 attrapées) ; brotli `merge` 523 o (`toMerged` d'es-toolkit 1 446 o), `defaults` 407 o (`defaultsDeep` 463 o), `mapValues` 377 o et `mapKeys` 416 o (es-toolkit 105 et 104 o) ; `Result` : 6 exemples remplacés par 3 lois ; tests 1 253 → 1 547 ; catalogue adversarial 17 exports, 78 contrôles, 24 N/A | 1 (M) |
 | T0.17 | `141f32d` docs(adr): judge the core functions against es-toolkit on generated inputs ; `4990e30` test(core): compare eight functions with es-toolkit on generated inputs | Juge différentiel (ADR 0022) : es-toolkit 1.52.0 en dépendance des tests, aucun paquet ajouté (`node_modules` 95 862 726 octets avant et après) ; `createJudge` et `runComparison` dans `@yaltaan/testing`, 1 000 entrées par comparaison ; 8 fonctions jugées (`pick`, `omit`, `mapValues`, `mapKeys`, `merge`, `defaults`, `equal`, `parsePath`), 9 sans équivalent nommées ; 23 paires fonction-différence en 13 lignes d'en-tête de module, toutes des choix déjà actés, aucun défaut ; 12 défauts volontaires sur 12 vus rouges (8 dans le code, 4 dans le juge ; un seul passait à 300 entrées) ; tests 1 547 → 1 564 ; suite de tests 6,71 → 7,33 s (médianes) ; 30 assertions écrites à la main désormais couvertes, gardées. | 0,5 (S) |
+| T3.2 | `2d66cec` docs(adr): read and write a value by a path with strict segments ; `995c2eb` feat(core): read and write a value by Path, judged against lodash's ; `53d7d6f` perf(core): keep the record copy helpers local to each object module | `@yaltaan/core/object` : `get`, `has`, `set`, `update`, `remove` par `Path` (ADR 0023 : segments stricts, `Result`, copie le long du chemin seulement, jamais de trou, `createMissing`, `{ key }` par `keyOf`), codes `path.missing` et `path.not_traversable` ; 6 lois générées sur entrées gelées, juge contre `es-toolkit/compat` dès le premier test (5 comparaisons, 9 différences dont 8 exactes) ; 10 défauts volontaires : lois et exemples 10/10, juge 6/9 ; tailles brotli `get` 567 / 570 o, `set` 1 317 / 1 312 o, les cinq 1 418 / 1 426 o (compat 1 466 / 1 483) ; un déplacement de `put` coûtait +1,78 % d'instructions à `omit`, corrigé (série : variantes Yaltaan à ±0,008 %) ; tests 1 564 → 1 926, exports 46 → 55 ; tickets T3.10 (chemins typés) et T0.21 (bruit du comptage) ouverts. | 1 (M) |
