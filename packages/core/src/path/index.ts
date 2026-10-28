@@ -17,6 +17,11 @@
 // Each regular expression is anchored where the scanner stands (`y`) and is a sequence of alternatives that no code
 // unit can start twice (a name, an index, a quoted key), so none can backtrack more than once per code unit: reading a
 // text takes a time linear in its length, which parsePath bounds before it starts.
+//
+// Differences from es-toolkit 1.52.0, each checked on generated inputs by the judge of the tests:
+//   - parsePath: a quoted key is a JSON string, whose escapes (`\n`, `\u0041`) are decoded; es-toolkit only drops their
+//     backslash
+//   - parsePath: a text outside the grammar is an issue; es-toolkit reads every text, as lodash does
 import { err, ok, type Result } from '../result/index.ts';
 
 /**

@@ -13,6 +13,11 @@
 //   anything else (class instances, functions, RegExp, ArrayBuffer, objects of another realm)  identity
 // A `pick` or `omit` mask (ADR 0021) walks into records and arrays only: under any other value it compares it whole.
 // The memory of pairs is kept per mask, since one pair may be equal under one mask and differ under another.
+//
+// Differences from es-toolkit 1.52.0, each checked on generated inputs by the judge of the tests:
+//   - equal: a hole of an array differs from `undefined`, as a missing key from an `undefined` field; es-toolkit takes
+//     both alike
+//   - equal: elements of a `Set` match by SameValueZero, as `has` reads them; es-toolkit also pairs equal objects
 import type { Mask } from '../object/index.ts';
 import { checkMask, keysOf, maskEntry } from '../object/mask.ts';
 

@@ -11,6 +11,21 @@
 //                                                  replaced, never walked; holes stay holes
 //   anything else (Map, Set, Date, class instances, arrays of another realm or subclass)  taken whole, as the value
 // A getter is read once, and only when its field is kept; an exception it throws is propagated.
+//
+// Differences from es-toolkit 1.52.0, each checked on generated inputs by the judge of the tests:
+//   - pick, omit, mapValues, mapKeys, merge, defaults: a dictionary without prototype stays one; es-toolkit returns an
+//     `Object` instance
+//   - pick, mapValues, mapKeys: a "__proto__" key stays a key; es-toolkit assigns it, which replaces the prototype of
+//     the copy
+//   - omit: a symbol key counts only with `symbols: true`; es-toolkit always copies it
+//   - merge, defaults: a "__proto__" key stays a key; es-toolkit skips it
+//   - merge: an array that meets an array or a record is replaced, or joined by `arrays: 'concat'`; es-toolkit merges
+//     them by index
+//   - merge: an `undefined` field of the overrides is copied, as a spread does; es-toolkit skips it
+//   - merge, defaults: symbol keys of both values count only with `symbols: true`; es-toolkit keeps those of the first
+//     and ignores the second
+//   - defaults: an array is a value, kept whole; es-toolkit fills its missing indexes from the fallback
+//   - mapValues, mapKeys: `symbols: true` maps symbol keys too; es-toolkit never reads them
 import { checkMask, isPlainArray, isRecord, keysOf, maskEntry } from './mask.ts';
 
 // The values a mask cannot walk into: a mask names them whole. A built-in that has a `Symbol.toStringTag` (Map, Set,

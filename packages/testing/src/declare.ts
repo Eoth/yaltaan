@@ -29,7 +29,7 @@ const DEFAULT_RUNS = 100;
 
 // FNV-1a over the test name: each declaration draws its own random values, the same on every run and machine, so a
 // failure replays from the seed fast-check prints.
-function seedOf(name: string): number {
+export function seedOf(name: string): number {
   let hash = 0x811c9dc5;
   for (let index = 0; index < name.length; index += 1) {
     hash = Math.imul(hash ^ name.charCodeAt(index), 0x01000193);
