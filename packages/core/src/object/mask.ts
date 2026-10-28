@@ -1,5 +1,5 @@
-// What the functions that walk a value by a mask share: which values they walk, which keys they read, and how a
-// mask entry is read. Internal to the package: no sub-path exports it.
+// What the functions of the module share: which values they walk, which keys they read, how a copy is made, and how
+// a mask entry is read. Internal to the package: no sub-path exports it.
 
 /** A record: an object whose prototype is `Object.prototype` or `null`. */
 export function isRecord(value: unknown): value is Readonly<Record<PropertyKey, unknown>> {
@@ -49,4 +49,18 @@ export function maskEntry(mask: object, key: PropertyKey): object | true | undef
   }
   const entry: unknown = (mask as Readonly<Record<PropertyKey, unknown>>)[key];
   return entry === true || entry === undefined ? entry : checkMask(entry, key);
+}
+
+/** An empty record with the prototype of `record`, so that a dictionary without prototype stays one. */
+export function blank(record: object): Record<PropertyKey, unknown> {
+  return Object.getPrototypeOf(record) === null ? (Object.create(null) as Record<PropertyKey, unknown>) : {};
+}
+
+// A data property, never a setter: assigning "__proto__" on an ordinary object would replace its prototype instead.
+export function put(target: Record<PropertyKey, unknown>, key: PropertyKey, value: unknown): void {
+  if (key === '__proto__') {
+    Object.defineProperty(target, key, { value, writable: true, enumerable: true, configurable: true });
+  } else {
+    target[key] = value;
+  }
 }
