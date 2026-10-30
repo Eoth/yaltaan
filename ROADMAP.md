@@ -27,16 +27,16 @@ Outillage de développement (empreinte installée, à ne laisser croître que pa
 
 Une version utilisable d'abord (décision du propriétaire du 2026-10-23, §3) : la 0.1.0 livre `@yaltaan/core`, les utilitaires que les équipes recodent, sur les contrats de §5 d'`ARCHITECTURE.md` ; la 0.2.0 ajoute schéma et règles, validés sur le formulaire pilote ; la 0.3.0 le formulaire et Angular. L'outillage qui reste attend d'être utile. Les contrats se gèlent après le pilote (T2.7), pas avant. Une itération peut prendre deux tickets S ou M d'un même domaine.
 
-**Avancement** : 17 étapes closes sur 80 ; prochaine : T3.3 a.
+**Avancement** : 17 étapes closes sur 81 ; prochaine : T3.3 a.
 
 | # | Lot | Tickets, dans l'ordre | Avancement | Sortie |
 |---|---|---|---|---|
 | 1 | 0 — Outillage | T0.1, T0.2, T0.7, T0.6, T0.5, T0.3, T0.4 a, b | 8 / 8 clos, terminé | Paquets vides qui passent toute la CI ; taille, coût des types, instructions et temps mesurés. |
-| 2 | 0.1.0 — `@yaltaan/core` utilisable | T1.1, T1.3, T1.2, T1.5, T3.1 a, b, T0.17, T3.2, T0.20 a, T3.3 a, T3.5, T3.4, T0.10 | 9 / 13 clos ; prochain : T3.3 a | `Result`, `Issue`, `Path`, `equal`, objets et accès par chemin, collections, nombres, chaînes ; version 0.1.0 étiquetée, archive vérifiée, publiée sur npm dès que l'organisation `@yaltaan` est réservée. |
+| 2 | 0.1.0 — `@yaltaan/core` utilisable | T1.1, T1.3, T1.2, T1.5, T3.1 a, b, T0.17, T3.2, T0.20 a, T3.3 a, b, T3.5, T3.4, T0.10 | 9 / 14 clos ; prochain : T3.3 a | `Result`, `Issue`, `Path`, `equal`, objets et accès par chemin, collections, nombres, chaînes ; version 0.1.0 étiquetée, archive vérifiée, publiée sur npm dès que l'organisation `@yaltaan` est réservée. |
 | 3 | 0.2.0 — Schéma et règles sur le pilote | T2.1 a, b, T2.8, T2.2, T2.3, T1.4, T0.20 b | 0 / 7 clos ; prochain : T2.1 a | Schéma Standard Schema minimal et règles relationnelles, scénarios du pilote verts sans `form`. |
 | 4 | 0.3.0 — Formulaire et Angular | T0.14, T1.6 a, T1.6 b, T2.4 a, b, c, T2.5, T2.6, T2.7 | 0 / 9 clos ; prochain : T0.14 | Pilote de bout en bout dans Angular, mesures, **ADR go/no-go de `form`**, gel des contrats. |
 | 5 | Outillage reporté | T0.18, T0.19, T0.21, T0.16, T0.8, T0.9, T0.13, T0.15 | 0 / 8 clos ; prochain : T0.18 | Selon le besoin réel des versions précédentes. |
-| 6 | 3 — Données (suite) | T3.3 b, T3.10, T3.6 a, b, c, T3.7 a, b, T3.8, T3.9 | 0 / 9 clos ; prochain : T3.3 b | Modules `@experimental`. |
+| 6 | 3 — Données (suite) | T3.3 c, T3.10, T3.6 a, b, c, T3.7 a, b, T3.8, T3.9 | 0 / 9 clos ; prochain : T3.3 c | Modules `@experimental`. |
 | 7 | 4 — Temporal | T4.5, T4.1, T4.2, T4.3, T4.4 | 0 / 5 clos ; prochain : T4.5 | Tests sur l'implémentation native et sur le polyfill recommandé. |
 | 8 | 5 — Schéma et règles complets | T5.1 a, b, T5.2, T5.3, T5.4, T5.5, T5.6, T5.7 | 0 / 8 clos ; prochain : T5.1 a | Interopérabilité Standard Schema vérifiée avec au moins deux moteurs tiers. |
 | 9 | 6 — Formulaire complet (si go) | T6.1, T6.2, T6.3, T6.4, T6.5, T6.6 | 0 / 6 clos ; prochain : T6.1 | Second projet pilote. |
@@ -264,10 +264,10 @@ Une décision réservée au propriétaire (nom, licence, API publique, contrat t
 
 #### T3.3 — `core/collection`
 - **Pourquoi** : seulement ce qui manque au natif (`ARCHITECTURE.md` §7.2).
-- **Faire** : (a) `partition`, `indexBy`, `countBy`, `uniqueBy`, `minBy`/`maxBy`, `topK` (tas), `sortBy` multicritère, `intersectionBy`/`differenceBy`, `paginate` ; (b) `chunk`, `window`, `zip` paresseux sur itérables (générateurs, sans dépendre des assistants d'itérateurs tant qu'ils sont hors baseline), `mapConcurrent`.
+- **Faire** : (a) par clé (ADR 0024) : `partition`, `indexBy`, `countBy`, `uniqueBy`, `intersectionBy`/`differenceBy` ; (b) par ordre : `minBy`/`maxBy`, `topK` (tas), `sortBy` multicritère, `paginate` ; (c) `chunk`, `window`, `zip` paresseux sur itérables (générateurs, sans dépendre des assistants d'itérateurs tant qu'ils sont hors baseline), `mapConcurrent`.
 - **Où** : `packages/core/src/collection/`.
-- **Accepté si** : `topK(xs, k)` égal à `xs.toSorted(cmp).slice(0, k)` (propriété de cohérence avec le natif) ; un comparateur non transitif ne boucle ni ne lève.
-- **Taille** L → (a) M, (b) M · **Prio** P1 · **Dépend de** T1.5
+- **Accepté si** : (a) `partition` garde chaque élément et leur ordre, `uniqueBy` idempotent, `intersectionBy` et `differenceBy` partagent leur entrée, chacune jugée contre es-toolkit (ADR 0022) ; (b) `topK(xs, k)` égal à `xs.toSorted(cmp).slice(0, k)` (propriété de cohérence avec le natif) ; un comparateur non transitif ne boucle ni ne lève.
+- **Taille** L → (a) M, (b) M, (c) M · **Prio** P1 · **Dépend de** T1.5
 
 #### T3.4 — `core/string`
 - **Pourquoi** : longueur et troncature par graphème, `slugify` aux règles écrites, détection des caractères invisibles et des contrôles bidirectionnels (attaques Trojan Source).
