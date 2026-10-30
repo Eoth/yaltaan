@@ -14,3 +14,4 @@ A row is never deleted: a removed code keeps its row, with the version that remo
 | `path.missing` | `index` | The value holds nothing at the segment at `index` of the path: a field absent, an index at or past the end or on a hole, no element with that key. | 0.1 | |
 | `path.not_traversable` | `index` | The value at the segment at `index` cannot be walked by it: a primitive, a `Map`, a class instance, a number on a record, a string on an array. | 0.1 | |
 | `issue.external` | `message` | An issue read from another Standard Schema validator; `message` is its message, `cause` the foreign issue. | 0.1 | |
+| `collection.duplicate_key` | `first` | Two elements of a collection have the same key: the issue's path gives the position of the second, `first` that of the first. | 0.1 | |

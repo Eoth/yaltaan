@@ -4,7 +4,7 @@ The shared contracts and data primitives of Yaltaan. The other packages build on
 
 **Not published yet**: the package is private until its first release. Every export is `@experimental`: it may change in a minor version until the contracts are frozen.
 
-It holds one sub-path per domain, each imported on its own (`@yaltaan/core/result`), so that an application ships only what it imports. Available today: `result`, `issue`, `path`, `equal` and `object` (selection by mask, merging, defaults, mapping, reading and writing by `Path`). The others are planned:
+It holds one sub-path per domain, each imported on its own (`@yaltaan/core/result`), so that an application ships only what it imports. Available today: `result`, `issue`, `path`, `equal`, `object` (selection by mask, merging, defaults, mapping, reading and writing by `Path`) and `collection` (by key). The others are planned:
 
 | Sub-path | Holds |
 |---|---|
@@ -12,7 +12,7 @@ It holds one sub-path per domain, each imported on its own (`@yaltaan/core/resul
 | `issue` | `Issue`, the one shape of every expected failure: a stable namespaced code, a `Path` and parameters, never a message. |
 | `path` | `Path` and its segments, including a key segment that follows an array element when it moves; a text form at the boundaries only. |
 | `object` | Picking, omitting and redacting fields by a mask the compiler checks; deep merging, defaults, mapping values and keys; reading and writing by `Path` with structural sharing. |
-| `collection` | What arrays and iterators lack natively: grouping by a unique key, top-k, multi-key sorting, chunks and windows. |
+| `collection` | What arrays and iterators lack natively: splitting, indexing by a unique key, counting, deduplicating and comparing by a key; top-k, multi-key sorting, chunks and windows are planned. |
 | `string` | Length and truncation by grapheme, slugs, detection of invisible and bidirectional control characters. |
 | `number` | Strict parsing to a `Result`, named rounding modes, exact conversions between `number` and `bigint`. |
 | `equal` | Configurable deep equality, on all fields or on those a mask selects. |
@@ -114,6 +114,18 @@ set({ user: { name: 'Ada' } }, ['user', 'name'], 'Grace'); // → { ok: true, va
 ```
 
 Only plain objects and arrays are walked; anything else is taken whole. A copy keeps the prototype of its record (`Object.prototype` or `null`), a `"__proto__"` key stays a key, a getter is read once and only when its field is kept, and symbol keys count only with `{ symbols: true }`.
+
+## `collection`
+
+Split, index, count, deduplicate and compare any iterable by a key. Keys are any value, compared by SameValueZero and held in a `Map`; a repeated key in `indexBy` is a `Result` error, never a lost element.
+
+```ts
+import { countBy, indexBy, uniqueBy } from '@yaltaan/core/collection';
+
+indexBy([{ id: 1 }, { id: 1 }], (item) => item.id).ok; // → false
+countBy([1, '1', 1], (item) => item).get(1); // → 2
+uniqueBy([1.2, 1.7, 2.1], Math.floor); // → [1.2, 2.1]
+```
 
 How to use each sub-path, in English and in French: the [guide](../../docs/guide/README.md). The contract of each export is in the [reference](../../docs/reference/core.md).
 

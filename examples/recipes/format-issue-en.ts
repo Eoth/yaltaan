@@ -16,6 +16,8 @@ const MESSAGES: Readonly<Record<string, (params: Params) => string>> = {
   'path.missing': (params) => `Nothing is there, from step ${String(params['index'])} of this path on.`,
   'path.not_traversable': (params) =>
     `Step ${String(params['index'])} of this path leads through a value it cannot enter.`,
+  'collection.duplicate_key': (params) =>
+    `This item repeats the key of item ${String(params['first'])}: each key may appear only once.`,
   'issue.external': (params) => String(params['message']),
 };
 
