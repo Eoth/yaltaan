@@ -8,6 +8,11 @@ repo_root="$(git rev-parse --show-toplevel)"
 
 # A clone may add checks of its own, never versioned, in .git/hooks/commit-msg.local.
 local_hook="$(git rev-parse --git-dir)/hooks/commit-msg.local"
+# One that exists but is not executable would be skipped without a word, and its check would hold nothing.
+if [ -e "$local_hook" ] && [ ! -x "$local_hook" ]; then
+  echo "commit-msg: $local_hook exists but is not executable: chmod +x it, or remove it" >&2
+  exit 1
+fi
 if [ -x "$local_hook" ]; then
   "$local_hook" "$1"
 fi

@@ -16,6 +16,11 @@ bash scripts/check-executable-scripts.sh
 
 # A clone may add checks of its own, never versioned, in .git/hooks/pre-commit.local.
 local_hook="$(git rev-parse --git-dir)/hooks/pre-commit.local"
+# One that exists but is not executable would be skipped without a word, and its check would hold nothing.
+if [ -e "$local_hook" ] && [ ! -x "$local_hook" ]; then
+  echo "pre-commit: $local_hook exists but is not executable: chmod +x it, or remove it" >&2
+  exit 1
+fi
 if [ -x "$local_hook" ]; then
   "$local_hook"
 fi
