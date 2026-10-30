@@ -28,3 +28,5 @@ yaltaan/core-parse-path	esbuild	1260	718	639	b908885c6f439a46
 yaltaan/core-parse-path	rollup	1272	720	637	32a8c9059a48d577
 yaltaan/core-result	esbuild	209	144	122	bc01613afe908f27
 yaltaan/core-result	rollup	209	145	121	c9a07d6a9aeb4b45
+yaltaan/core-ten-primitives	esbuild	4052	1623	1472	7c196514ca1f4ee6
+yaltaan/core-ten-primitives	rollup	4123	1617	1466	b0bbf62702f77937

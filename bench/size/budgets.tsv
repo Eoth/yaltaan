@@ -7,7 +7,7 @@ yaltaan/core-issue	550	hypothesis
 yaltaan/core-omit	600	references/es-toolkit-compat-omit
 yaltaan/core-parse-path	750	references/es-toolkit-to-path
 yaltaan/core-result	150	hypothesis
-yaltaan/core-ten-primitives	1000	references/es-toolkit-ten-primitives
+yaltaan/core-ten-primitives	1480	references/es-toolkit-ten-primitives
 yaltaan/core-reactive	1000	references/preact-signals
 yaltaan/schema-login	1500	references/valibot-login
 yaltaan/temporal-layer	1790	references/temporal-polyfill
