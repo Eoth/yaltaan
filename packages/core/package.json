@@ -19,6 +19,10 @@
       "types": "./dist/issue/index.d.ts",
       "default": "./dist/issue/index.js"
     },
+    "./number": {
+      "types": "./dist/number/index.d.ts",
+      "default": "./dist/number/index.js"
+    },
     "./object": {
       "types": "./dist/object/index.d.ts",
       "default": "./dist/object/index.js"

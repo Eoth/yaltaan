@@ -25,4 +25,4 @@ An export that runs (a function, a constant that can be called, a class) carries
 
 ## Packages
 
-- [`@yaltaan/core`](core.md): 74 public export(s).
+- [`@yaltaan/core`](core.md): 88 public export(s).

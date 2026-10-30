@@ -18,6 +18,12 @@ const MESSAGES: Readonly<Record<string, (params: Params) => string>> = {
     `Step ${String(params['index'])} of this path leads through a value it cannot enter.`,
   'collection.duplicate_key': (params) =>
     `This item repeats the key of item ${String(params['first'])}: each key may appear only once.`,
+  'number.syntax': (params) => `This is not a number: it cannot be read at character ${String(params['index'])}.`,
+  'number.too_long': (params) => `This number is too long: at most ${String(params['maximum'])} characters.`,
+  'number.out_of_range': () => 'This number is too large or too small.',
+  'number.inexact': (params) =>
+    `This number has ${String(params['digits'])} significant digits, more than can be kept: shorten it.`,
+  'number.not_integer': () => 'This must be a whole number.',
   'issue.external': (params) => String(params['message']),
 };
 

@@ -4,7 +4,7 @@ The shared contracts and data primitives of Yaltaan. The other packages build on
 
 **Not published yet**: the package is private until its first release. Every export is `@experimental`: it may change in a minor version until the contracts are frozen.
 
-It holds one sub-path per domain, each imported on its own (`@yaltaan/core/result`), so that an application ships only what it imports. Available today: `result`, `issue`, `path`, `equal`, `object` (selection by mask, merging, defaults, mapping, reading and writing by `Path`) and `collection` (by key). The others are planned:
+It holds one sub-path per domain, each imported on its own (`@yaltaan/core/result`), so that an application ships only what it imports. Available today: `result`, `issue`, `path`, `equal`, `object` (selection by mask, merging, defaults, mapping, reading and writing by `Path`), `collection` (by key and by order) and `number`. The others are planned:
 
 | Sub-path | Holds |
 |---|---|
@@ -14,7 +14,7 @@ It holds one sub-path per domain, each imported on its own (`@yaltaan/core/resul
 | `object` | Picking, omitting and redacting fields by a mask the compiler checks; deep merging, defaults, mapping values and keys; reading and writing by `Path` with structural sharing. |
 | `collection` | What arrays and iterators lack natively: splitting, indexing by a unique key, counting, deduplicating and comparing by a key; smallest and largest by a key, top-k, multi-key sorting and pages; chunks and windows are planned. |
 | `string` | Length and truncation by grapheme, slugs, detection of invisible and bidirectional control characters. |
-| `number` | Strict parsing to a `Result`, named rounding modes, exact conversions between `number` and `bigint`. |
+| `number` | Strict parsing to a `Result` with explicit separators, bounds, comparison within explicit tolerances, rounding by the named modes of `Intl.NumberFormat`, exact conversions between `number` and `bigint`. |
 | `equal` | Configurable deep equality, on all fields or on those a mask selects. |
 | `diff` | Diffs and patches addressed by `Path`. |
 | `async` | Timeouts, retries, concurrency limits, debouncing and throttling, each cancellable by an `AbortSignal`, with an injectable clock. |
@@ -126,6 +126,20 @@ indexBy([{ id: 1 }, { id: 1 }], (item) => item.id).ok; // → false
 countBy([1, '1', 1], (item) => item).get(1); // → 2
 uniqueBy([1.2, 1.7, 2.1], Math.floor); // → [1.2, 2.1]
 topK([12, 87, 45, 99], 2, (a, b) => b - a); // → [99, 87]
+```
+
+## `number`
+
+Read a number from text without guessing: explicit separators, the whole text or an issue that says where it breaks, and a refusal of any text the number read cannot hold. Bound and compare numbers with named options, round them by the modes of `Intl.NumberFormat`, and convert to and from `bigint` exactly.
+
+```ts
+import { bigIntToNumber, clamp, parseNumber, round } from '@yaltaan/core/number';
+
+parseNumber('1 234,5', { decimal: ',', grouping: ' ' }); // → { ok: true, value: 1234.5 }
+parseNumber('12abc').ok; // → false
+clamp(12, { min: 0, max: 10 }); // → 10
+round(1.005, { digits: 2, mode: 'halfExpand' }); // → 1.01
+bigIntToNumber(2n ** 53n + 1n).ok; // → false
 ```
 
 How to use each sub-path, in English and in French: the [guide](../../docs/guide/README.md). The contract of each export is in the [reference](../../docs/reference/core.md).

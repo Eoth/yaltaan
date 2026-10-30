@@ -15,3 +15,8 @@ A row is never deleted: a removed code keeps its row, with the version that remo
 | `path.not_traversable` | `index` | The value at the segment at `index` cannot be walked by it: a primitive, a `Map`, a class instance, a number on a record, a string on an array. | 0.1 | |
 | `issue.external` | `message` | An issue read from another Standard Schema validator; `message` is its message, `cause` the foreign issue. | 0.1 | |
 | `collection.duplicate_key` | `first` | Two elements of a collection have the same key: the issue's path gives the position of the second, `first` that of the first. | 0.1 | |
+| `number.syntax` | `index` | The text of a number breaks the grammar at code unit `index`. | 0.1 | |
+| `number.too_long` | `length`, `maximum` | The text of a number is `length` code units long, over `maximum`. | 0.1 | |
+| `number.out_of_range` | | The value is beyond the largest finite number, or not zero and nearer to zero than the smallest. | 0.1 | |
+| `number.inexact` | `digits` | The value has `digits` significant digits, more than the nearest number keeps. | 0.1 | |
+| `number.not_integer` | | An integer was required: the number has a fraction, or is `NaN` or infinite. | 0.1 | |

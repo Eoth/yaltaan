@@ -706,6 +706,342 @@ export declare function toStandardIssue(issue: Issue, options: ToStandardIssueOp
 toStandardIssue({ code: 'a.b', path: ['x'] }, { format: (i) => i.code }) // { message: 'a.b', path: ['x'] }
 ```
 
+## `@yaltaan/core/number`
+
+### `Bounds`
+
+A type.
+
+The bounds of `clamp`, each inclusive and optional.
+
+```ts
+export interface Bounds {
+    readonly min?: number;
+    readonly max?: number;
+}
+```
+
+| Contract | Value |
+|---|---|
+| `@since` | 0.1 |
+| `@experimental` | yes |
+
+### `NumberIssue`
+
+A type.
+
+Why a number could not be read or converted: - `number.syntax`: the text breaks the grammar at code unit `index`. - `number.too_long`: the text is `length` code units long, over `maximum`. - `number.out_of_range`: the value is beyond the largest finite number, or not zero and nearer to zero than the smallest. - `number.inexact`: the value has `digits` significant digits, more than the nearest number keeps. - `number.not_integer`: a `bigint` was asked of a fraction, `NaN` or an infinity.
+
+```ts
+export type NumberIssue = {
+    readonly code: 'number.syntax';
+    readonly path: Path;
+    readonly params: {
+        readonly index: number;
+    };
+} | {
+    readonly code: 'number.too_long';
+    readonly path: Path;
+    readonly params: {
+        readonly length: number;
+        readonly maximum: number;
+    };
+} | {
+    readonly code: 'number.out_of_range';
+    readonly path: Path;
+} | {
+    readonly code: 'number.inexact';
+    readonly path: Path;
+    readonly params: {
+        readonly digits: number;
+    };
+} | {
+    readonly code: 'number.not_integer';
+    readonly path: Path;
+};
+```
+
+| Contract | Value |
+|---|---|
+| `@since` | 0.1 |
+| `@experimental` | yes |
+
+### `ParseNumberOptions`
+
+A type.
+
+What `parseNumber` reads.
+
+```ts
+export interface ParseNumberOptions {
+    /** The decimal separator, one code unit; `'.'` by default. */
+    readonly decimal?: string;
+    /** The group separator of the integer part, one code unit; none by default, so that no group is read. */
+    readonly grouping?: string;
+    /** Whether an exponent (`1.5e-7`) is read; true by default, so that every text of `String(x)` is. */
+    readonly exponent?: boolean;
+    /** Most code units of the text; 1,000 by default. */
+    readonly maxLength?: number;
+}
+```
+
+| Contract | Value |
+|---|---|
+| `@since` | 0.1 |
+| `@experimental` | yes |
+
+### `Range`
+
+A type.
+
+The range of `inRange`: closed unless `exclusive` names the bounds it leaves out.
+
+```ts
+export interface Range extends Bounds {
+    readonly exclusive?: 'min' | 'max' | 'both';
+}
+```
+
+| Contract | Value |
+|---|---|
+| `@since` | 0.1 |
+| `@experimental` | yes |
+
+### `RoundOptions`
+
+A type.
+
+What `round` does.
+
+```ts
+export interface RoundOptions {
+    /** Fractional digits kept, a safe integer; 0 by default, negative to round to tens, hundreds… */
+    readonly digits?: number;
+    readonly mode: RoundingMode;
+}
+```
+
+| Contract | Value |
+|---|---|
+| `@since` | 0.1 |
+| `@experimental` | yes |
+
+### `RoundingMode`
+
+A type.
+
+A rounding mode, named as `Intl.NumberFormat`'s `roundingMode`: toward +∞ (`ceil`), −∞ (`floor`), away from zero (`expand`) or toward it (`trunc`), or to the nearest with a tie broken one of those ways or to the even digit.
+
+```ts
+export type RoundingMode = 'ceil' | 'floor' | 'expand' | 'trunc' | 'halfCeil' | 'halfFloor' | 'halfExpand' | 'halfTrunc' | 'halfEven';
+```
+
+| Contract | Value |
+|---|---|
+| `@since` | 0.1 |
+| `@experimental` | yes |
+
+### `Tolerance`
+
+A type.
+
+The tolerances of `approxEqual`: an absolute difference, non-negative, a fraction of the larger magnitude, from 0 to 1, or both, the wider winning.
+
+```ts
+export type Tolerance = {
+    readonly absolute: number;
+    readonly relative?: number;
+} | {
+    readonly absolute?: number;
+    readonly relative: number;
+};
+```
+
+| Contract | Value |
+|---|---|
+| `@since` | 0.1 |
+| `@experimental` | yes |
+
+### `approxEqual`
+
+A function.
+
+Whether `a` and `b` differ by at most the wider of the absolute tolerance and the relative one times the larger magnitude. Equal numbers always are (`-0` and `0`, an infinity and itself), `NaN` never is, and an infinity is only to itself.
+
+```ts
+export declare function approxEqual(a: number, b: number, within: Tolerance): boolean;
+```
+
+| Contract | Value |
+|---|---|
+| `@pure` | yes |
+| `@sharing` | none |
+| `@complexity` | O(1) |
+| `@throws` | TypeError when `a`, `b` or a tolerance is not a number, or no tolerance is given |
+| `@throws` | RangeError when a tolerance is negative or `NaN`, or `relative` is above 1 |
+| `@since` | 0.1 |
+| `@experimental` | yes |
+
+**Example**
+
+```ts
+approxEqual(0.1 + 0.2, 0.3, { relative: 1e-9 }) // true
+```
+
+### `bigIntToNumber`
+
+A function.
+
+The number equal to `value`, or why there is none: `number.out_of_range` beyond the largest finite number, `number.inexact` between two numbers, where `Number(value)` would round in silence.
+
+```ts
+export declare function bigIntToNumber(value: bigint): Result<number, NumberIssue>;
+```
+
+| Contract | Value |
+|---|---|
+| `@pure` | yes |
+| `@sharing` | none |
+| `@complexity` | O(d) (d = digits of `value`) |
+| `@throws` | TypeError when `value` is not a bigint |
+| `@since` | 0.1 |
+| `@experimental` | yes |
+
+**Example**
+
+```ts
+bigIntToNumber(2n ** 53n + 1n).ok // false
+```
+
+### `clamp`
+
+A function.
+
+`value` brought within `min` and `max`: `value` itself when it is within them (so `-0` stays `-0`), the bound it crosses otherwise; `NaN` stays `NaN`. A bound left out does not limit.
+
+```ts
+export declare function clamp(value: number, bounds: Bounds): number;
+```
+
+| Contract | Value |
+|---|---|
+| `@pure` | yes |
+| `@sharing` | none |
+| `@complexity` | O(1) |
+| `@throws` | TypeError when `value` or a bound is not a number |
+| `@throws` | RangeError when a bound is `NaN`, or `min` is above `max` |
+| `@since` | 0.1 |
+| `@experimental` | yes |
+
+**Example**
+
+```ts
+clamp(12, { min: 0, max: 10 }) // 10
+```
+
+### `inRange`
+
+A function.
+
+Whether `value` lies within the range: closed by default, without the bounds `exclusive` names; a bound left out does not limit, excluded or not. `NaN` lies in no range, and a range whose bounds are equal and one of them excluded holds nothing.
+
+```ts
+export declare function inRange(value: number, range: Range): boolean;
+```
+
+| Contract | Value |
+|---|---|
+| `@pure` | yes |
+| `@sharing` | none |
+| `@complexity` | O(1) |
+| `@throws` | TypeError when `value` or a bound is not a number, or `exclusive` is not `'min'`, `'max'` or `'both'` |
+| `@throws` | RangeError when a bound is `NaN`, or `min` is above `max` |
+| `@since` | 0.1 |
+| `@experimental` | yes |
+
+**Example**
+
+```ts
+inRange(10, { min: 0, max: 10, exclusive: 'max' }) // false
+```
+
+### `numberToBigInt`
+
+A function.
+
+The `bigint` equal to `value`, an integer (`-0` gives `0n`), or `number.not_integer` for a fraction, `NaN` or an infinity.
+
+```ts
+export declare function numberToBigInt(value: number): Result<bigint, NumberIssue>;
+```
+
+| Contract | Value |
+|---|---|
+| `@pure` | yes |
+| `@sharing` | none |
+| `@complexity` | O(1) |
+| `@throws` | TypeError when `value` is not a number |
+| `@since` | 0.1 |
+| `@experimental` | yes |
+
+**Example**
+
+```ts
+numberToBigInt(2 ** 60) // { ok: true, value: 1152921504606846976n }
+```
+
+### `parseNumber`
+
+A function.
+
+Reads a number written as the grammar of this module says (`-1234.5`, `1.5e-7`, `1 234,5` with the separators of a locale), or says why not. The text is untrusted: its length is bounded, a departure from the grammar is an issue at the code unit where it is, and a text that says more than the number read keeps (beyond the finite numbers, below the smallest, more significant digits than it holds) is refused, never rounded in silence.
+
+```ts
+export declare function parseNumber(text: string, options?: ParseNumberOptions): Result<number, NumberIssue>;
+```
+
+| Contract | Value |
+|---|---|
+| `@pure` | yes |
+| `@sharing` | none |
+| `@complexity` | O(n) (n = length of the text) |
+| `@throws` | TypeError when `text` or a separator is not a string, or `exponent` is not a boolean |
+| `@throws` | RangeError when a separator is not one code unit, is a digit, a sign or `e`, or both are the same, or when `maxLength` is neither a non-negative integer nor Infinity |
+| `@since` | 0.1 |
+| `@experimental` | yes |
+
+**Example**
+
+```ts
+parseNumber('1 234,5', { decimal: ',', grouping: ' ' }) // { ok: true, value: 1234.5 }
+```
+
+### `round`
+
+A function.
+
+`value` rounded to `digits` fractional digits by `mode`, on its shortest decimal (the one `String` writes), then read back as the nearest number: `1.005` rounds to `1.01`, as `Intl.NumberFormat` rounds it. `NaN`, the infinities and the zeros come back as they are, and a negative value rounded to zero gives `-0`.
+
+```ts
+export declare function round(value: number, options: RoundOptions): number;
+```
+
+| Contract | Value |
+|---|---|
+| `@pure` | yes |
+| `@sharing` | none |
+| `@complexity` | O(1) |
+| `@throws` | TypeError when `value` is not a number, or `mode` is not a rounding mode |
+| `@throws` | RangeError when `digits` is not a safe integer, or the result is beyond the largest finite number |
+| `@since` | 0.1 |
+| `@experimental` | yes |
+
+**Example**
+
+```ts
+round(2.345, { digits: 2, mode: 'halfEven' }) // 2.34
+```
+
 ## `@yaltaan/core/object`
 
 ### `AccessIssue`
