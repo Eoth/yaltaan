@@ -27,7 +27,7 @@ Outillage de développement (empreinte installée, à ne laisser croître que pa
 
 Une version utilisable d'abord (décision du propriétaire du 2026-10-23, §3) : la 0.1.0 livre `@yaltaan/core`, les utilitaires que les équipes recodent, sur les contrats de §5 d'`ARCHITECTURE.md` ; la 0.2.0 ajoute schéma et règles, validés sur le formulaire pilote ; la 0.3.0 le formulaire et Angular. L'outillage qui reste attend d'être utile. Les contrats se gèlent après le pilote (T2.7), pas avant. Une itération peut prendre deux tickets S ou M d'un même domaine.
 
-**Avancement** : 19 étapes closes sur 82 ; prochaine : T3.5.
+**Avancement** : 19 étapes closes sur 84 ; prochaine : T3.5.
 
 | # | Lot | Tickets, dans l'ordre | Avancement | Sortie |
 |---|---|---|---|---|
@@ -36,11 +36,11 @@ Une version utilisable d'abord (décision du propriétaire du 2026-10-23, §3) :
 | 3 | 0.2.0 — Schéma et règles sur le pilote | T2.1 a, b, T2.8, T2.2, T2.3, T1.4, T0.20 b | 0 / 7 clos ; prochain : T2.1 a | Schéma Standard Schema minimal et règles relationnelles, scénarios du pilote verts sans `form`. |
 | 4 | 0.3.0 — Formulaire et Angular | T0.14, T1.6 a, T1.6 b, T2.4 a, b, c, T2.5, T2.6, T2.7 | 0 / 9 clos ; prochain : T0.14 | Pilote de bout en bout dans Angular, mesures, **ADR go/no-go de `form`**, gel des contrats. |
 | 5 | Outillage reporté | T0.18, T0.19, T0.21, T0.22, T0.16, T0.8, T0.9, T0.13, T0.15 | 0 / 9 clos ; prochain : T0.18 | Selon le besoin réel des versions précédentes. |
-| 6 | 3 — Données (suite) | T3.3 c, T3.10, T3.6 a, b, c, T3.7 a, b, T3.8, T3.9 | 0 / 9 clos ; prochain : T3.3 c | Modules `@experimental`. |
+| 6 | 3 — Données (suite) | T3.3 c, T3.10, T3.11, T3.6 a, b, c, T3.7 a, b, T3.8, T3.9 | 0 / 10 clos ; prochain : T3.3 c | Modules `@experimental`. |
 | 7 | 4 — Temporal | T4.5, T4.1, T4.2, T4.3, T4.4 | 0 / 5 clos ; prochain : T4.5 | Tests sur l'implémentation native et sur le polyfill recommandé. |
 | 8 | 5 — Schéma et règles complets | T5.1 a, b, T5.2, T5.3, T5.4, T5.5, T5.6, T5.7 | 0 / 8 clos ; prochain : T5.1 a | Interopérabilité Standard Schema vérifiée avec au moins deux moteurs tiers. |
 | 9 | 6 — Formulaire complet (si go) | T6.1, T6.2, T6.3, T6.4, T6.5, T6.6 | 0 / 6 clos ; prochain : T6.1 | Second projet pilote. |
-| 10 | 7 — Durcissement | T0.11, T0.12, T7.1, T7.2, T7.3, T7.4, T7.5 | 0 / 7 clos ; prochain : T0.11 | 1.0 = uniquement des modules `@stable`. |
+| 10 | 7 — Durcissement | T0.11, T0.12, T7.1, T7.2, T7.3, T7.6, T7.4, T7.5 | 0 / 8 clos ; prochain : T0.11 | 1.0 = uniquement des modules `@stable`. |
 
 `core/async` et `core/cache` (`ARCHITECTURE.md` §7.6, §7.7) n'avaient pas de phase : ils entrent au lot 3 (T3.7, T3.8). Si le formulaire montre que sa validation asynchrone en a besoin plus tôt, T3.7 a remonte avant T2.4 c.
 
@@ -72,6 +72,7 @@ Une décision réservée au propriétaire (nom, licence, API publique, contrat t
 | `Issue` et registre des codes (ADR 0019) | Où vit le registre, comment prouver qu'un code n'est jamais retiré, que devient un segment `{ key }` en Standard Schema, quel code pour une issue d'un autre validateur ? | **Décidé le 2026-10-25 par délégation du propriétaire (choix de conception)** : un registre écrit à la main par paquet, `docs/issue-codes/<paquet>.md`, comparé aux déclarations publiées et à chacune de ses versions committées (une ligne n'est jamais supprimée, un code retiré garde sa ligne avec la version qui le retire ; à partir de 1.0, seulement en majeure) ; un `{ key }` sort en index actuel donné par un `resolveKey` de l'appelant, ou le chemin s'arrête avant lui (l'erreur s'affiche sur la liste, jamais sur un champ inexistant) ; une issue d'un autre validateur devient `issue.external`, message dans `params.message`, issue d'origine dans `cause` ; formateur anglais en recette (`examples/recipes/`), jamais livré. Écartés : codes dans la JSDoc seule (rien ne prouve qu'un code existe encore) ; registre généré depuis les déclarations (un code retiré quitterait aussi le registre) ; `{ key }` transmis tel quel (lu comme un nom de propriété : erreur sur un champ inexistant, en silence) ; conversion qui échoue (chaque frontière devrait traiter un échec pour une issue affichable). |
 | Juge différentiel (ADR 0022) | Quel juge extérieur pour les fonctions de `@yaltaan/core`, et comment tenir les différences voulues ? | **Décidé le 2026-10-28 (choix technique interne, demandé par le propriétaire)** : es-toolkit 1.52.0, déjà installé pour le banc (aucun paquet ajouté, `node_modules` inchangé à 95 862 726 octets), en dépendance des tests ; harnais `createJudge` de `@yaltaan/testing` : mêmes entrées générées des deux côtés, résultats comparés par `util.isDeepStrictEqual`, 1 000 entrées par comparaison ; chaque différence voulue écrite dans l'en-tête du module (bloc qui nomme la version installée) et vérifiée par le juge dans les deux sens (écrite, atteinte, changeante ; un quart des entrées au moins comparées). Écartés : ne rien faire ; Node seul (une fonction sur huit) ; lodash 4.18.1 (un paquet de plus, 1 413 741 octets, pour ce que `es-toolkit/compat` lit déjà comme lodash). |
 | Guide utilisateur bilingue | Faut-il documenter chaque fonctionnalité pour l'utilisateur dès sa livraison, et en quelle langue ? | **Acté par le propriétaire le 2026-10-25** : oui, en anglais et en français, avec des schémas quand ils expliquent mieux que le texte. `docs/guide/en/` et `docs/guide/fr/`, une page par sous-chemin livré, mêmes blocs de code dans les deux langues (lignes de commentaire exceptées) ; schémas en Mermaid (texte, dessiné par GitHub, aucune image à télécharger) ; chaque exemple compilé et exécuté par la porte, chaque résultat annoncé par `// →` vérifié (`scripts/check-doc-examples.ts`, READMEs des paquets publiés compris). Exception à la règle « documentation publique en anglais » limitée au guide ; référence, ADR et READMEs restent en anglais. |
+| Budget des dix primitives (ADR 0027) | Le scénario `core-ten-primitives` pèse 1 472 / 1 466 o pour un budget de 1 000 o (es-toolkit 657 / 661 o) : relever le budget, ou retirer des comportements décidés ? | **Recommandation, à valider** : relever le budget à 1 480 o, le chiffre mesuré arrondi, après les gains sans changement de comportement que le contradicteur a montrés (`clamp` 270 → 228 o) : les octets en plus d'es-toolkit sont des comportements actés (`Result` et `Issue` d'`indexBy`, clés dans une `Map`, masques à toute profondeur, stratégie de tableaux de `merge`, contrôles stricts de `clamp`) ; une cure de taille (T7.6) cherche ensuite les octets qu'aucune décision n'exige et abaisse le budget. Ligne du budget appliquée en attendant (une ligne de `bench/size/budgets.tsv` à défaire). Écartés : garder 1 000 o (retirer environ 470 o de contrats actés) ; un budget par fonction (plus de chiffres à tenir, plus de comparaison avec la référence). |
 
 ## 4. Non-objectifs (exclusions motivées)
 
@@ -325,6 +326,13 @@ Une décision réservée au propriétaire (nom, licence, API publique, contrat t
 - **Accepté si** : un segment mal orthographié dans un chemin littéral est une erreur de compilation ; `get(x, ['a', 0])` typé comme `x.a[0]` ; coût des types dans son seuil, nombre d'instanciations par usage publié.
 - **Taille** M · **Prio** P1 · **Dépend de** T3.2
 
+#### T3.11 — `parseNumber` : groupes de l'Inde et autres chiffres
+- **Pourquoi** : en-IN et hi-IN groupent par deux au-dessus des milliers (`12,34,567.5`), ar-EG et fa-IR écrivent d'autres chiffres : `parseNumber` refuse aujourd'hui ces textes (ADR 0026).
+- **Faire** : des tailles de groupes données par l'appelant (celles de `formatToParts`), et les systèmes de chiffres décimaux d'`Intl` (`numberingSystem`), nommés par l'appelant, jamais devinés.
+- **Où** : `packages/core/src/number/`.
+- **Accepté si** : aller-retour `parseNumber(format(x))` pour en-IN, hi-IN, ar-EG et fa-IR (`Intl.NumberFormat` à 17 chiffres significatifs) ; groupes mal placés refusés comme aujourd'hui ; taille du module mesurée avant et après.
+- **Taille** S · **Prio** P2 · **Dépend de** T3.5
+
 ### Lot 4 — Temporal
 
 #### T4.1 — Intervalles
@@ -493,6 +501,13 @@ Une décision réservée au propriétaire (nom, licence, API publique, contrat t
 - **Où** : tout le dépôt.
 - **Accepté si** : aucun export `@experimental` dans un paquet 1.0.
 - **Taille** S · **Prio** P1 · **Dépend de** T7.4
+
+#### T7.6 — Cure de taille des dix primitives
+- **Pourquoi** : le scénario `core-ten-primitives` pèse 1 472 / 1 466 o brotli contre 657 / 661 o pour es-toolkit ; son budget n'est plus qu'un plafond au chiffre mesuré (ADR 0027).
+- **Faire** : chercher les octets qu'aucun comportement décidé n'exige (messages, aides en double, code qu'un bundler ne retire pas ; déjà mesurés : `propertyIsEnumerable` lu une fois dans `object`, −8 o, `${x}` pour `${String(x)}`, −4 o), fonction par fonction, mesure avant et après ; abaisser le budget au chiffre obtenu.
+- **Où** : `packages/core/src/object/`, `collection/`, `number/` ; `bench/size/budgets.tsv`.
+- **Accepté si** : chaque octet gagné mesuré par `scripts/size-report.ts` ; tests, lois et juges inchangés et verts ; budget abaissé par ADR.
+- **Taille** M · **Prio** P2 · **Dépend de** T3.5
 
 ## 6. Hors feuille de route
 
