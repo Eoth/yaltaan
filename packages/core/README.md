@@ -12,7 +12,7 @@ It holds one sub-path per domain, each imported on its own (`@yaltaan/core/resul
 | `issue` | `Issue`, the one shape of every expected failure: a stable namespaced code, a `Path` and parameters, never a message. |
 | `path` | `Path` and its segments, including a key segment that follows an array element when it moves; a text form at the boundaries only. |
 | `object` | Picking, omitting and redacting fields by a mask the compiler checks; deep merging, defaults, mapping values and keys; reading and writing by `Path` with structural sharing. |
-| `collection` | What arrays and iterators lack natively: splitting, indexing by a unique key, counting, deduplicating and comparing by a key; top-k, multi-key sorting, chunks and windows are planned. |
+| `collection` | What arrays and iterators lack natively: splitting, indexing by a unique key, counting, deduplicating and comparing by a key; smallest and largest by a key, top-k, multi-key sorting and pages; chunks and windows are planned. |
 | `string` | Length and truncation by grapheme, slugs, detection of invisible and bidirectional control characters. |
 | `number` | Strict parsing to a `Result`, named rounding modes, exact conversions between `number` and `bigint`. |
 | `equal` | Configurable deep equality, on all fields or on those a mask selects. |
@@ -117,14 +117,15 @@ Only plain objects and arrays are walked; anything else is taken whole. A copy k
 
 ## `collection`
 
-Split, index, count, deduplicate and compare any iterable by a key. Keys are any value, compared by SameValueZero and held in a `Map`; a repeated key in `indexBy` is a `Result` error, never a lost element.
+Split, index, count, deduplicate and compare any iterable by a key. Keys are any value, compared by SameValueZero and held in a `Map`; a repeated key in `indexBy` is a `Result` error, never a lost element. Find, sort and page it by an order: `minBy`, `maxBy`, `topK`, `sortBy` and `paginate` share one order on keys, missing keys last.
 
 ```ts
-import { countBy, indexBy, uniqueBy } from '@yaltaan/core/collection';
+import { countBy, indexBy, topK, uniqueBy } from '@yaltaan/core/collection';
 
 indexBy([{ id: 1 }, { id: 1 }], (item) => item.id).ok; // → false
 countBy([1, '1', 1], (item) => item).get(1); // → 2
 uniqueBy([1.2, 1.7, 2.1], Math.floor); // → [1.2, 2.1]
+topK([12, 87, 45, 99], 2, (a, b) => b - a); // → [99, 87]
 ```
 
 How to use each sub-path, in English and in French: the [guide](../../docs/guide/README.md). The contract of each export is in the [reference](../../docs/reference/core.md).

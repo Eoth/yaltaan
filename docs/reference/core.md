@@ -25,6 +25,44 @@ export type CollectionIssue = {
 | `@since` | 0.1 |
 | `@experimental` | yes |
 
+### `ComparedCriterion`
+
+A type.
+
+A criterion of `sortBy` whose present keys `compare` orders, `Intl.Collator`'s for a locale order; missing keys (`undefined`, `null`, `NaN`) stay last and never reach it.
+
+```ts
+export interface ComparedCriterion<T> {
+    readonly key: (item: T, index: number) => unknown;
+    readonly order?: 'asc' | 'desc';
+    compare(a: unknown, b: unknown): number;
+}
+```
+
+| Contract | Value |
+|---|---|
+| `@since` | 0.1 |
+| `@experimental` | yes |
+
+### `KeyCriterion`
+
+A type.
+
+A criterion of `sortBy` in the order of `SortKey`, ascending unless `order` is 'desc'.
+
+```ts
+export interface KeyCriterion<T> {
+    readonly key: (item: T, index: number) => SortKey;
+    readonly order?: 'asc' | 'desc';
+    readonly compare?: undefined;
+}
+```
+
+| Contract | Value |
+|---|---|
+| `@since` | 0.1 |
+| `@experimental` | yes |
+
 ### `KeyOptions`
 
 A type.
@@ -36,6 +74,75 @@ export interface KeyOptions {
     /** SameValueZero (`-0` equals `0`, the default) or SameValue (`Object.is`: they differ). */
     readonly equality?: 'SameValueZero' | 'SameValue';
 }
+```
+
+| Contract | Value |
+|---|---|
+| `@since` | 0.1 |
+| `@experimental` | yes |
+
+### `Page`
+
+A type.
+
+A page of `paginate`: its elements, the request, `length` the number of elements of the whole collection, and `pageCount` the number of pages, 0 when the collection is empty.
+
+```ts
+export interface Page<T> {
+    readonly items: T[];
+    readonly pageIndex: number;
+    readonly pageSize: number;
+    readonly length: number;
+    readonly pageCount: number;
+}
+```
+
+| Contract | Value |
+|---|---|
+| `@since` | 0.1 |
+| `@experimental` | yes |
+
+### `PageRequest`
+
+A type.
+
+Which page `paginate` returns: `pageIndex` from 0, `pageSize` elements per page, as a paginator's page event gives them.
+
+```ts
+export interface PageRequest {
+    readonly pageIndex: number;
+    readonly pageSize: number;
+}
+```
+
+| Contract | Value |
+|---|---|
+| `@since` | 0.1 |
+| `@experimental` | yes |
+
+### `SortCriterion`
+
+A type.
+
+A criterion of `sortBy`: a key function, ascending, or a criterion object.
+
+```ts
+export type SortCriterion<T> = ((item: T, index: number) => SortKey) | KeyCriterion<T> | ComparedCriterion<T>;
+```
+
+| Contract | Value |
+|---|---|
+| `@since` | 0.1 |
+| `@experimental` | yes |
+
+### `SortKey`
+
+A type.
+
+A key of `minBy`, `maxBy` and `sortBy`. Numbers, bigints and booleans compare by value (`-0` equals `0`) and come before strings, which compare by UTF-16 code unit; `undefined`, `null` and `NaN` are missing keys, after every present key in both directions.
+
+```ts
+export type SortKey = number | bigint | boolean | string | null | undefined;
 ```
 
 | Contract | Value |
@@ -147,6 +254,85 @@ export declare function intersectionBy<T, U>(items: Iterable<T>, others: Iterabl
 intersectionBy([{ id: 1 }, { id: 2 }], [{ id: 2 }], (item) => item.id)
 ```
 
+### `maxBy`
+
+A function.
+
+The first element with the largest key in the order of `SortKey`, `undefined` when no key is present: an element whose key is missing (`undefined`, `null`, `NaN`) is never chosen.
+
+```ts
+export declare function maxBy<T>(items: Iterable<T>, key: (item: T, index: number) => SortKey): T | undefined;
+```
+
+| Contract | Value |
+|---|---|
+| `@pure` | yes |
+| `@sharing` | structural |
+| `@complexity` | O(n) (n = elements) |
+| `@throws` | TypeError when `key` is not a function, returns a key that is not a `SortKey`, or `items` is not iterable |
+| `@throws` | what `key` or the iteration throws, unchanged |
+| `@since` | 0.1 |
+| `@experimental` | yes |
+
+**Example**
+
+```ts
+maxBy([{ age: 30 }, { age: 26 }, { age: 28 }], (person) => person.age)
+```
+
+### `minBy`
+
+A function.
+
+The first element with the smallest key in the order of `SortKey`, `undefined` when no key is present: an element whose key is missing (`undefined`, `null`, `NaN`) is never chosen.
+
+```ts
+export declare function minBy<T>(items: Iterable<T>, key: (item: T, index: number) => SortKey): T | undefined;
+```
+
+| Contract | Value |
+|---|---|
+| `@pure` | yes |
+| `@sharing` | structural |
+| `@complexity` | O(n) (n = elements) |
+| `@throws` | TypeError when `key` is not a function, returns a key that is not a `SortKey`, or `items` is not iterable |
+| `@throws` | what `key` or the iteration throws, unchanged |
+| `@since` | 0.1 |
+| `@experimental` | yes |
+
+**Example**
+
+```ts
+minBy([{ age: 30 }, { age: 26 }, { age: 28 }], (person) => person.age)
+```
+
+### `paginate`
+
+A function.
+
+The page `pageIndex` (from 0) of `pageSize` elements, with the number of elements and of pages of the whole collection; a page past the end has no element. An array is read only over the page; any other iterable is read whole, to count it, and only the page is kept.
+
+```ts
+export declare function paginate<T>(items: Iterable<T>, request: PageRequest): Page<T>;
+```
+
+| Contract | Value |
+|---|---|
+| `@pure` | yes |
+| `@sharing` | structural |
+| `@complexity` | O(pageSize) for an array, O(n) for another iterable (n = elements) |
+| `@throws` | TypeError when `request` is not an object, or `items` is not iterable |
+| `@throws` | RangeError when `pageIndex` is not a non-negative safe integer, or `pageSize` not a positive one |
+| `@throws` | what the iteration throws, unchanged |
+| `@since` | 0.1 |
+| `@experimental` | yes |
+
+**Example**
+
+```ts
+paginate(['a', 'b', 'c', 'd', 'e'], { pageIndex: 1, pageSize: 2 })
+```
+
 ### `partition`
 
 A function.
@@ -172,6 +358,59 @@ export declare function partition<T>(items: Iterable<T>, predicate: (item: T, in
 
 ```ts
 partition([1, 2, 3, 4], (n) => n % 2 === 0)
+```
+
+### `sortBy`
+
+A function.
+
+A new array of the elements sorted by the first criterion, then by the next among equals, and so on; elements equal on every criterion keep their input order. Each key is computed once per element and criterion, then the positions are sorted by the native stable sort; a `compare` that is not consistent gives an unspecified order, never a loop.
+
+```ts
+export declare function sortBy<T>(items: Iterable<T>, criteria: SortCriterion<T> | readonly SortCriterion<T>[]): T[];
+```
+
+| Contract | Value |
+|---|---|
+| `@pure` | yes |
+| `@sharing` | structural |
+| `@complexity` | O(n log n) comparisons, n calls of each key (n = elements) |
+| `@throws` | TypeError when a criterion is neither a key function nor an object with one, `order` is neither 'asc' nor 'desc', `compare` is given and not a function, a key without `compare` is not a `SortKey`, or `items` is not iterable |
+| `@throws` | what a key, `compare` or the iteration throws, unchanged |
+| `@since` | 0.1 |
+| `@experimental` | yes |
+
+**Example**
+
+```ts
+sortBy([{ name: 'Lin', age: 30 }, { name: 'Ada', age: 26 }], [(p) => p.age, (p) => p.name])
+```
+
+### `topK`
+
+A function.
+
+The `k` first elements of `items.toSorted(compare)`, in that order, equal elements in input order: `undefined` elements come after every other and never reach `compare`. A heap of at most `k` elements keeps the memory at O(k) for a stream; a `compare` that is not consistent gives an unspecified choice of `min(k, n)` elements, never a loop.
+
+```ts
+export declare function topK<T>(items: Iterable<T>, k: number, compare: (a: T, b: T) => number): T[];
+```
+
+| Contract | Value |
+|---|---|
+| `@pure` | yes |
+| `@sharing` | structural |
+| `@complexity` | O(n log k) comparisons, O(k) memory (n = elements) |
+| `@throws` | TypeError when `compare` is not a function, or `items` is not iterable |
+| `@throws` | RangeError when `k` is not a non-negative safe integer |
+| `@throws` | what `compare`, the conversion of its result to a number, or the iteration throws, unchanged |
+| `@since` | 0.1 |
+| `@experimental` | yes |
+
+**Example**
+
+```ts
+topK([5, 1, 4, 2, 3], 2, (a, b) => a - b)
 ```
 
 ### `uniqueBy`
