@@ -304,7 +304,7 @@ Each domain is described by its scope, its decisions, what it does not do, and i
 
 ### 7.4 `core/number`
 
-**Scope**: strict `parseNumber` (explicit decimal and grouping separators, returns a `Result`), `clamp`, `inRange`, `approxEqual` (explicit absolute and relative tolerances), `round(x, digits, mode)` with named modes (`half-even`, `half-up`…), `number` ↔ `bigint` conversions that are exact or fail.
+**Scope**: strict `parseNumber` (explicit decimal and grouping separators, returns a `Result`), `clamp`, `inRange`, `approxEqual` (explicit absolute and relative tolerances), `round(x, { digits, mode })` with the nine named modes of `Intl.NumberFormat` (`halfEven`, `halfExpand`…), on the shortest decimal of `x`, `number` ↔ `bigint` conversions that are exact or fail ([ADR 0026](docs/adr/0026-numbers.md)).
 
 **Does not do**: arbitrary-precision decimal arithmetic (out of scope; left to a dedicated library).
 
