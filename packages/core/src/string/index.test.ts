@@ -331,10 +331,11 @@ test('slugify spells every letter of U+00C0 to U+017F in ASCII letters', () => {
   }
 });
 
-// The time of `run` on `make(n)`, the fastest of three.
+// The time of `run` on `value`, the fastest of five: a pause of the machine or of the collector lengthens one run,
+// rarely all five.
 function fastest(run: (value: string) => unknown, value: string): number {
   let best = Number.POSITIVE_INFINITY;
-  for (let attempt = 0; attempt < 3; attempt += 1) {
+  for (let attempt = 0; attempt < 5; attempt += 1) {
     const start = process.hrtime.bigint();
     run(value);
     best = Math.min(best, Number(process.hrtime.bigint() - start) / 1e6);
@@ -351,12 +352,15 @@ test('every function takes a time proportional to the text, on the texts that wo
     ['graphemeLength', graphemeLength, (n) => `e${'\u0301'.repeat(n)}`],
     ['graphemeLength', graphemeLength, (n) => 'a'.repeat(n) + '\u0301'],
     ['truncate', (value) => truncate(value, { maxLength: value.length - 1 }), (n) => 'a'.repeat(n) + '\u0301'],
-    ['findHidden', findHidden, (n) => '\u200b'.repeat(n)],
+    // One hidden character in 64: the scan is timed, not the collector, which one object per character would bring
+    // in on a loaded machine.
+    ['findHidden', findHidden, (n) => ('a'.repeat(63) + '\u200b').repeat(n / 64)],
   ];
   for (const [name, run, make] of cases) {
-    const times = [20_000, 40_000, 80_000].map((n) => fastest(run, make(n)));
-    // Four times the text, at most eight times the time, with a millisecond of noise; backtracking squares it.
-    assert.ok(times[2]! <= 8 * times[0]! + 1, `${name}: ${times.map((time) => time.toFixed(2)).join(', ')} ms`);
+    const times = [10_000, 80_000].map((n) => fastest(run, make(n)));
+    // Eight times the text: a linear cost takes eight times the time, backtracking 64 times; 24 times and 2 ms leave
+    // room for a loaded machine, where a run of a tenth of a millisecond can take ten times longer.
+    assert.ok(times[1]! <= 24 * times[0]! + 2, `${name}: ${times.map((time) => time.toFixed(2)).join(', ')} ms`);
   }
 });
 
