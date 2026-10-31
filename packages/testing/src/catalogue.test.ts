@@ -105,7 +105,7 @@ test('Unicode strings disagree in code units, code points and graphemes, or are 
   const { unicode } = adversarial;
   const count = (text: string): number => [...graphemes.segment(text)].length;
   const zwj = caseOf(unicode, 'ZWJ sequence');
-  assert.ok(zwj.includes('‍'));
+  assert.ok(zwj.includes('\u200D'));
   assert.equal(count(zwj), 1);
   assert.equal(zwj.length, 11);
   assert.equal(count(caseOf(unicode, 'combining characters')), 1);
@@ -116,10 +116,10 @@ test('Unicode strings disagree in code units, code points and graphemes, or are 
   for (const label of ['lone high surrogate', 'lone low surrogate', 'reversed surrogate pair']) {
     assert.match(caseOf(unicode, label), LONE_SURROGATE, label);
   }
-  assert.match(caseOf(unicode, 'bidirectional override'), /‮/u);
-  assert.match(caseOf(unicode, 'bidirectional isolates'), /⁧/u);
+  assert.match(caseOf(unicode, 'bidirectional override'), /\u202E/u);
+  assert.match(caseOf(unicode, 'bidirectional isolates'), /\u2067/u);
   assert.match(caseOf(unicode, 'right-to-left text'), /^\p{Script=Arabic}+$/u);
-  assert.match(caseOf(unicode, 'invisible characters'), /​/u);
+  assert.match(caseOf(unicode, 'invisible characters'), /\u200B/u);
 });
 
 test('callbacks throw, mutate their value and the collection, or answer with a promise', async () => {
@@ -220,8 +220,8 @@ test('a counterexample prints the label of its case, even for a value fast-check
 test('random Unicode strings reach lone surrogates, joiners and directional controls', () => {
   const strings = fc.sample(adversarial.unicode.random, { seed: 1, numRuns: 500 }).join('');
   assert.match(strings, LONE_SURROGATE);
-  assert.match(strings, /‍/u);
-  assert.match(strings, /[‮⁦⁩]/u);
+  assert.match(strings, /\u200D/u);
+  assert.match(strings, /[\u202E\u2066\u2069]/u);
 });
 
 test('random hostile objects reach frozen, prototype-less and dangerous-key objects', () => {
