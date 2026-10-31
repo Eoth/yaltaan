@@ -8,6 +8,7 @@ repo_root="$(git rev-parse --show-toplevel)"
 cd "$repo_root"
 bash scripts/check-no-internal-doc-refs.sh --cached
 bash scripts/check-text-format.sh --cached
+node scripts/check-hidden-characters.ts --cached
 bash scripts/check-comment-hygiene.sh --cached
 bash scripts/check-file-size.sh --cached
 bash scripts/check-roadmap-tickets.sh --cached

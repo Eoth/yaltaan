@@ -79,6 +79,9 @@ if [ "$bad_messages" = 0 ]; then echo "ok: every message in $range follows the r
 step "text format"
 bash scripts/check-text-format.sh || failed
 
+step "hidden characters"
+node scripts/check-hidden-characters.ts || failed
+
 step "comment hygiene"
 bash scripts/check-comment-hygiene.sh || failed
 
