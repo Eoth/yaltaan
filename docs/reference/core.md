@@ -2005,3 +2005,189 @@ export declare function unwrapOr<T, E, F>(result: Result<T, E>, fallback: F): T 
 ```ts
 unwrapOr(err('empty'), 0) // 0
 ```
+
+## `@yaltaan/core/string`
+
+### `HiddenCharacter`
+
+A type.
+
+A character `findHidden` reports.
+
+```ts
+export interface HiddenCharacter {
+    /** Where it starts in the text, in code units. */
+    readonly index: number;
+    readonly codePoint: number;
+    readonly kind: HiddenKind;
+}
+```
+
+| Contract | Value |
+|---|---|
+| `@since` | 0.1 |
+| `@experimental` | yes |
+
+### `HiddenKind`
+
+A type.
+
+Why `findHidden` reports a character: it reorders the text around it (`bidi`), it is not drawn (`invisible`), or it is a control character other than whitespace (`control`).
+
+```ts
+export type HiddenKind = 'bidi' | 'invisible' | 'control';
+```
+
+| Contract | Value |
+|---|---|
+| `@since` | 0.1 |
+| `@experimental` | yes |
+
+### `TruncateOptions`
+
+A type.
+
+The bounds of `truncate`, at least one, and the text that marks a cut: `'…'` by default.
+
+```ts
+export type TruncateOptions = {
+    readonly maxGraphemes: number;
+    readonly maxLength?: number;
+    readonly omission?: string;
+} | {
+    readonly maxGraphemes?: number;
+    readonly maxLength: number;
+    readonly omission?: string;
+};
+```
+
+| Contract | Value |
+|---|---|
+| `@since` | 0.1 |
+| `@experimental` | yes |
+
+### `findHidden`
+
+A function.
+
+Lists, in order, the characters of `text` a reader cannot see or that reorder what is seen: the bidirectional controls of Trojan Source attacks (`bidi`, Unicode Bidi_Control), the other default-ignorable characters (`invisible`: zero-width characters, joiners, soft hyphen, variation selectors, tags, U+FEFF…), and control characters other than whitespace (`control`). An emoji sequence holds a zero-width joiner and a variation selector, a Persian word a zero-width non-joiner: the caller filters on `codePoint` what it accepts. Not reported: a character drawn blank that is not default-ignorable (U+2800, U+FFF9–U+FFFB), whitespace, line separators included (`normalizeWhitespace`), and lone surrogates (`isWellFormed`). One object per character found: a text of hidden characters only costs about 40 times its size.
+
+```ts
+export declare function findHidden(text: string): HiddenCharacter[];
+```
+
+| Contract | Value |
+|---|---|
+| `@pure` | yes |
+| `@sharing` | none |
+| `@complexity` | O(n) (n = length of the text) |
+| `@throws` | TypeError when `text` is not a string |
+| `@since` | 0.1 |
+| `@experimental` | yes |
+
+**Example**
+
+```ts
+findHidden('a\u202Eb') // [{ index: 1, codePoint: 0x202e, kind: 'bidi' }]
+```
+
+### `graphemeLength`
+
+A function.
+
+Counts the graphemes of `text`, the characters a reader sees: an emoji sequence, a flag, a letter and its accents are one each, CR LF is one.
+
+```ts
+export declare function graphemeLength(text: string): number;
+```
+
+| Contract | Value |
+|---|---|
+| `@pure` | yes |
+| `@sharing` | none |
+| `@complexity` | O(n) (n = length of the text) |
+| `@throws` | TypeError when `text` is not a string |
+| `@since` | 0.1 |
+| `@experimental` | yes |
+
+**Example**
+
+```ts
+graphemeLength('noe\u0308l') // 4
+```
+
+### `normalizeWhitespace`
+
+A function.
+
+Replaces every run of whitespace (Unicode White_Space, line breaks included) by one space, and removes the space at each end.
+
+```ts
+export declare function normalizeWhitespace(text: string): string;
+```
+
+| Contract | Value |
+|---|---|
+| `@pure` | yes |
+| `@sharing` | none |
+| `@complexity` | O(n) (n = length of the text) |
+| `@throws` | TypeError when `text` is not a string |
+| `@since` | 0.1 |
+| `@experimental` | yes |
+
+**Example**
+
+```ts
+normalizeWhitespace('  Jean \t\n Dupont ') // 'Jean Dupont'
+```
+
+### `slugify`
+
+A function.
+
+Turns `text` into a slug of ASCII letters and digits separated by `-`: compatibility forms decomposed (NFKD), lower case, marks removed, æ ð ø þ ß đ ħ ı ĸ ł ŋ œ ŧ spelt ae d o th ss d h i k l n oe t, and every other run of characters one `-`, none at either end. Any other letter separates, Latin ones beyond U+017F included (ə, ɓ, ɛ), and a text that leaves no ASCII letter or digit gives `''`; NFKD turns some symbols into ASCII (™ gives tm).
+
+```ts
+export declare function slugify(text: string): string;
+```
+
+| Contract | Value |
+|---|---|
+| `@pure` | yes |
+| `@sharing` | none |
+| `@complexity` | O(n) (n = length of the text) |
+| `@throws` | TypeError when `text` is not a string |
+| `@since` | 0.1 |
+| `@experimental` | yes |
+
+**Example**
+
+```ts
+slugify('Crème brûlée : 2 œufs') // 'creme-brulee-2-oeufs'
+```
+
+### `truncate`
+
+A function.
+
+Returns `text` when it holds within the bounds, otherwise its longest prefix of whole graphemes that holds within them followed by `omission`: never half an emoji, a flag or a letter and its accents. `maxGraphemes` counts graphemes, `maxLength` code units, the unit of `String.length` and of a storage limit; the omission counts in both. An omission that starts with a mark, a joiner or half of a flag joins the last grapheme kept, as it would anywhere it is appended.
+
+```ts
+export declare function truncate(text: string, options: TruncateOptions): string;
+```
+
+| Contract | Value |
+|---|---|
+| `@pure` | yes |
+| `@sharing` | none |
+| `@complexity` | O(m) (m = code units up to the first grapheme past a bound, at most the length of the text) |
+| `@throws` | TypeError when `text` or `omission` is not a string, a bound is not a number, or no bound is given |
+| `@throws` | RangeError when a bound is neither a non-negative integer nor Infinity, or the omission does not hold within the bounds |
+| `@since` | 0.1 |
+| `@experimental` | yes |
+
+**Example**
+
+```ts
+truncate('Crème brûlée', { maxGraphemes: 8 }) // 'Crème b…'
+```

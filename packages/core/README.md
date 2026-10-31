@@ -4,7 +4,7 @@ The shared contracts and data primitives of Yaltaan. The other packages build on
 
 **Not published yet**: the package is private until its first release. Every export is `@experimental`: it may change in a minor version until the contracts are frozen.
 
-It holds one sub-path per domain, each imported on its own (`@yaltaan/core/result`), so that an application ships only what it imports. Available today: `result`, `issue`, `path`, `equal`, `object` (selection by mask, merging, defaults, mapping, reading and writing by `Path`), `collection` (by key and by order) and `number`. The others are planned:
+It holds one sub-path per domain, each imported on its own (`@yaltaan/core/result`), so that an application ships only what it imports. Available today: `result`, `issue`, `path`, `equal`, `object` (selection by mask, merging, defaults, mapping, reading and writing by `Path`), `collection` (by key and by order), `string` and `number`. The others are planned:
 
 | Sub-path | Holds |
 |---|---|
@@ -13,7 +13,7 @@ It holds one sub-path per domain, each imported on its own (`@yaltaan/core/resul
 | `path` | `Path` and its segments, including a key segment that follows an array element when it moves; a text form at the boundaries only. |
 | `object` | Picking, omitting and redacting fields by a mask the compiler checks; deep merging, defaults, mapping values and keys; reading and writing by `Path` with structural sharing. |
 | `collection` | What arrays and iterators lack natively: splitting, indexing by a unique key, counting, deduplicating and comparing by a key; smallest and largest by a key, top-k, multi-key sorting and pages; chunks and windows are planned. |
-| `string` | Length and truncation by grapheme, slugs, detection of invisible and bidirectional control characters. |
+| `string` | Length and truncation by grapheme, slugs by written rules, whitespace collapsed, detection of invisible, bidirectional and control characters. |
 | `number` | Strict parsing to a `Result` with explicit separators, bounds, comparison within explicit tolerances, rounding by the named modes of `Intl.NumberFormat`, exact conversions between `number` and `bigint`. |
 | `equal` | Configurable deep equality, on all fields or on those a mask selects. |
 | `diff` | Diffs and patches addressed by `Path`. |
@@ -140,6 +140,20 @@ parseNumber('12abc').ok; // → false
 clamp(12, { min: 0, max: 10 }); // → 10
 round(1.005, { digits: 2, mode: 'halfExpand' }); // → 1.01
 bigIntToNumber(2n ** 53n + 1n).ok; // → false
+```
+
+## `string`
+
+Count and cut text by grapheme, the character a reader sees, never half an emoji or an accent without its letter. Turn a title into an ASCII slug by written rules, collapse whitespace, and name the characters a reader cannot see or that reorder the text, before they reach a page or a log.
+
+```ts
+import { findHidden, graphemeLength, normalizeWhitespace, slugify, truncate } from '@yaltaan/core/string';
+
+graphemeLength('noe\u0308l'); // → 4
+truncate('Crème brûlée', { maxGraphemes: 8 }); // → 'Crème b…'
+slugify('Crème brûlée : 2 œufs'); // → 'creme-brulee-2-oeufs'
+normalizeWhitespace('  Jean \t\n Dupont '); // → 'Jean Dupont'
+findHidden('user\u202Egnp.exe'); // → [{ index: 4, codePoint: 0x202e, kind: 'bidi' }]
 ```
 
 How to use each sub-path, in English and in French: the [guide](../../docs/guide/README.md). The contract of each export is in the [reference](../../docs/reference/core.md).
