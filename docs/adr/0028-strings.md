@@ -1,0 +1,56 @@
+# ADR 0028 — Strings: graphemes, truncation, slugs, whitespace, hidden characters
+
+- Date: 2026-10-31
+- Status: accepted (design choices delegated by the owner, reported for review)
+
+## Context
+
+ARCHITECTURE.md §7.3 puts in `core/string` `graphemeLength`, a grapheme-aware `truncate`, a `slugify` with explicit rules (NFKD normalization, removal of diacritics, allowlist), `normalizeWhitespace`, and the detection of invisible characters and bidirectional controls, the characters of Trojan Source attacks; it settles three invariants: `slugify` and `normalizeWhitespace` are idempotent, and `truncate` never cuts inside a grapheme. Casing beyond the native methods and comparison (`Intl.Collator`) stay out. §5.7 allows at most two positional arguments, then an options object.
+
+The platform segments graphemes with `Intl.Segmenter` (Widely available since 2026-10-16), normalizes with `normalize('NFKD')`, and knows the Unicode properties in regular expressions (`\p{White_Space}`, `\p{Default_Ignorable_Code_Point}`, `\p{Bidi_Control}`). The nearest implementations, the judges of these functions (ADR 0022), are es-toolkit's `truncate` (in `es-toolkit/compat`, with lodash's semantics), `kebabCase` and `deburr`; es-toolkit has no grapheme count, no whitespace collapse and no detection.
+
+## Options
+
+1. **Native, or do nothing.** `text.length` counts code units: a family emoji is 8, an `e` with a combining accent 2. `slice` cuts a surrogate pair or a grapheme in two. `trim()` and `\s` remove U+FEFF, which is not whitespace, and keep U+0085, which is. Nothing in the platform names the hidden characters. Each project writes its own regular expressions, often with a trailing anchor that backtracks (below).
+2. **es-toolkit's semantics.** `truncate` counts code points, so it cuts a family emoji and a combining accent; `kebabCase(deburr(text))` splits `camelCase` and `abc123`, keeps every letter of every script (`привет-мир`), and leaves `ﬁ` and `²` as they are; nothing for whitespace or hidden characters.
+3. **Graphemes by `Intl.Segmenter`, written rules for slugs and whitespace, hidden characters by Unicode properties.** Kept, with the rules below.
+
+## Measurements
+
+Node 24.21.0 (Unicode 17.0), es-toolkit 1.52.0, 2026-10-31:
+
+- `'\u{1F468}\u200D\u{1F469}\u200D\u{1F467}'`: 8 code units, 5 code points, 1 grapheme; `e` + U+0301: 2 code units, 1 grapheme; a regional indicator flag: 4 code units, 1 grapheme; `a\r\nb`: 3 graphemes.
+- es-toolkit's `truncate('ab' + family + 'cd', { length: 4, omission: '…' })` → `'ab\u{1F468}…'`, a third of the family; `truncate('e\u0301\u0301\u0301xyz', { length: 3, omission: '' })` → the `e` with two of its three accents.
+- `kebabCase`: `'Hello World'` → `hello-world`, `'camelCase'` → `camel-case`, `'abc123'` → `abc-123`, `'Привет мир'` → `привет-мир`; `deburr('ﬁ²')` → `ﬁ²`, `deburr('Straße')` → `Strasse`, `deburr('cœur')` → `coeur`.
+- `new Intl.Segmenter(…, { granularity: 'grapheme' })`: about 3.9 µs; segmenting a 28-character Latin title: about 3.3 µs, 117 ns a character. `new Intl.Segmenter('und', …)` resolves to the host's locale (`fr-FR` here); UAX #29 grapheme rules do not depend on the locale.
+- The 896 code units U+0000–U+02FF, U+2010–U+205F and U+20A0–U+20CF: each of their 802 816 ordered pairs is a grapheme boundary for `Intl.Segmenter`, but CR LF. None of them is an extender, a joiner, a prepended mark, a regional indicator or a Hangul jamo, so the rules that look further back than one character (emoji sequences, flags, Indic conjuncts) never apply to a text made of them only.
+- `/\p{White_Space}+$/u` on 10 000, 20 000 and 40 000 spaces followed by `x`: 152, 349 and 704 ms; `/\p{White_Space}+/gu` replaced by one space on 400 000 spaces: 0.36 ms.
+- `'\u0085a\uFEFF'.trim()` keeps U+0085 and removes U+FEFF; `/\s/` matches U+FEFF and not U+0085; `\p{White_Space}` the reverse.
+- `normalize('NFKD')` multiplies a length by 18 at most (U+FDFA).
+- The Unicode Character Database files PropList.txt and DerivedCoreProperties.txt list the same White_Space, Bidi_Control and Default_Ignorable_Code_Point code points in versions 15.1, 16.0 and 17.0.
+- In the letters U+00C0–U+017F, NFKD, lower case and the removal of marks leave 13 letters outside ASCII: æ, ð, ø, þ, ß, đ, ħ, ı, ĸ, ł, ŋ, œ, ŧ (and their capitals); `deburr` maps each of them as the table below does. Ŀ and ŀ decompose to `l` and a middle dot (U+00B7).
+
+## Decision
+
+- **`graphemeLength(text)`** counts the extended grapheme clusters of UAX #29, as `Intl.Segmenter` with `granularity: 'grapheme'` segments them. A text made only of the 896 code units above is counted in one pass, each code unit a grapheme and CR LF one; any other text goes through the segmenter, built at the first call that needs it and kept, never when the module loads.
+- **`truncate(text, { maxGraphemes, maxLength, omission })`** returns `text` itself when it holds within both bounds; otherwise the longest prefix of whole graphemes that, followed by `omission`, holds within both, then `omission`. `maxGraphemes` counts graphemes, `maxLength` code units, the unit of `String.length` and of a storage limit, so that a grapheme carrying thousands of combining marks cannot pass a bound of 20 graphemes at a megabyte. At least one bound (`TypeError` otherwise); each a non-negative integer or `Infinity` (`RangeError`). `omission` is `'…'` (U+2026, one grapheme) by default, any string otherwise; an omission that does not hold within the bounds is a `RangeError`, whatever the text, since it depends on the caller's arguments only. The walk stops at the first grapheme past a bound: the time is in the kept length, not in the text's. Since `Intl.Segmenter` reads the whole text it is given before its first segment, it gets windows that double in length from 64 code units, each started again at the last grapheme of the one before (a grapheme boundary depends only on the characters before it, and UAX #29 never breaks inside a sequence a rule looks back on). An omission that starts with a mark, a joiner or half of a flag joins the last grapheme kept, as it would wherever it is appended: the text's own graphemes are never cut, and the bounds hold.
+- **`slugify(text)`** applies, in order: `normalize('NFKD')`; `toLowerCase()`; the removal of every mark (`\p{M}`); the table æ → ae, ð → d, ø → o, þ → th, ß → ss, đ → d, ħ → h, ı → i, ĸ → k, ł → l, ŋ → n, œ → oe, ŧ → t; then every run of characters other than `a`–`z` and `0`–`9` becomes one `-`, and none starts or ends the slug. The slug matches `^([a-z0-9]+(-[a-z0-9]+)*)?$`, which makes `slugify` idempotent, and it is a path segment of a URL without percent-encoding. Any other letter separates, Latin letters beyond U+017F included (`ə`, `ɓ`, `ɛ`). A text that leaves no ASCII letter or digit gives `''` (NFKD turns some symbols into ASCII: `™` gives `tm`, `①` gives `1`): the caller decides what an empty slug means. No option: a separator, a length or a locale's transliteration (German `ä` → `ae`) is a ticket when a need is measured.
+- **`normalizeWhitespace(text)`** replaces every run of White_Space characters (Unicode PropList: tab to carriage return, space, U+0085, U+00A0, U+1680, U+2000–U+200A, U+2028, U+2029, U+202F, U+205F, U+3000) by one space, and removes the space at each end. Line breaks are whitespace: a text that keeps its paragraphs is not this function's. U+FEFF is not whitespace; `findHidden` names it.
+- **`findHidden(text)`** returns, in order, each code point that a reader cannot see or that reorders what is seen: `{ index, codePoint, kind }`, `index` in code units. `kind` is `'bidi'` for Bidi_Control (U+061C, U+200E, U+200F, U+202A–U+202E, U+2066–U+2069), `'invisible'` for the other Default_Ignorable_Code_Point (zero-width characters, joiners, word joiner, soft hyphen, variation selectors, tags, fillers, U+FEFF…), `'control'` for a control character (General_Category Cc) that is not White_Space (U+0000–U+0008, U+000E–U+001F, U+007F–U+0084, U+0086–U+009F). Not reported: a character drawn blank that is not default-ignorable (U+2800, U+FFF9–U+FFFB), whitespace, line separators included, and lone surrogates. Nothing is exempted: an emoji sequence holds a zero-width joiner and a variation selector, a Persian word a zero-width non-joiner, and only the caller knows which it accepts, by filtering on `codePoint` (a recipe in the guide). A lone surrogate is not reported: `isWellFormed` tests it.
+- Every function throws a `TypeError` for a `text` that is not a string. None limits the length of the text: each is linear in it (regular expressions without a trailing anchor or a nested repetition, measured at n, 2n and 4n by a test), works on a text already in memory, and returns at most 18 times its length (`slugify`, the NFKD bound), most often less.
+- **Not here**: cutting at a word boundary (`Intl.Segmenter` with `granularity: 'word'`), removing hidden characters, slug options, the display width of a text (East Asian Width), confusable characters (UTS #39).
+
+## Review
+
+A contradictor, given the question and the code without this record, checked the module: no invariant broken on 200 000 random truncations, the fast path sound against every rule of UAX #29 that looks back, `findHidden` equal to the Unicode tables, nothing built when the module loads. It found two promises the code broke, both fixed before the record was accepted: `truncate` segmented the whole rest of a text once it left the fast path (8 million Cyrillic letters, 9.5 ms for 5 graphemes, now under 0.01 ms, by the windows above), and the documentation said a text without a Latin letter gives an empty slug, which `™` contradicts. It measured a named-property lookup (`FOLDED[-1]`) in `slugify` that made a text of another script 17 times slower: a range check now skips the table, 4 million CJK characters 191 → 93 ms, 66 ms of which is `normalize`. It named what the documentation now says: Latin letters beyond the table separate, the characters `findHidden` does not report, an omission that joins the last grapheme. Two of its remarks became a ticket: a transliteration of the Latin letters beyond U+017F, and a `findHidden` bounded in memory (one object per character found, about 40 times the size of a text made only of hidden characters).
+
+## Consequences
+
+- A title cut by `truncate` never ends on half an emoji, a lone accent or half a flag, and a bound in code units keeps a field within its column.
+- A slug is ASCII: a title in Cyrillic, Greek, Arabic or Chinese gives `''`, unlike es-toolkit's `kebabCase`, which keeps its letters.
+- A form can refuse, or show, the bidirectional controls and invisible characters of a field, its user name or a file name, before they reach a page or a log.
+- Unlike es-toolkit, `truncate` counts graphemes and refuses an omission longer than its bound, and `slugify` keeps `camelCase` and `abc123` whole and decomposes compatibility forms (`ﬁ` → `fi`, `²` → `2`).
+
+## Review condition
+
+A need, measured in the pilot, for a word-boundary cut, a non-ASCII slug, a locale's transliteration or paragraphs kept by `normalizeWhitespace`; an engine whose `Intl.Segmenter` breaks inside one of the 896 fast code units' pairs; a change of the three Unicode properties in a later version of the standard.

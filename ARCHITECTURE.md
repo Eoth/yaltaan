@@ -296,7 +296,7 @@ Each domain is described by its scope, its decisions, what it does not do, and i
 
 ### 7.3 `core/string`
 
-**Scope**: `graphemeLength`, grapheme-aware `truncate`, `slugify` with explicit rules (NFKD normalization, removal of diacritics, allowlist), `normalizeWhitespace`, detection of invisible characters and bidirectional controls (Trojan Source attacks).
+**Scope**: `graphemeLength`, grapheme-aware `truncate` within a bound in graphemes, in code units or both, `slugify` with explicit rules (NFKD normalization, removal of diacritics, ASCII allowlist), `normalizeWhitespace`, and `findHidden`, the detection of bidirectional controls (Trojan Source attacks), invisible characters and control characters ([ADR 0028](docs/adr/0028-strings.md)).
 
 **Does not do**: locale-dependent casing beyond the native methods; comparison (`Intl.Collator` does it).
 
