@@ -7,7 +7,7 @@ Yaltaan is a library: it runs inside the applications that import it, in browser
 - **Prototype pollution**: a key such as `__proto__`, `constructor` or `prototype`, in a path or an object, that reaches a prototype on write.
 - **Catastrophic regular expressions**: a pattern whose backtracking makes a short input take unbounded time.
 - **Unbounded resource use**: a depth, a number of keys or elements, a string length, a cache size or a recursion that no default limit bounds.
-- **Supply chain**: a published package that carries code absent from this repository. The packages have no runtime dependency; development dependencies are pinned, come from the npm registry only and never run install scripts; releases are to be published from CI with npm provenance and no long-lived token.
+- **Supply chain**: a published package that carries code absent from this repository. The packages have no runtime dependency; development dependencies are pinned, come from the npm registry only and never run install scripts; releases are published only by the release workflow, through npm trusted publishing with provenance, and no npm token exists.
 
 ## Reporting a vulnerability
 

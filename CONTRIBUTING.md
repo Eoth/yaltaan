@@ -21,7 +21,7 @@ These are the engineering rules of this repository: how a change is decided, tes
 
 A change is done when all of these hold, not when its own tests pass:
 
-1. `bash scripts/verify.sh` prints `OK`: the repository guards, formatting, types, tests, build, package manifests and contents, the lockfile's sources, integrity and licences, the dependency graph between packages, the contract tags of every public export and the reference generated from them, the adversarial declaration of every export that runs, import sizes, the dependency audit and the workflows; then, as each harness arrives, type-checking cost and the platform baseline. A step that cannot run (a tool missing, the registry unreachable) is reported as skipped, never as passed.
+1. `bash scripts/verify.sh` prints `OK`: the repository guards, formatting, types, tests, build, package manifests and contents, a rehearsal of the release, the lockfile's sources, integrity and licences, the dependency graph between packages, the contract tags of every public export and the reference generated from them, the adversarial declaration of every export that runs, import sizes, the dependency audit and the workflows; then, as each harness arrives, type-checking cost and the platform baseline. A step that cannot run (a tool missing, the registry unreachable) is reported as skipped, never as passed.
 2. A bug fixed comes with its regression test in the same commit, seen failing before the fix: remove the fix, watch the test fail, put the fix back.
 3. A bug that reveals a gap in the process (a check nobody ran, a gate that could not fail) also gets a mechanical guard, a script, a hook or a CI job, that stops the whole class of error, not only the case found.
 4. A decision record, written before the code, in every case listed in [docs/adr/README.md](docs/adr/README.md) (a new package, a new dependency, a change to a shared contract, an exception to a rule, a promotion to `@stable`…).
@@ -75,6 +75,15 @@ A verdict from an in-house checker counts only once a second, independent method
 - The body says why: the root cause, the measurements before and after, the trade-offs made. Every figure in it comes from a command run before committing. The commit message is the history: neither the code nor the documentation repeats it.
 - A commit has one author, who answers for it: no trailer that credits a co-author or a generator.
 - Never `--no-verify`: a failing hook is fixed, not skipped.
+
+## Releasing
+
+Every published package carries one version, released by the annotated tag `v<version>` on a commit of `main` ([ADR 0029](docs/adr/0029-release-workflow.md)). The release workflow ([.github/workflows/release.yml](.github/workflows/release.yml)) publishes through npm trusted publishing, with provenance: no npm token exists, in the repository or in its secrets, and no version with code is published from a machine (npm needs a package to exist before it trusts a workflow with it: how each new package name is created is in the ADR).
+
+1. `node scripts/release-prepare.ts <version>` sets the version of every published package and of the specs that name one, removes `private`, and moves the entries under `Unreleased` into the section of the version, dated today. Read the diff, commit it as `chore(release): <version>`, and let the gate pass. The section must carry the author or committer date of that commit: prepare again a release committed for the first time on a later day.
+2. `git tag -a v<version> -m v<version>`, then push the commit, then the tag. The workflow checks the tag against the manifests and the changelog, builds twice and compares the tarballs to the byte, inspects them, writes their SBOMs, installs them into an empty project and compiles every sub-path under TypeScript 7 and 6.0, then publishes once the `npm` environment's reviewer approves, and creates the GitHub release with the tarballs, their SHA-512 sums and the SBOMs.
+
+`bash scripts/release-rehearsal.sh` runs every step but the publication on a test version (`<next minor>-rehearsal.0`) in a temporary clone; the gate runs it on the working tree, the workflow on every push to `main` and every pull request to `main`. A tag of a `-rehearsal.N` version is checked by the workflow like a release and never published, nor is a tag a manual run is started from.
 
 ## Proposing a decision
 

@@ -559,8 +559,8 @@ An `@experimental` API can change in a minor version; a `@stable` API follows Se
 - Zero third-party runtime dependencies in `core`, `temporal`, `schema`, `rules` and `form`: a package depends only on the packages below it in the graph (§6). The adapters also have peer dependencies on their framework.
 - Lockfile under version control; no Git dependency; licence check; vulnerability scan; secret detection.
 - The repository's `.npmrc` enforces part of this at install time: no dependency lifecycle script runs, versions are saved exactly, nothing is installed from Git, and a version published less than seven days ago is never picked.
-- Publishing through trusted publishing (OIDC) with npm provenance; an SBOM with every release; two-factor authentication mandatory.
-- CI runs `publint` and `arethetypeswrong`, and inspects the actual content of the published tarball.
+- Publishing through trusted publishing (OIDC) with npm provenance, by a release workflow that rehearses on every change and publishes only a release tag; no npm token exists; an SBOM with every release; two-factor authentication mandatory ([ADR 0029](docs/adr/0029-release-workflow.md)).
+- CI runs `publint` and inspects the actual content of the published tarball: it holds exactly what the targets of `exports` reach, and two builds of the same commit give the same tarball to the byte ([ADR 0029](docs/adr/0029-release-workflow.md)). The published types are compiled by TypeScript 7 and 6.0 from the installed tarball; whether `arethetypeswrong` runs as well awaits the owner's decision on [ADR 0030](docs/adr/0030-arethetypeswrong.md), which recommends not.
 - No `postinstall` script, no telemetry, no network call.
 
 ## 12. Decisions, contributions and plan

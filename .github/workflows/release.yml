@@ -1,0 +1,167 @@
+# Releases the published packages (ADR 0029). A tag `v<version>` pushed on a commit of main is checked and
+# published; every other run publishes nothing: a push to main and a pull request rehearse on a test tag, a manual
+# run rehearses (or, started from a tag, checks it), and a tag of a `-rehearsal.N` version is checked like a release.
+# scripts/release-verdict.sh decides, and its tests try every event.
+#
+# In this workflow, only the publishing job may ask GitHub for an OIDC token (`id-token: write`, which the Scorecard
+# workflow also holds for its own results), which npm exchanges for a short-lived
+# publish credential (trusted publishing): no npm token exists, neither in the repository nor in its secrets. That
+# job runs in the environment `npm`, whose reviewers approve each publication; it installs nothing and runs no code
+# of the repository or of a dependency: it publishes the tarballs the checking job made, once their SHA-512 match the
+# sums that job passed on as an output, which an artifact replaced in between cannot change. setup-node is never
+# given a `registry-url`: it would write a token line into .npmrc.
+#
+# Actions are pinned to commit SHAs, the version in the comment: a tag can be moved, a commit cannot. A new version
+# is taken once it has been out seven days, as for npm packages (.npmrc).
+name: Release
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  # A rehearsal superseded by a newer push is cancelled; a release is never stopped half-way through publishing.
+  cancel-in-progress: ${{ github.ref_type != 'tag' }}
+
+defaults:
+  run:
+    # An explicit `bash` runs every step with `-eo pipefail`: a failing command inside a pipe fails the step.
+    shell: bash
+
+jobs:
+  check:
+    name: Check and pack (a rehearsal unless the tag names a release)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    outputs:
+      publish: ${{ steps.verdict.outputs.publish }}
+      dist-tag: ${{ steps.verdict.outputs.dist-tag }}
+      prerelease: ${{ steps.verdict.outputs.prerelease }}
+      sums: ${{ steps.verdict.outputs.sums }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # The rehearsal clones the history, and a release tag must be reachable from main.
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - run: npm ci --ignore-scripts
+      - name: Rehearse a release on a test tag
+        if: github.ref_type != 'tag'
+        run: bash scripts/release-rehearsal.sh --out "$RUNNER_TEMP/release"
+      - name: Check the tag
+        if: github.ref_type == 'tag'
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          # The tag as it was pushed: a checkout started by a tag event may hold a lightweight copy of it, while the
+          # release requires the annotated tag.
+          git fetch --quiet --force origin "refs/tags/$TAG:refs/tags/$TAG"
+          if ! git merge-base --is-ancestor HEAD origin/main; then
+            echo "::error::the tag $TAG names a commit that is not on main"
+            exit 1
+          fi
+          # A rehearsal version is recognised by the script itself, from the tag.
+          node scripts/release.ts --tag "$TAG" --out "$RUNNER_TEMP/release"
+      - name: Decide what the next jobs do
+        id: verdict
+        run: |
+          bash scripts/release-verdict.sh "$RUNNER_TEMP/release" >> "$GITHUB_OUTPUT"
+          grep '^publish=' "$GITHUB_OUTPUT"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: release
+          path: ${{ runner.temp }}/release/
+          if-no-files-found: error
+
+  publish:
+    name: Publish to npm (trusted publishing, provenance)
+    needs: check
+    if: needs.check.outputs.publish == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    environment: npm
+    permissions:
+      contents: read
+      # The OIDC token npm exchanges for a publish credential, and signs the provenance with.
+      id-token: write
+    steps:
+      # A second lock, independent of the checking job: whatever its outputs say, only a pushed tag publishes.
+      - name: Publish only from a pushed tag
+        run: |
+          if [ "$GITHUB_EVENT_NAME" != push ] || [ "$GITHUB_REF_TYPE" != tag ]; then
+            echo "::error::a $GITHUB_EVENT_NAME of a $GITHUB_REF_TYPE never publishes"
+            exit 1
+          fi
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: release
+          path: release
+      - name: Compare the downloaded files with the sums of the checking job
+        env:
+          SUMS: ${{ needs.check.outputs.sums }}
+        run: |
+          cd release
+          sha512sum --check --strict <<< "$SUMS"
+          # Every tarball of the folder is published below: none may be missing from the sums.
+          [ "$(find . -maxdepth 1 -name '*.tgz' | wc -l)" = "$(grep -c '\.tgz$' <<< "$SUMS")" ]
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - name: Publish each tarball
+        env:
+          DIST_TAG: ${{ needs.check.outputs.dist-tag }}
+        run: |
+          # Trusted publishing needs npm 11.5.1 or later.
+          npm_version=$(npm --version)
+          if [ "$(printf '%s\n' 11.5.1 "$npm_version" | sort -V | head -n 1)" != 11.5.1 ]; then
+            echo "::error::npm $npm_version cannot publish through trusted publishing (11.5.1 or later)"
+            exit 1
+          fi
+          for tarball in release/*.tgz; do
+            npm publish "$tarball" --provenance --access public --tag "$DIST_TAG"
+          done
+
+  github-release:
+    name: GitHub release, with the tarballs, their sums and SBOMs
+    needs: [check, publish]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: release
+          path: release
+      - name: Compare the downloaded files with the sums of the checking job
+        env:
+          SUMS: ${{ needs.check.outputs.sums }}
+        run: |
+          cd release
+          sha512sum --check --strict <<< "$SUMS"
+      - name: Create the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+          PRERELEASE: ${{ needs.check.outputs.prerelease }}
+        run: |
+          prerelease=()
+          if [ "$PRERELEASE" = true ]; then
+            prerelease=(--prerelease)
+          fi
+          gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --verify-tag --title "$TAG" \
+            --notes-file release/RELEASE_NOTES.md "${prerelease[@]}" \
+            release/*.tgz release/*.cdx.json release/SHA512SUMS
