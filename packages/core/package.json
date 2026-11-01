@@ -4,6 +4,15 @@
   "private": true,
   "description": "Shared contracts and data primitives of Yaltaan: Result, Issue, Path, deep equality, reactive nodes.",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Eoth/yaltaan.git",
+    "directory": "packages/core"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
   "type": "module",
   "sideEffects": false,
   "exports": {

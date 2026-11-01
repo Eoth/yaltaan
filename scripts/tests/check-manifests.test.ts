@@ -54,6 +54,8 @@ function validPackage(name = 'core'): Manifest {
     version: '0.0.0',
     private: true,
     license: 'MIT',
+    repository: { type: 'git', url: 'git+https://github.com/owner/yaltaan.git', directory: `packages/${name}` },
+    publishConfig: { access: 'public', provenance: true },
     type: 'module',
     sideEffects: false,
     exports: { '.': './dist/index.js', './result': './dist/result.js', './package.json': './package.json' },
@@ -168,7 +170,8 @@ test('the package name is the scope and the folder name', () => {
   for (const name of ['@yaltaan/schema', 'core', '@yaltaanjs/core', '@yaltaan/Core', undefined]) {
     assertOneProblem(checkPackageManifest({ ...validPackage(), name }, 'packages/core'), '"name"');
   }
-  assertOneProblem(checkPackageManifest(validPackage(), 'packages/schema'), 'expected "@yaltaan/schema"');
+  const inSchema = { ...validPackage(), repository: validPackage('schema')['repository'] };
+  assertOneProblem(checkPackageManifest(inSchema, 'packages/schema'), 'expected "@yaltaan/schema"');
 });
 
 test('a package is an ES module without side effects, under MIT, with its Node engines', () => {
@@ -282,6 +285,34 @@ test('a package stays private while its version is 0.0.0', () => {
   assertOneProblem(checkPackageManifest(without(validPackage(), 'private'), dir), '"private" must be true');
   assertOneProblem(checkPackageManifest({ ...validPackage(), private: false }, dir), '"private" must be true');
   assertOneProblem(checkPackageManifest(without(validPackage(), 'version'), dir), '"version" must be a string');
+});
+
+test('a published package names its repository on GitHub and publishes in public with provenance', () => {
+  const dir = 'packages/core';
+  const repository = { type: 'git', url: 'git+https://github.com/owner/yaltaan.git', directory: dir };
+  const wrongRepositories: unknown[] = [
+    undefined,
+    'github:owner/yaltaan',
+    { ...repository, type: 'svn' },
+    { ...repository, url: 'https://github.com/owner/yaltaan.git' },
+    { ...repository, url: 'git+https://gitlab.com/owner/yaltaan.git' },
+    { ...repository, directory: 'packages/schema' },
+    without(repository, 'directory'),
+  ];
+  for (const wrong of wrongRepositories) {
+    const manifest =
+      wrong === undefined ? without(validPackage(), 'repository') : { ...validPackage(), repository: wrong };
+    assertOneProblem(checkPackageManifest(manifest, dir), '"repository" must be');
+  }
+  const publishConfig = { access: 'public', provenance: true };
+  for (const wrong of [undefined, { ...publishConfig, access: 'restricted' }, without(publishConfig, 'provenance')]) {
+    const manifest =
+      wrong === undefined ? without(validPackage(), 'publishConfig') : { ...validPackage(), publishConfig: wrong };
+    assertOneProblem(checkPackageManifest(manifest, dir), '"publishConfig" must be');
+  }
+  // An internal package is never published: neither field is asked of it.
+  const internal = without(without(validPackage('testing'), 'repository'), 'publishConfig');
+  assert.deepEqual(checkPackageManifest(internal, 'packages/testing', true), []);
 });
 
 test('an internal package stays private whatever its version', () => {

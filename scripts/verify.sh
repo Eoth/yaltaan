@@ -180,6 +180,22 @@ node scripts/type-cost.ts || failed
 step "package contents"
 node scripts/check-package-contents.ts || failed
 
+step "release rehearsal"
+# The whole release on a test tag, in a clone of the working tree: tag, version and changelog, two builds identical
+# to the byte, the tarballs inspected, SBOMs, a consumer's imports and compilations, then npm's dry run, the only
+# part that asks the registry. Without network that part alone is reported skipped; CI runs it online.
+rehearsal_log=$(mktemp)
+if bash scripts/release-rehearsal.sh --working-tree > "$rehearsal_log" 2>&1; then
+  tail -n 1 "$rehearsal_log"
+elif grep -q '^release: release files' "$rehearsal_log" &&
+  grep -q -E 'ENOTFOUND|EAI_AGAIN|ECONNREFUSED|ETIMEDOUT' "$rehearsal_log"; then
+  skip "the registry cannot be reached for npm's dry run (every other stage passed)"
+else
+  grep -v '^npm notice' "$rehearsal_log"
+  failed
+fi
+rm -f "$rehearsal_log"
+
 step "audit"
 # Both commands ask the registry. Without network the step is reported skipped, never passed; CI runs it online.
 audit_log=$(mktemp)

@@ -4,6 +4,7 @@
 //
 // Usage: node scripts/check-manifests.ts
 import { readInternalPackages } from './lib/internal-packages.ts';
+import { normalizeRepositoryUrl } from './lib/release.ts';
 import {
   isJsonObject,
   listWorkspacePackages,
@@ -133,6 +134,9 @@ export function checkPackageManifest(manifest: unknown, dir: string, internal = 
   problems.push(...checkPinnedDevDependencies(manifest, file));
   problems.push(...checkNoInstallScripts(manifest, file));
 
+  if (!internal) {
+    problems.push(...checkPublishingFields(manifest, dir).map((message) => `${file}: ${message}`));
+  }
   const version = manifest['version'];
   if (typeof version !== 'string') {
     fail('"version" must be a string');
@@ -140,6 +144,34 @@ export function checkPackageManifest(manifest: unknown, dir: string, internal = 
     fail('"private" must be true: an internal package is never published, whatever its version');
   } else if (version === '0.0.0' && manifest['private'] !== true) {
     fail('"private" must be true while "version" is "0.0.0": nothing is published before the release workflow');
+  }
+  return problems;
+}
+
+/**
+ * The fields a publication reads: "repository", which npm compares with the repository the provenance names (the
+ * release checks that it is the one it runs from), and "publishConfig", without which a scoped package would be
+ * published private, or published without provenance from a machine that cannot sign.
+ */
+export function checkPublishingFields(manifest: JsonObject, dir: string): string[] {
+  const problems: string[] = [];
+  const repository = manifest['repository'];
+  if (
+    !isJsonObject(repository) ||
+    repository['type'] !== 'git' ||
+    typeof repository['url'] !== 'string' ||
+    normalizeRepositoryUrl(repository['url']) === undefined ||
+    !repository['url'].startsWith('git+https://') ||
+    repository['directory'] !== dir
+  ) {
+    problems.push(
+      `"repository" must be { "type": "git", "url": "git+https://github.com/<owner>/<repository>.git", ` +
+        `"directory": "${dir}" }: npm compares it with the repository named by the provenance`,
+    );
+  }
+  const publishConfig = manifest['publishConfig'];
+  if (!isJsonObject(publishConfig) || publishConfig['access'] !== 'public' || publishConfig['provenance'] !== true) {
+    problems.push('"publishConfig" must be { "access": "public", "provenance": true }');
   }
   return problems;
 }
