@@ -168,7 +168,7 @@ type Path = readonly PathSegment[];
 ### 5.4 Schema = Standard Schema
 
 - Every schema of `@yaltaan/schema` implements the Standard Schema interface (`~standard`, interface version 1, specification 1.1.0). This gives immediate interoperability with the engines that consume it: TanStack Form reads it natively, react-hook-form through `standardSchemaResolver` from `@hookform/resolvers`, and Angular Signal Forms, stable in Angular 22, through `validateStandardSchema`.
-- The interface's types are copied into the library rather than taken as a dependency: the specification allows it, and the zero runtime dependency rule (§11) holds.
+- The interface's types are copied into the library rather than taken as a dependency: the specification allows it, and the zero runtime dependency rule (§11) holds. The specification publishes no test suite: a type test compares the copy with `@standard-schema/spec`, and a table of its requirements reads every schema the tests build ([ADR 0031](docs/adr/0031-judges-of-the-schema.md)).
 - Conversely, `@yaltaan/rules` and `@yaltaan/form` accept any Standard Schema schema (zod, valibot, arktype…). No lock-in: Yaltaan's own schema can lose a comparison without breaking the rest of the library.
 
 ### 5.5 Reactive node
@@ -515,7 +515,7 @@ Each public export that runs (a function, a constant that can be called, a class
 
 ### 10.2 Properties
 
-With fast-check, where applicable: idempotence, round trip, inverse, conservation, absence of mutation, determinism, stability, associativity, commutativity, monotonicity, consistency with the platform and between equivalent APIs. The invariants listed in §7 are tests, not intentions. A function with an equivalent in es-toolkit is also run beside it on the same generated inputs, from its first test ([ADR 0022](docs/adr/0022-es-toolkit-as-a-differential-judge.md)): every disagreement is a defect or a difference the module documents, which the judge reads and checks.
+With fast-check, where applicable: idempotence, round trip, inverse, conservation, absence of mutation, determinism, stability, associativity, commutativity, monotonicity, consistency with the platform and between equivalent APIs. The invariants listed in §7 are tests, not intentions. A function with an equivalent in es-toolkit is also run beside it on the same generated inputs, from its first test ([ADR 0022](docs/adr/0022-es-toolkit-as-a-differential-judge.md)): every disagreement is a defect or a difference the module documents, which the judge reads and checks. A schema of `@yaltaan/schema` is judged the same way against valibot, on generated schemas and inputs ([ADR 0031](docs/adr/0031-judges-of-the-schema.md)).
 
 ### 10.3 Race tests
 
