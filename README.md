@@ -4,7 +4,7 @@
 
 Yaltaan is a native-first TypeScript standard library for applications. Its value is not a long list of functions but one shared model — `Result`, `Issue`, `Path`, schemas that implement [Standard Schema](https://standardschema.dev), and reactive nodes — used the same way by every domain: an error from a schema, a date parser, a relational rule or a server has the same shape and the same `Path`, and one typed `Path` serves reading, writing, diffs, errors and form fields alike. It ships only what the platform lacks, has no runtime dependency, and its contracts (mutation, complexity, errors, import cost) are written down, checked in CI and measured.
 
-**Status: pre-release. Nothing is published and there is no API yet.**
+**Status: pre-release. `@yaltaan/core` has its first, `@experimental` API; nothing is published yet.**
 
 ## Packages
 
@@ -12,7 +12,7 @@ Dependencies flow one way and never back: `core ← temporal`, and `core ← sch
 
 | Package | Status | Purpose |
 |---|---|---|
-| [`@yaltaan/core`](packages/core/README.md) | empty | The shared contracts (`Result`, `Issue`, `Path`, reactive nodes) and the data primitives the platform lacks: objects, collections, strings, numbers, deep equality, diff, async control, bounded caches. |
+| [`@yaltaan/core`](packages/core/README.md) | experimental, unpublished | The shared contracts (`Result`, `Issue`, `Path`, reactive nodes) and the data primitives the platform lacks: objects, collections, strings, numbers, deep equality, diff, async control, bounded caches. |
 | `@yaltaan/temporal` | planned | What Temporal does not provide: intervals, parsing of declared formats, `Date` conversions that require an explicit time zone. Temporal itself comes from the platform or from a polyfill the application installs. |
 | `@yaltaan/schema` | planned | Schemas and reversible codecs implementing Standard Schema v1, usable by any engine that reads it. |
 | `@yaltaan/rules` | planned | Declarative relational rules (required if, all or none, at least n of) that work in any form engine, with or without `@yaltaan/form`. |
