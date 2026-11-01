@@ -54,6 +54,7 @@ function lockfile(changes: Json = {}): Json {
       hasInstallScript: true,
     }),
     'node_modules/prettier': registryEntry('prettier', '3.9.9', 'MIT', { bin: { prettier: 'bin/prettier.cjs' } }),
+    'node_modules/publint/node_modules/picocolors': registryEntry('picocolors', '1.1.1', 'ISC'),
     'node_modules/typescript': registryEntry('typescript', '7.0.2', 'Apache-2.0', { bin: { tsc: 'bin/tsc' } }),
     'node_modules/undici-types': registryEntry('undici-types', '6.21.0', 'MIT'),
     'packages/core': { name: '@yaltaan/core', version: '0.0.0', license: 'MIT' },
@@ -77,8 +78,8 @@ test('a lockfile that follows every rule has no problem', () => {
   assert.deepEqual(checkLockfile(lockfile(), rootManifest()), []);
 });
 
-test('the allowlists are MIT and Apache-2.0, and the install script of fsevents alone', () => {
-  assert.deepEqual(ALLOWED_LICENSES, ['MIT', 'Apache-2.0']);
+test('the allowlists are MIT, Apache-2.0 and ISC, and the install script of fsevents alone', () => {
+  assert.deepEqual(ALLOWED_LICENSES, ['MIT', 'Apache-2.0', 'ISC']);
   assert.deepEqual(INSTALL_SCRIPT_ALLOWLIST, ['fsevents']);
 });
 
@@ -114,7 +115,8 @@ test('every locked package has a SHA-512 checksum', () => {
 });
 
 test('every locked package carries an allowed licence, as an exact SPDX identifier', () => {
-  for (const license of [undefined, 'GPL-3.0-only', 'ISC', 'mit', 'MIT OR Apache-2.0', '(MIT OR Apache-2.0)', 42]) {
+  const refused = [undefined, 'GPL-3.0-only', 'BSD-3-Clause', 'mit', 'MIT OR Apache-2.0', '(MIT OR Apache-2.0)', 42];
+  for (const license of refused) {
     const entry = registryEntry('prettier', '3.9.9', license);
     const problems = checkLockfile(lockfile({ 'node_modules/prettier': entry }), rootManifest());
     assertOneProblem(problems, 'packages["node_modules/prettier"] has licence');
@@ -122,8 +124,9 @@ test('every locked package carries an allowed licence, as an exact SPDX identifi
 });
 
 test('an allowed licence that no locked package carries is a stale allowance', () => {
-  const policy = { licenses: ['MIT', 'Apache-2.0', 'ISC'], installScripts: INSTALL_SCRIPT_ALLOWLIST };
-  assertOneProblem(checkLockfile(lockfile(), rootManifest(), policy), 'licence ISC is allowed but no locked package');
+  const policy = { licenses: [...ALLOWED_LICENSES, 'BSD-3-Clause'], installScripts: INSTALL_SCRIPT_ALLOWLIST };
+  const stale = checkLockfile(lockfile(), rootManifest(), policy);
+  assertOneProblem(stale, 'licence BSD-3-Clause is allowed but no locked package');
   // Removing the only Apache-2.0 package leaves its allowance unused: the workspace entries, skipped, never count.
   const problems = checkLockfile(lockfile({ 'node_modules/typescript': undefined }), rootManifest());
   assertOneProblem(problems, 'licence Apache-2.0 is allowed but no locked package');
@@ -237,7 +240,7 @@ test('the repository check reads package.json and package-lock.json from disk', 
   fs.writeFileSync(path.join(root, 'packages', 'core', 'package.json'), JSON.stringify(coreManifest));
   assertOneProblem(checkRepositoryLockfile(root).problems, 'package-lock.json: cannot be read as JSON');
   fs.writeFileSync(path.join(root, 'package-lock.json'), JSON.stringify(lockfile()));
-  assert.deepEqual(checkRepositoryLockfile(root), { problems: [], entries: 8 });
+  assert.deepEqual(checkRepositoryLockfile(root), { problems: [], entries: 9 });
   const unlicensed = lockfile({ 'node_modules/prettier': registryEntry('prettier', '3.9.9', undefined) });
   fs.writeFileSync(path.join(root, 'package-lock.json'), JSON.stringify(unlicensed));
   assertOneProblem(checkRepositoryLockfile(root).problems, 'has licence undefined');

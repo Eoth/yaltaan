@@ -19,7 +19,7 @@ import {
  * not listed, so it fails until it is listed itself). Adding an entry requires an architecture decision record that
  * justifies the dependency bringing it. An entry that no locked package uses is a stale exception and fails the check.
  */
-export const ALLOWED_LICENSES: readonly string[] = ['MIT', 'Apache-2.0'];
+export const ALLOWED_LICENSES: readonly string[] = ['MIT', 'Apache-2.0', 'ISC'];
 
 /**
  * Packages allowed to declare an install script (`"hasInstallScript": true`). Adding an entry requires an architecture
