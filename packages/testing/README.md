@@ -59,6 +59,14 @@ import { adversarial, fc } from '@yaltaan/testing';
 fc.assert(fc.property(adversarial.unicode.arbitrary, ({ value }) => value.length >= 0));
 ```
 
+## Judging a schema library
+
+`@yaltaan/testing/schema-judge`, a sub-path of its own so that the tests of other packages do not load valibot, holds the judges of [ADR 0031](../../docs/adr/0031-judges-of-the-schema.md):
+
+- `STANDARD_SCHEMA_TABLE` and `readStandard`: every requirement of the Standard Schema interface as a named check, applied to whatever a schema returns through `~standard`; `standardValidate`, the generic consumer of the specification;
+- `shapes` and `schemaCases`: schemas described as data, with inputs near them, valid or broken at every depth;
+- `fromShape` and `ShapeLibrary`: a shape built by any library, `valibotLibrary` for the reference. A comparison hands both to `createJudge`.
+
 ## The reporter
 
 `npm test` runs `node:test` with the reporter of this package (`@yaltaan/testing/reporter`): Node's `spec` report and, when the gate sets `YALTAAN_ADVERSARIAL_RECORDS=1`, one record line per adversarial category test that finished. `scripts/check-adversarial.ts` reads those lines.

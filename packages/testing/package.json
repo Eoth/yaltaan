@@ -8,7 +8,8 @@
   "sideEffects": false,
   "exports": {
     ".": "./src/index.ts",
-    "./reporter": "./src/reporter.ts"
+    "./reporter": "./src/reporter.ts",
+    "./schema-judge": "./src/schema-judge.ts"
   },
   "files": [
     "src/",
