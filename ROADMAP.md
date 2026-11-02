@@ -27,13 +27,13 @@ Outillage de développement (empreinte installée, à ne laisser croître que pa
 
 Une version utilisable d'abord (décision du propriétaire du 2026-10-23, §3) : la 0.1.0 livre `@yaltaan/core`, les utilitaires que les équipes recodent, sur les contrats de §5 d'`ARCHITECTURE.md` ; la 0.2.0 ajoute schéma et règles, validés sur le formulaire pilote ; la 0.3.0 le formulaire et Angular. L'outillage qui reste attend d'être utile. Les contrats se gèlent après le pilote (T2.7), pas avant. Une itération peut prendre deux tickets S ou M d'un même domaine.
 
-**Avancement** : 24 étapes closes sur 88 ; prochaine : T0.23.
+**Avancement** : 24 étapes closes sur 89 ; prochaine : T0.23.
 
 | # | Lot | Tickets, dans l'ordre | Avancement | Sortie |
 |---|---|---|---|---|
 | 1 | 0 — Outillage | T0.1, T0.2, T0.7, T0.6, T0.5, T0.3, T0.4 a, b | 8 / 8 clos, terminé | Paquets vides qui passent toute la CI ; taille, coût des types, instructions et temps mesurés. |
 | 2 | 0.1.0 — `@yaltaan/core` utilisable | T1.1, T1.3, T1.2, T1.5, T3.1 a, b, T0.17, T3.2, T0.20 a, T3.3 a, b, T3.5, T3.4, T0.16, T0.10, T0.23 | 15 / 16 clos ; prochain : T0.23 | `Result`, `Issue`, `Path`, `equal`, objets et accès par chemin, collections, nombres, chaînes ; version 0.1.0 étiquetée, archive vérifiée, publiée sur npm dès que l'organisation `@yaltaan` est réservée. |
-| 3 | 0.2.0 — Schéma et règles sur le pilote | T2.1 a, b, T2.8, T2.2, T2.3, T1.4, T0.20 b | 1 / 7 clos ; prochain : T2.1 a | Schéma Standard Schema minimal et règles relationnelles, scénarios du pilote verts sans `form`. |
+| 3 | 0.2.0 — Schéma et règles sur le pilote | T2.1 a, b, T2.8, T2.2, T2.9, T2.3, T1.4, T0.20 b | 1 / 8 clos ; prochain : T2.1 a | Schéma Standard Schema minimal et règles relationnelles, scénarios du pilote verts sans `form`. |
 | 4 | 0.3.0 — Formulaire et Angular | T0.14, T1.6 a, T1.6 b, T2.4 a, b, c, T2.5, T2.6, T2.7 | 0 / 9 clos ; prochain : T0.14 | Pilote de bout en bout dans Angular, mesures, **ADR go/no-go de `form`**, gel des contrats. |
 | 5 | Outillage reporté | T0.18, T0.19, T0.21, T0.22, T0.24, T0.8, T0.9, T0.13, T0.15 | 0 / 9 clos ; prochain : T0.18 | Selon le besoin réel des versions précédentes. |
 | 6 | 3 — Données (suite) | T3.3 c, T3.10, T3.11, T3.12 a, b, T3.6 a, b, c, T3.7 a, b, T3.8, T3.9 | 0 / 12 clos ; prochain : T3.3 c | Modules `@experimental`. |
@@ -76,6 +76,8 @@ Une décision réservée au propriétaire (nom, licence, API publique, contrat t
 | Publication (ADR 0029) | Comment publier sans jeton, prouver le workflow sans rien publier, et juger l'archive réelle ? | **Décidé le 2026-11-01 (choix technique interne)** : une version pour tous les paquets publiés, étiquette annotée `v<version>` sur un commit de `main` ; `release-prepare.ts` prépare le commit (versions, `private` retiré, section du CHANGELOG datée) ; `release.ts` juge l'étiquette, les manifestes (`repository` comparé au dépôt qui publie, `publishConfig` public avec provenance) et le CHANGELOG, construit deux fois dans deux dossiers et compare les archives à l'octet, inspecte chaque archive par ce que les cibles d'`exports` atteignent (JavaScript par l'analyseur de Rollup, déclarations par TypeScript 7), écrit un SBOM CycloneDX par `npm sbom`, installe les archives hors ligne et compile chaque sous-chemin sous TypeScript 7 et 6.0 (`nodenext`, `bundler`) ; répétition (`release-rehearsal.sh`, version `<mineure suivante>-rehearsal.0`) dans la porte et à chaque poussée ; décision de publier par `release-verdict.sh` (seule une étiquette poussée d'une version qui n'est pas une répétition, table complète des événements testée) ; publication par trusted publishing (OIDC), seul job avec `id-token: write`, environnement `npm`, second verrou sur l'événement, sommes SHA-512 de chaque fichier vérifiées, aucun code du dépôt exécuté ; **publint 0.3.25** en dépendance de développement (7 entrées de verrou, 254 200 octets, MIT et ISC, ISC admis par le contrôle du verrou), appelé sur les octets de l'archive. Écartés : publication à la main (jeton, pas de provenance) ; changesets, semantic-release, release-please (modèle de version imposé, dizaines de paquets, aucune inspection de l'archive). |
 | arethetypeswrong (ADR 0030) | Faut-il installer `@arethetypeswrong/cli` pour juger les types publiés ? | **Recommandation, à valider** : non. 56 entrées de verrou, 34 324 474 octets (`node_modules` +36 %), un TypeScript 5.6.1-rc épinglé, hors des versions prises en charge (6.0 et 7.x), qui dit `require` impossible là où Node ≥ 22.12 le fait. À la place : les archives installées dans un projet vide, chaque sous-chemin compilé par TypeScript 7.0.2 et 6.0.3 sous `nodenext` et `bundler`, chargé par Node par `import` et par `require` (déjà en place, aucun paquet ajouté). La ligne d'`ARCHITECTURE.md` §11 qui promet arethetypeswrong change selon la réponse. |
 | Juges du schéma (ADR 0031) | Quels juges extérieurs pour `@yaltaan/schema`, puisque Standard Schema ne publie aucune suite de tests exécutable ? | **Décidé le 2026-11-01 (choix technique interne)** : `@standard-schema/spec` 1.1.0 en dépendance de développement (types seuls, 22 634 octets, MIT, sans dépendance, jamais importé par un fichier publié), pour comparer nos interfaces recopiées, dans les deux sens ; une table de 13 exigences nommées tirée de l'interface (`STANDARD_SCHEMA_TABLE`), appliquée à tout ce qu'un schéma renvoie par `~standard` ; le consommateur générique de la spécification recopié ; valibot 1.5.0, déjà installé, en juge différentiel sur des schémas décrits en données et des entrées générées (même verdict, même sortie, mêmes chemins d'issue, lus par `~standard` des deux côtés), par `createJudge` d'ADR 0022. Sous-chemin `@yaltaan/testing/schema-judge`, pour qu'un test de `core` ne charge pas valibot. Écartés : ne rien faire ; `@standard-schema/utils` (un paquet pour lire un chemin) ; Zod ou ArkType (un paquet de plus pour les mêmes questions, reportés à T5.7). |
+| Paquet `@yaltaan/schema` (ADR 0032) | Que dit le message d'une issue Standard Schema, qu'est-ce qu'un objet, et avec quoi le scénario de connexion borne-t-il un texte sans raffinements ? | **Décidé le 2026-11-01 par délégation du propriétaire (choix de conception)** : API en fonctions (`string`, `number`, `literal`, `optional`, `nullable`, `array`, `object`, `discriminatedUnion`, `parse`, `withMessages`), bornes en options du schéma qu'elles bornent (`minLength`, `maxLength`, `pattern`, `min`, `max`, `integer`, les noms des attributs HTML) ; le message d'une issue est son code, et `withMessages(schema, format)` donne les mots de l'application au schéma qu'un moteur lit ; `object` ne lit que les clés propres d'un objet simple (une classe, un tableau, une `Map` : `schema.invalid_type`) ; `number` ne prend que des nombres finis ; un `pattern` n'est pas testé au-delà de `maxLength` ; `__proto__`, `constructor`, `prototype` ne se déclarent pas (`TypeError`). Écartés : un `pipe` dès maintenant (T5.1) ; un message anglais par défaut (§5.2 : la librairie n'écrit aucun message) ; `libraryOptions.format` (les moteurs n'en passent pas) ; la lecture par `in` de valibot (un prototype pollué satisferait un champ). |
+| `@yaltaan/schema` dans la 0.1.0 | La publication prend tous les paquets non internes : `v0.1.0` emporterait `@yaltaan/schema`, prévu en 0.2.0, et échouerait à mi-chemin si son nom n'existe pas sur npm. Le publier aussi ? | **Recommandation, à valider** : oui si T2.1 b et T2.3 ne sont pas finis quand les recherches de marque aboutissent, en `@experimental` comme `core` : réserver un nom de plus ne coûte qu'une commande, aucune mécanique de retenue à écrire ni à tester. Si non : un ticket retient le paquet (champ de manifeste lu par `release-prepare.ts` et `release.ts`). Publication irréversible : rien ne part sans le propriétaire (T0.23). |
 
 ## 4. Non-objectifs (exclusions motivées)
 
@@ -185,7 +187,7 @@ Une décision réservée au propriétaire (nom, licence, API publique, contrat t
 
 #### T0.23 — Première publication : 0.1.0 sur npm
 - **Pourquoi** : la 0.1.0 n'existe pour un utilisateur qu'installable, avec sa provenance ; le workflow de T0.10 n'a encore publié que des répétitions.
-- **Faire** : quand le propriétaire a fait ses recherches de marque, réservé l'organisation npm `yaltaan`, créé le nom de chaque paquet par une première publication à la main (npm ne configure un trusted publisher que pour un paquet qui existe : version de réservation sans code recommandée, ADR 0029), configuré un trusted publisher par paquet (ce dépôt, `release.yml`, environnement `npm`) et l'environnement GitHub `npm` avec son relecteur : `node scripts/release-prepare.ts 0.1.0`, la mention « Not published yet » retirée de `packages/core/README.md` (elle partirait dans l'archive), commit, étiquette `v0.1.0`, poussée ; lire le workflow ; vérifier dans un projet vide `npm install @yaltaan/core` puis `npm audit signatures` (provenance vérifiée), et la release GitHub (archive, sommes, SBOM).
+- **Faire** : quand le propriétaire a fait ses recherches de marque, réservé l'organisation npm `yaltaan`, créé le nom de chaque paquet (`@yaltaan/core` et, depuis T2.2, `@yaltaan/schema` : §3) par une première publication à la main (npm ne configure un trusted publisher que pour un paquet qui existe : version de réservation sans code recommandée, ADR 0029), configuré un trusted publisher par paquet (ce dépôt, `release.yml`, environnement `npm`) et l'environnement GitHub `npm` avec son relecteur : `node scripts/release-prepare.ts 0.1.0`, la mention « Not published yet » retirée de `packages/core/README.md` et de `packages/schema/README.md` (elle partirait dans l'archive), `@since` de `@yaltaan/schema` et la colonne `Since` de son registre passés à 0.1 si le paquet part dans cette version, commit, étiquette `v0.1.0`, poussée ; lire le workflow ; vérifier dans un projet vide `npm install @yaltaan/core` puis `npm audit signatures` (provenance vérifiée), et la release GitHub (archive, sommes, SBOM).
 - **Où** : `package.json` des paquets, `CHANGELOG.md`, `.github/workflows/release.yml`.
 - **Accepté si** : `npm view @yaltaan/core@0.1.0 dist.attestations` donne une provenance qui nomme ce dépôt et ce workflow ; le SHA-512 de l'archive publiée est celui d'une répétition du même commit sur le poste ; aucun jeton créé.
 - **Taille** S · **Prio** P0 · **Dépend de** T0.10, recherches de marque, organisation npm et environnement `npm` (propriétaire)
@@ -222,19 +224,19 @@ Une décision réservée au propriétaire (nom, licence, API publique, contrat t
 - **Accepté si** : (a) chaque règle et chaque issue d'un scénario cite un champ du pilote par son chemin, scénarios relus par le propriétaire ; (b) chaque scénario vu rouge, puis vert avec T2.2 et T2.3.
 - **Taille** M → (a) S, (b) S · **Prio** P0 · **Dépend de** (b) T2.2
 
-#### T2.2 — Schéma minimal conforme Standard Schema v1
-- **Pourquoi** : premier domaine branché sur `Result`, `Issue` et `Path`, et porte d'entrée vers les moteurs tiers.
-- **Faire** : `object`, `string`, `number`, `optional`, `nullable`, `array`, `literal`, union discriminée ; API en fonctions (tree-shaking) ; interface `~standard` (types recopiés, aucune dépendance) ; clés inconnues selon §3 ; clé absente, `undefined` et `null` distincts ; validation qui ne mute jamais l'entrée.
-- **Où** : `packages/schema/`.
-- **Accepté si** : un schéma consommé par `validateStandardSchema` d'Angular et par TanStack Form sans pont ; invariants d'`ARCHITECTURE.md` §7.9 en propriétés fast-check (déterminisme ; une valeur valide relue par son schéma redonne la même valeur, et `parse` est idempotent), plutôt qu'en exemples ; budget du schéma de connexion tenu (scénario `yaltaan/schema-login`, 1 500 o, ADR 0010).
-- **Taille** M · **Prio** P0 · **Dépend de** T1.1, T1.2, T1.3
-
 #### T2.3 — Cinq règles relationnelles
 - **Pourquoi** : le différenciateur : des règles déclaratives qui fonctionnent dans n'importe quel moteur de formulaire (`ARCHITECTURE.md` §7.10).
-- **Faire** : les cinq règles que le pilote exige parmi `requiredIf`, `allOrNone`, `atLeast`, `atMost`, `exactly`, `mutuallyExclusive`, `unique`, `ordered` ; chaque règle déclare ses dépendances et ses cibles ; lectures réelles tracées et comparées en mode test ; `requiredPaths(rules, values)` dérivé ; chaque règle utilisable comme raffinement Standard Schema.
+- **Faire** : (si `rules` ne déclare pas `core`, `writeSbom` de `scripts/release.ts` doit aussi déballer les dépendances de ses dépendances, et `checkSbom` les admettre) ; les cinq règles que le pilote exige parmi `requiredIf`, `allOrNone`, `atLeast`, `atMost`, `exactly`, `mutuallyExclusive`, `unique`, `ordered` ; chaque règle déclare ses dépendances et ses cibles ; lectures réelles tracées et comparées en mode test ; `requiredPaths(rules, values)` dérivé ; chaque règle utilisable comme raffinement Standard Schema.
 - **Où** : `packages/rules/`.
 - **Accepté si** : une règle qui lit hors de ses dépendances déclarées échoue en mode test ; `atLeast` monotone (propriété) ; les règles fonctionnent dans Angular Signal Forms sans `form`.
 - **Taille** M · **Prio** P0 · **Dépend de** T2.2
+
+#### T2.9 — Coût des types de l'inférence du schéma
+- **Pourquoi** : `InferOutput` d'un `object` est le premier type public qui se calcule en profondeur chez l'utilisateur, et aucun usage de `bench/types/usages/` ne le mesure : la porte dit « no usage of a public type yet », alors qu'un type parfait qui ralentit un gros projet est un défaut (`ARCHITECTURE.md` §8).
+- **Faire** : un usage `schema-object` (objet imbriqué, tableau, optionnels, union discriminée, comme le pilote), ses plafonds par compilateur dans `bench/types/ceilings.tsv` par un ADR qui les mesure ; le temps de l'étape relevé contre le seuil de T0.15.
+- **Où** : `bench/types/`, `docs/adr/`.
+- **Accepté si** : l'étape « type cost » compte l'usage sous TypeScript 7 et 6.0 ; un `Flatten` retiré ou une récursion ajoutée bouge un compte et fait échouer la porte.
+- **Taille** S · **Prio** P1 · **Dépend de** T2.2
 
 #### T2.4 — Formulaire minimal
 - **Pourquoi** : mesurer ce qu'un modèle de formulaire propre apporte face à Signal Forms et TanStack Form avant de s'y engager.
@@ -391,7 +393,7 @@ Une décision réservée au propriétaire (nom, licence, API publique, contrat t
 
 #### T5.5 — Limites de sécurité et fuzz du schéma
 - **Pourquoi** : un schéma valide des entrées non fiables.
-- **Faire** : options de lecture à défauts finis (profondeur 64, 10 000 clés, 1 000 000 éléments : hypothèses à calibrer) ; fuzz continu des parseurs.
+- **Faire** : options de lecture à défauts finis (profondeur 64, 10 000 clés, 1 000 000 éléments, 1 000 issues : hypothèses à calibrer ; les deux dernières existent en constantes depuis T2.2, ADR 0032) ; fuzz continu des parseurs.
 - **Où** : `packages/schema/`.
 - **Accepté si** : chaque limite atteinte donne une issue à code stable, sans exception ni temps non borné.
 - **Taille** S · **Prio** P1 · **Dépend de** T5.1
@@ -406,7 +408,7 @@ Une décision réservée au propriétaire (nom, licence, API publique, contrat t
 #### T5.7 — Interopérabilité Standard Schema vérifiée
 - **Pourquoi** : « pas de verrouillage » se prouve dans les deux sens.
 - **Faire** : `rules` et `form` acceptent des schémas zod, valibot et arktype ; nos schémas validés par au moins deux moteurs tiers (TanStack Form, résolveurs de react-hook-form, Angular Signal Forms).
-- **Où** : `tests/interop/` (dépendances de test, ADR).
+- **Où** : `tests/interop/` (dépendances de test, ADR ; `run.sh` y lit déjà nos schémas dans Angular Signal Forms et TanStack Form, hors de la porte, projet jetable de 85 Mo : T2.2).
 - **Accepté si** : matrice d'interopérabilité verte en CI.
 - **Taille** S · **Prio** P1 · **Dépend de** T5.1
 

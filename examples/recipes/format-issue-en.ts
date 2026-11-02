@@ -5,6 +5,13 @@ import type { Issue, IssueFormatter } from '@yaltaan/core/issue';
 
 type Params = Readonly<Record<string, unknown>>;
 
+const EXPECTED: Readonly<Record<string, string>> = {
+  string: 'text',
+  number: 'a number',
+  array: 'a list',
+  object: 'a group of fields',
+};
+
 // One function per code. An own-property lookup (Object.hasOwn) keeps a code such as `toString` or `__proto__`
 // from reaching a function of Object.prototype.
 const MESSAGES: Readonly<Record<string, (params: Params) => string>> = {
@@ -24,6 +31,17 @@ const MESSAGES: Readonly<Record<string, (params: Params) => string>> = {
   'number.inexact': (params) =>
     `This number has ${String(params['digits'])} significant digits, more than can be kept: shorten it.`,
   'number.not_integer': () => 'This must be a whole number.',
+  'schema.invalid_type': (params) => `This must be ${EXPECTED[String(params['expected'])] ?? 'something else'}.`,
+  'schema.invalid_value': () => 'This value is not one of the choices.',
+  'schema.missing': () => 'This is required.',
+  'schema.unknown_key': () => 'This field is not expected.',
+  'schema.too_short': (params) => `This is too short: at least ${String(params['minimum'])} characters.`,
+  'schema.too_long': (params) => `This is too long: at most ${String(params['maximum'])} characters.`,
+  'schema.too_small': (params) => `This is too small: at least ${String(params['minimum'])}.`,
+  'schema.too_large': (params) => `This is too large: at most ${String(params['maximum'])}.`,
+  'schema.not_integer': () => 'This must be a whole number.',
+  'schema.invalid_format': () => 'This does not have the expected format.',
+  'schema.too_many_issues': () => 'This has too many errors to list them all.',
   'issue.external': (params) => String(params['message']),
 };
 

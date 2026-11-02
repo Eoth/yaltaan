@@ -1,10 +1,17 @@
 // Validating a login form, an email and a password of at least eight characters: a predicate written with the
-// platform against valibot's schema, the reference of the size harness for the same form. Both sides use valibot's
-// email pattern, so they accept the same inputs.
+// platform against valibot's schema, the reference of the size harness for the same form, and Yaltaan's. All sides use
+// valibot's email pattern, so they accept the same inputs.
+import { object, parse, string } from '@yaltaan/schema';
 import * as v from 'valibot';
 import { seededRandom, word, type PerfScenario } from '../scenario.ts';
 
 const LoginSchema = v.object({ email: v.pipe(v.string(), v.email()), password: v.pipe(v.string(), v.minLength(8)) });
+
+const YaltaanLogin = object({
+  // Longer than the longest email of the data sets: the bound must not change which inputs are accepted.
+  email: string({ pattern: v.EMAIL_REGEX, maxLength: 100_000 }),
+  password: string({ minLength: 8 }),
+});
 
 function nativeIsLogin(input: unknown): boolean {
   if (typeof input !== 'object' || input === null) {
@@ -72,6 +79,10 @@ const scenario: PerfScenario = {
       const input = { email: 'ada.lovelace@example.com', password: 'analytical' };
       return () => v.safeParse(LoginSchema, input).success;
     },
+    'yaltaan/micro': () => {
+      const input = { email: 'ada.lovelace@example.com', password: 'analytical' };
+      return () => parse(YaltaanLogin, input).ok;
+    },
     'native/realistic': () => {
       const inputs = logins(4, 100, 8);
       return () => inputs.map(nativeIsLogin);
@@ -80,6 +91,10 @@ const scenario: PerfScenario = {
       const inputs = logins(4, 100, 8);
       return () => inputs.map((input) => v.safeParse(LoginSchema, input).success);
     },
+    'yaltaan/realistic': () => {
+      const inputs = logins(4, 100, 8);
+      return () => inputs.map((input) => parse(YaltaanLogin, input).ok);
+    },
     'native/pathological': () => {
       const inputs = hostileLogins();
       return () => inputs.map(nativeIsLogin);
@@ -87,6 +102,10 @@ const scenario: PerfScenario = {
     'valibot/pathological': () => {
       const inputs = hostileLogins();
       return () => inputs.map((input) => v.safeParse(LoginSchema, input).success);
+    },
+    'yaltaan/pathological': () => {
+      const inputs = hostileLogins();
+      return () => inputs.map((input) => parse(YaltaanLogin, input).ok);
     },
   },
 };

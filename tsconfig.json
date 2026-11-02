@@ -10,6 +10,7 @@
     "bench/perf/**/*.ts",
     "examples/**/*.ts",
     "packages/testing/src/**/*.ts",
-    "packages/core/src/**/*.ts"
+    "packages/core/src/**/*.ts",
+    "packages/schema/src/**/*.ts"
   ]
 }

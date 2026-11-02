@@ -26,6 +26,12 @@ flowchart LR
 | [Reading and writing by path](access.md) | `@yaltaan/core/object` | Read a place of a value by a `Path`, or get a copy with that place changed, removed or created, sharing the rest and telling a missing field from an `undefined` one. | `a?.b?.[i]` written in the code, a spread per level, `lodash.get`/`set` that change their argument and leave holes. |
 | [Issues](issue.md) | `@yaltaan/core/issue` | One error shape for everything, your own messages in your own languages, and the bridge to Standard Schema form engines. | One error format per library, and the glue code between them. |
 
+## Available in `@yaltaan/schema`
+
+| Page | Import | What you get | Instead of |
+|---|---|---|---|
+| [Schemas](schema.md) | `@yaltaan/schema` | Read what comes from outside into a typed value or every issue found, with a schema any Standard Schema form engine takes as it is. | A test per field and a cast, a validation library with its own error format. |
+
 Every export is `@experimental` until the contracts are frozen: it may change in a minor version, and the [changelog](../../../CHANGELOG.md) says so in bold.
 
 ## Principles you can rely on

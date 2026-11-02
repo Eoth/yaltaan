@@ -155,6 +155,20 @@ test('every file a package needs, taken out of its tarball, is reported', () => 
   }
 });
 
+test('a package may import the dependencies its manifest declares, and nothing else', () => {
+  const schema = new Map(packed.get('packages/schema'));
+  const dir = 'packages/schema';
+  assert.deepEqual(inspectFiles(schema, dir, licence), []);
+  const manifest = JSON.parse(schema.get('package.json')!.toString('utf8')) as Record<string, unknown>;
+  delete manifest['dependencies'];
+  schema.set('package.json', Buffer.from(JSON.stringify(manifest)));
+  const problems = inspectFiles(schema, dir, licence);
+  assert.ok(
+    problems.some((problem) => problem.includes("Cannot find module '@yaltaan/core/result'")),
+    problems.join('\n'),
+  );
+});
+
 test('the targets of every condition of "exports" and of the other entry fields are followed', () => {
   const manifest = {
     exports: { '.': { types: './dist/index.d.ts', default: './dist/index.js' }, './blocked': null, './a': './a.js' },
