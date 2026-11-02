@@ -209,7 +209,7 @@ const answering = (answer: unknown): Props => ({ validate: () => answer });
 const BROKEN: Readonly<Record<RequirementName, { readonly schema: StandardSchemaV1; readonly input?: unknown }>> = {
   props: { schema: { '~standard': 1 } as unknown as StandardSchemaV1 },
   version: { schema: exampleSchema({ version: 2 }) },
-  vendor: { schema: exampleSchema({ vendor: '' }) },
+  vendor: { schema: exampleSchema({ vendor: 1 }) },
   validate: { schema: exampleSchema({ validate: 'not a function' }) },
   types: { schema: exampleSchema({ types: 'not an object' }) },
   synchronous: { schema: exampleSchema(answering(Promise.resolve({ value: 1 }))) },

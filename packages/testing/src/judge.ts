@@ -18,8 +18,9 @@
 // difference without `expected` holds wherever its predicate says, so a predicate drawn too wide hides
 // disagreements inside it.
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
+import { join } from 'node:path';
 import { after, test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { isDeepStrictEqual } from 'node:util';
@@ -97,8 +98,13 @@ export function documentedDifferences(source: string, reference: string): Readon
   return pairs;
 }
 
+// Through the folders Node would look in: a package's `exports` may not list its own manifest, as valibot's does not.
 function installedVersion(reference: string, from: URL): string {
-  const manifest = createRequire(from).resolve(`${reference}/package.json`);
+  const folders = createRequire(from).resolve.paths(reference) ?? [];
+  const manifest = folders.map((folder) => join(folder, reference, 'package.json')).find((file) => existsSync(file));
+  if (manifest === undefined) {
+    throw new Error(`${reference} is not installed where ${fileURLToPath(from)} can import it`);
+  }
   return (JSON.parse(readFileSync(manifest, 'utf8')) as { version: string }).version;
 }
 

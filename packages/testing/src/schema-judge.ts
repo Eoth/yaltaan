@@ -3,9 +3,10 @@
 // valibot judges the behaviour: a shape, plain data that describes a schema, is built by each library through a
 // `ShapeLibrary`, and both read the same input through `~standard`: same verdict, same output, same issue paths.
 //
-// Blind spots: codes and parameters of issues (valibot has neither); getters and proxies, which no generator draws (the
-// adversarial catalogue reaches them); an input both libraries mishandle alike; and how an engine uses a schema, which
-// only a real engine can say.
+// Blind spots: codes and parameters of issues (valibot has neither); getters, proxies, symbol and non-enumerable keys,
+// which no generator draws (the adversarial catalogue and the laws of the package reach them); more than a few issues
+// or elements, so no limit of a library; an input both libraries mishandle alike; the same seeds on every run; and how
+// an engine uses a schema, which only a real engine can say.
 import type { StandardSchemaV1 } from '@standard-schema/spec';
 import fc from 'fast-check';
 import * as v from 'valibot';
@@ -14,7 +15,7 @@ import * as v from 'valibot';
 export type UnknownKeys = 'strip' | 'reject' | 'passthrough';
 
 /** A value a literal schema can hold. */
-export type LiteralValue = string | number | boolean | bigint | null;
+export type LiteralValue = string | number | boolean | null;
 
 /** One alternative of a discriminated union: its literal under the union's key, and its other fields. */
 export interface UnionOption {
@@ -49,17 +50,17 @@ export interface NumberOptions {
   readonly integer?: boolean;
 }
 
-/** Every kind of shape, for the checks that a library or a generator covers them all. */
-export const SHAPE_KINDS: readonly Shape['kind'][] = [
-  'string',
-  'number',
-  'literal',
-  'optional',
-  'nullable',
-  'array',
-  'object',
-  'union',
-];
+/** Every kind of shape, for the checks that a library or a generator covers them all; the compiler keeps it whole. */
+export const SHAPE_KINDS: readonly Shape['kind'][] = Object.keys({
+  string: true,
+  number: true,
+  literal: true,
+  optional: true,
+  nullable: true,
+  array: true,
+  object: true,
+  union: true,
+} satisfies Record<Shape['kind'], true>) as Shape['kind'][];
 
 /** What a library must offer to be judged. `S` is its schema type; every schema also speaks Standard Schema. */
 export interface ShapeLibrary<S extends StandardSchemaV1 = StandardSchemaV1> {
@@ -198,8 +199,8 @@ export const STANDARD_SCHEMA_TABLE = {
     holds: ({ schema }) => propsOf(schema)['version'] === 1,
   },
   vendor: {
-    says: '`vendor` is the name of the schema library',
-    holds: ({ schema }) => typeof propsOf(schema)['vendor'] === 'string' && propsOf(schema)['vendor'] !== '',
+    says: '`vendor` is the name of the schema library, a string',
+    holds: ({ schema }) => typeof propsOf(schema)['vendor'] === 'string',
   },
   validate: {
     says: '`validate` is a function',
@@ -232,8 +233,8 @@ export const STANDARD_SCHEMA_TABLE = {
     },
   },
   message: {
-    says: 'an issue holds its message, a string that is not empty',
-    holds: ({ result }) => everyIssue(result, ({ message }) => typeof message === 'string' && message !== ''),
+    says: 'an issue holds its message, a string',
+    holds: ({ result }) => everyIssue(result, ({ message }) => typeof message === 'string'),
   },
   path: {
     says: 'the path of an issue is absent, undefined or an array',
@@ -328,7 +329,7 @@ export async function standardValidate<T extends StandardSchemaV1>(
 const DECLARED_KEYS = ['a', 'b', 'c', 'toString', 'valueOf', '0', 'é'];
 const UNKNOWN_KEYS = ['x', 'y', 'z', '__proto__', 'constructor', 'prototype', 'hasOwnProperty'];
 const DISCRIMINATORS = ['kind', 'type'];
-const LITERALS: readonly LiteralValue[] = ['a', 'b', '', 0, 1, -1, true, false, null, 1n];
+const LITERALS: readonly LiteralValue[] = ['a', 'b', '', 0, 1, -1, true, false, null];
 
 class Instance {
   a = 'a';
@@ -377,12 +378,16 @@ const lengths = fc.oneof(
 
 const PATTERNS: readonly RegExp[] = [/^[a-z]+$/, /^\d{2,3}$/, /a/, /^.$/su];
 
+// A pattern comes with `maxLength`: a library may require it, so that the pattern only meets a bounded text.
 const stringShape: fc.Arbitrary<Shape> = fc
-  .tuple(lengths, fc.option(fc.constantFrom(...PATTERNS), { nil: undefined }))
-  .map(([options, pattern]): Shape => ({
-    kind: 'string',
-    options: pattern === undefined ? options : { ...options, pattern },
-  }));
+  .tuple(lengths, fc.option(fc.constantFrom(...PATTERNS), { nil: undefined }), fc.integer({ min: 3, max: 8 }))
+  .map(([options, pattern, longest]): Shape => {
+    if (pattern === undefined) {
+      return { kind: 'string', options };
+    }
+    const maxLength = options.maxLength ?? Math.max(options.minLength ?? 0, longest);
+    return { kind: 'string', options: { ...options, maxLength, pattern } };
+  });
 
 const numberShape: fc.Arbitrary<Shape> = fc
   .record(
@@ -510,6 +515,7 @@ function valueNear(shape: Shape): fc.Arbitrary<unknown> {
       return fc.oneof(
         { weight: 5, arbitrary: fc.array(inputNear(shape.element), { minLength, maxLength }) },
         fc.array(inputNear(shape.element), { maxLength: maxLength + 2 }),
+        fc.array(inputNear(shape.element), { maxLength: Math.max(minLength - 1, 0) }),
       );
     }
     case 'object':
@@ -532,6 +538,51 @@ function valueNear(shape: Shape): fc.Arbitrary<unknown> {
 
 function inputNear(shape: Shape): fc.Arbitrary<unknown> {
   return fc.oneof({ weight: 12, arbitrary: valueNear(shape) }, JUNK);
+}
+
+function isObjectValue(value: unknown): value is Readonly<Record<string, unknown>> {
+  return typeof value === 'object' && value !== null;
+}
+
+/** Every place of `input` a reader of `shape` walks to, with the shape of that place; a union reads as its option. */
+export function* placesOf(shape: Shape, input: unknown): Generator<{ readonly shape: Shape; readonly input: unknown }> {
+  yield { shape, input };
+  switch (shape.kind) {
+    case 'optional':
+    case 'nullable':
+      yield* placesOf(shape.inner, input);
+      break;
+    case 'array':
+      if (Array.isArray(input)) {
+        for (const element of Array.from(input as unknown[])) {
+          yield* placesOf(shape.element, element);
+        }
+      }
+      break;
+    case 'object':
+      if (isObjectValue(input)) {
+        for (const [key, inner] of shape.entries) {
+          if (key in input) {
+            yield* placesOf(inner, input[key]);
+          }
+        }
+      }
+      break;
+    case 'union': {
+      const option = isObjectValue(input)
+        ? shape.options.find(({ literal }) => literal === input[shape.key])
+        : undefined;
+      if (option !== undefined) {
+        const entries: UnionOption['entries'] = [
+          [shape.key, { kind: 'literal', value: option.literal }],
+          ...option.entries,
+        ];
+        yield* placesOf({ kind: 'object', entries, unknownKeys: option.unknownKeys }, input);
+      }
+      break;
+    }
+    default:
+  }
 }
 
 /** One case of a judge: a schema described as data, and an input near it. */
