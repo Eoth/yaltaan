@@ -384,6 +384,33 @@ test('truncate keeps whole graphemes across the windows the segmenter reads, how
   );
 });
 
+test('truncate keeps a grapheme whose last character a window cuts in two', () => {
+  // Every code point of the supplementary planes that joins the character before it, from the engine's own Unicode
+  // tables, right after a letter that puts its surrogate pair across the edge of a window: the segmenter would read a
+  // lone half, and the letter would end a grapheme it does not end.
+  const joining = /^[\p{M}\p{Emoji_Modifier}]$/u;
+  const joiners: string[] = [];
+  for (let code = 0x10000; code <= 0x1ffff; code += 1) {
+    const character = String.fromCodePoint(code);
+    if (joining.test(character)) {
+      joiners.push(character);
+    }
+  }
+  assert.ok(joiners.length > 500, `${joiners.length} code points`);
+  for (const joiner of joiners) {
+    // The window ends after 64 code units, the second after 192 more from where the first stopped.
+    for (const padding of [63, 190]) {
+      const value = '\u0436'.repeat(padding) + joiner;
+      const count = endsOf(value).length;
+      if (count === padding) {
+        assert.equal(truncate(value, { maxGraphemes: count }), value, `U+${joiner.codePointAt(0)!.toString(16)}`);
+      }
+    }
+  }
+  const modifier = '\u0436'.repeat(445) + '\u{1F3FD}';
+  assert.equal(truncate(modifier, { maxGraphemes: 445 }), modifier);
+});
+
 test('truncate walks the graphemes it keeps, not the rest of the text', () => {
   // Cyrillic leaves the walk by code unit at once: the segmenter takes over from the first grapheme.
   for (const unit of ['a', '\u0436', '\u{1F600}']) {

@@ -100,7 +100,12 @@ function* ends(text: string): Generator<number, void> {
     index = end;
   }
   for (let size = 64; index < text.length; size *= 2) {
-    const stop = Math.min(text.length, index + size);
+    let stop = Math.min(text.length, index + size);
+    // Never between the halves of a surrogate pair: the segmenter would read a lone half, which joins nothing, and the
+    // character before it would end a grapheme that the other half, an accent or a skin tone, goes on.
+    if (stop < text.length && (text.charCodeAt(stop - 1) & 0xfc00) === 0xd800) {
+      stop += 1;
+    }
     const from = index;
     for (const { index: start, segment } of segments(text.slice(from, stop))) {
       if (from + start + segment.length === stop && stop < text.length) {
