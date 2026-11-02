@@ -3,3 +3,5 @@
 # exactOptionalPropertyTypes. A decision record sets each ceiling, and only a new one changes it; the basis is the
 # measurement or the reference it was calibrated against.
 usage	compiler	instantiations	basis
+schema-object	ts7	16000	ADR 0033: measured 14466, valibot on the same shape 58622
+schema-object	ts6	12700	ADR 0033: measured 11544, valibot on the same shape 30364

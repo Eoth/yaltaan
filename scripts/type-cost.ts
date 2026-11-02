@@ -5,11 +5,14 @@
 //   so any count that moves fails until `--update` records it, and the commit that does explains the difference;
 // - that each usage of bench/types/usages/ adds at most its ceiling of bench/types/ceilings.tsv to a fixture of
 //   FIXTURE_FILES files, under each compiler (the two compilers count differently);
-// - that the reference project with every usage checks at most TIME_BUDGET slower than without, under TypeScript 7,
-//   on the medians of TIMED_PASSES interleaved passes. A difference within the spread of the passes without the
-//   usages is noise, never a verdict: one pass varies by more than the budget on a loaded machine.
-// Check time under 6.0 and memory are printed, not judged. Projects are written under node_modules/.cache/, where
-// module resolution finds the workspace packages, and removed afterwards.
+// - that the reference project with one usage in every file checks at most TIME_BUDGET slower than without, for each
+//   usage alone, under TypeScript 7, on the medians of TIMED_PASSES interleaved passes: one ratio over all the usages
+//   would spend itself as usages arrive, and hide a usage that doubles. A difference within the spread of the passes
+//   without the usage is noise, never a verdict.
+// Check time under 6.0 and memory are printed, not judged. A project with a usage in every file is checked under
+// TypeScript 7 with exactOptionalPropertyTypes only, the one the time verdict reads: under 6.0 it would take 12 s of
+// the step for a count nothing judges, and a cost that appears only at that size, only under 6.0, is not seen. Projects
+// are written under node_modules/.cache/, where module resolution finds the workspace packages, and removed afterwards.
 //
 // Usage: node scripts/type-cost.ts [--update]
 import { spawnSync } from 'node:child_process';
@@ -28,7 +31,8 @@ export const WORK_DIR = 'node_modules/.cache/yaltaan-type-cost';
 export const REFERENCE_FILES = 2000;
 export const FIXTURE_FILES = 10;
 export const TIMED_PASSES = 5;
-export const TIME_BUDGET = 0.1;
+// Slower by this ratio, with a usage in every file: the project checks in at most ten times the time without it.
+export const TIME_BUDGET = 9;
 
 export const COMPILERS = ['ts7', 'ts6'] as const;
 export type CompilerName = (typeof COMPILERS)[number];
@@ -51,7 +55,7 @@ export interface Diagnostics {
 }
 
 export interface CountRow {
-  /** `reference`, `reference+usages`, `fixture` or `usage/<name>`. */
+  /** `reference`, `reference+<name>`, `fixture` or `usage/<name>`. */
   readonly subject: string;
   readonly compiler: CompilerName;
   readonly options: OptionSet;
@@ -66,9 +70,14 @@ export interface TimeVerdict {
   readonly ok: boolean;
 }
 
+export interface UsageTime extends TimeVerdict {
+  readonly usage: string;
+}
+
 export interface TypeCostReport {
   readonly rows: readonly CountRow[];
-  readonly time: TimeVerdict | undefined;
+  /** One verdict per usage; none without a usage. */
+  readonly times: readonly UsageTime[];
   /** One line per measurement, for the log. */
   readonly lines: readonly string[];
   readonly problems: readonly string[];
@@ -315,7 +324,7 @@ export function runTypeCost(root: string, options: TypeCostOptions = {}): TypeCo
   const lines: string[] = [];
   const rows: CountRow[] = [];
   const work = path.join(root, WORK_DIR);
-  let time: TimeVerdict | undefined;
+  const times: UsageTime[] = [];
   try {
     const compilers = findCompilers().filter((compiler) => options.compilers?.includes(compiler.name) ?? true);
     const model = readFileSync(path.join(root, MODEL_FILE), 'utf8');
@@ -326,7 +335,9 @@ export function runTypeCost(root: string, options: TypeCostOptions = {}): TypeCo
       ['reference', generateProject(referenceFiles, model, [])],
     ]);
     if (usages.length > 0) {
-      subjects.set('reference+usages', generateProject(referenceFiles, model, usages));
+      for (const usage of usages) {
+        subjects.set(`reference+${usage.name}`, generateProject(referenceFiles, model, [usage]));
+      }
       subjects.set('fixture', generateProject(fixtureFiles, model, []));
       for (const usage of usages) {
         subjects.set(`usage/${usage.name}`, generateProject(fixtureFiles, model, [usage]));
@@ -342,6 +353,9 @@ export function runTypeCost(root: string, options: TypeCostOptions = {}): TypeCo
     for (const compiler of compilers) {
       for (const optionSet of OPTION_SETS) {
         for (const [subject, dir] of dirs) {
+          if (subject.startsWith('reference+') && (compiler.name !== 'ts7' || optionSet !== 'exact')) {
+            continue;
+          }
           const measured = check(compiler, dir, optionSet);
           if (typeof measured === 'string') {
             problems.push(`${subject} under ${compiler.name} ${compiler.version} (${optionSet}): ${measured}`);
@@ -363,10 +377,13 @@ export function runTypeCost(root: string, options: TypeCostOptions = {}): TypeCo
     }
 
     const ts7 = compilers.find((compiler) => compiler.name === 'ts7');
-    const withDir = dirs.get('reference+usages');
     const withoutDir = dirs.get('reference');
-    if (ts7 !== undefined && withDir !== undefined && withoutDir !== undefined) {
-      const times = { without: [] as number[], with: [] as number[] };
+    for (const usage of usages) {
+      const withDir = dirs.get(`reference+${usage.name}`);
+      if (ts7 === undefined || withDir === undefined || withoutDir === undefined) {
+        continue;
+      }
+      const passes = { without: [] as number[], with: [] as number[] };
       const counts = { without: new Set<number>(), with: new Set<number>() };
       for (let pass = 0; pass < (options.passes ?? TIMED_PASSES); pass += 1) {
         for (const [side, dir] of [
@@ -375,7 +392,7 @@ export function runTypeCost(root: string, options: TypeCostOptions = {}): TypeCo
         ] as const) {
           const measured = check(ts7, dir, 'exact');
           if (typeof measured !== 'string') {
-            times[side].push(measured.checkTime);
+            passes[side].push(measured.checkTime);
             counts[side].add(measured.instantiations);
           }
         }
@@ -383,13 +400,14 @@ export function runTypeCost(root: string, options: TypeCostOptions = {}): TypeCo
       if (counts.without.size > 1 || counts.with.size > 1) {
         problems.push(`instantiation counts varied between timed passes: ${[...counts.without, ...counts.with]}`);
       }
-      if (times.without.length > 0 && times.with.length > 0) {
-        time = judgeCheckTime(times.without, times.with);
-        if (!time.ok) {
+      if (passes.without.length > 0 && passes.with.length > 0) {
+        const verdict = judgeCheckTime(passes.without, passes.with);
+        times.push({ usage: usage.name, ...verdict });
+        if (!verdict.ok) {
           problems.push(
-            `with every usage the reference project checks ${(time.ratio * 100).toFixed(1)} % slower under ts7 ` +
-              `(median ${time.with.median} s against ${time.without.median} s), over the budget of ` +
-              `${TIME_BUDGET * 100} %`,
+            `with ${usage.name} in every file the reference project checks ${(verdict.ratio * 100).toFixed(1)} % ` +
+              `slower under ts7 (median ${verdict.with.median} s against ${verdict.without.median} s), over the ` +
+              `budget of ${TIME_BUDGET * 100} %`,
           );
         }
       }
@@ -424,10 +442,10 @@ export function runTypeCost(root: string, options: TypeCostOptions = {}): TypeCo
       }
     }
     lines.push(`compilers: ${compilers.map((compiler) => `${compiler.name} ${compiler.version}`).join(', ')}`);
-    return { rows, time, lines, problems, changes, awaiting: ceilingCheck.awaiting, written };
+    return { rows, times, lines, problems, changes, awaiting: ceilingCheck.awaiting, written };
   } catch (error) {
     problems.push(describeError(error));
-    return { rows, time, lines, problems, changes: [], awaiting: [], written: false };
+    return { rows, times, lines, problems, changes: [], awaiting: [], written: false };
   } finally {
     rmSync(work, { recursive: true, force: true });
   }
@@ -441,14 +459,14 @@ if (import.meta.main) {
   }
   const result = runTypeCost(repositoryRoot, { update: args[0] === '--update' });
   console.log(result.lines.join('\n'));
-  if (result.time !== undefined) {
-    const { without, with: withUsages, ratio } = result.time;
+  for (const { usage, without, with: withUsage, ratio } of result.times) {
     console.log(
       `check time under ts7, ${TIMED_PASSES} passes: without usages ${without.median} s ` +
         `(${without.min}-${without.max}), ` +
-        `with ${withUsages.median} s (${withUsages.min}-${withUsages.max}), ${(ratio * 100).toFixed(1)} %`,
+        `with ${usage} ${withUsage.median} s (${withUsage.min}-${withUsage.max}), ${(ratio * 100).toFixed(1)} %`,
     );
-  } else {
+  }
+  if (result.times.length === 0) {
     console.log('check time not judged: no usage of a public type yet, the project with usages is the one without');
   }
   if (result.awaiting.length > 0) {

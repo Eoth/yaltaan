@@ -6,8 +6,12 @@ import { after, test } from 'node:test';
 
 import { repositoryRoot } from '../lib/workspace.ts';
 import {
+  BASELINE_FILE,
   CEILING_FILE,
+  COMPILERS,
+  FIXTURE_FILES,
   MODEL_FILE,
+  OPTION_SETS,
   USAGE_DIR,
   checkCeilings,
   describeChanges,
@@ -19,6 +23,7 @@ import {
   parseDiagnostics,
   runTypeCost,
   type CountRow,
+  type TypeCostReport,
 } from '../type-cost.ts';
 
 const temporaryRoots: string[] = [];
@@ -70,13 +75,15 @@ test('the figures of an --extendedDiagnostics output are read from both compiler
 });
 
 test('check time fails over the budget only when the difference also exceeds the spread of the passes', () => {
-  const slower = judgeCheckTime([1.0, 1.01, 1.02], [1.2, 1.21, 1.22]);
+  const slower = judgeCheckTime([1.0, 1.01, 1.02], [1.2, 1.21, 1.22], 0.1);
   assert.equal(slower.ok, false);
   assert.ok(Math.abs(slower.ratio - 0.198) < 0.001);
   assert.deepEqual(slower.without, { median: 1.01, min: 1.0, max: 1.02 });
-  assert.equal(judgeCheckTime([0.8, 1.0, 1.3], [1.2, 1.21, 1.22]).ok, true, 'within the spread: noise');
-  assert.equal(judgeCheckTime([1.0, 1.0], [1.05, 1.05]).ok, true, 'within the budget');
+  assert.equal(judgeCheckTime([0.8, 1.0, 1.3], [1.2, 1.21, 1.22], 0.1).ok, true, 'within the spread: noise');
+  assert.equal(judgeCheckTime([1.0, 1.0], [1.05, 1.05], 0.1).ok, true, 'within the budget');
   assert.equal(judgeCheckTime([1.0, 1.0, 1.0, 1.0], [1.0, 1.2, 1.3, 9]).with.median, 1.25);
+  assert.equal(judgeCheckTime([0.15, 0.15], [1.4, 1.5]).ok, true, 'within the budget of the harness: nine times more');
+  assert.equal(judgeCheckTime([0.15, 0.15], [1.5, 1.6]).ok, false, 'over the budget of the harness');
 });
 
 test('the baseline is written in a fixed order, read back, and compared row by row', () => {
@@ -204,6 +211,112 @@ test('too deep a recursion fails its ceiling, an unbounded one fails the check, 
   assert.ok(!fs.existsSync(path.join(root, 'node_modules', '.cache', 'yaltaan-type-cost')), 'the projects are removed');
 });
 
+// A fixture root where the schemas resolve to the declarations this build published, changed by `change`.
+function schemaRoot(change: (declarations: string) => string): string {
+  const published = path.join(repositoryRoot, 'packages', 'schema', 'dist', 'index.d.ts');
+  const original = fs.readFileSync(published, 'utf8');
+  const changed = change(original);
+  const root = fixtureRoot({
+    [`${USAGE_DIR}/schema-object.ts`]: fs.readFileSync(
+      path.join(repositoryRoot, USAGE_DIR, 'schema-object.ts'),
+      'utf8',
+    ),
+    [CEILING_FILE]: fs.readFileSync(path.join(repositoryRoot, CEILING_FILE), 'utf8'),
+    'node_modules/@yaltaan/schema/package.json': JSON.stringify({
+      name: '@yaltaan/schema',
+      type: 'module',
+      exports: { '.': { types: './index.d.ts' } },
+    }),
+    'node_modules/@yaltaan/schema/index.d.ts': changed,
+  });
+  fs.symlinkSync(path.join(repositoryRoot, 'packages', 'core'), path.join(root, 'node_modules', '@yaltaan', 'core'));
+  return root;
+}
+
+const schemaOptions = { referenceFiles: 10, fixtureFiles: FIXTURE_FILES, passes: 1 };
+
+function usageCount(report: TypeCostReport, compiler: string): number | undefined {
+  const count = (subject: string): number | undefined =>
+    report.rows.find((row) => row.subject === subject && row.compiler === compiler && row.options === 'exact')
+      ?.instantiations;
+  const used = count('usage/schema-object');
+  const base = count('fixture');
+  return used === undefined || base === undefined ? undefined : used - base;
+}
+
+test('the schema usage moves a count when the inference loses a type, and leaves its ceiling when it recurses', () => {
+  const recorded = parseBaseline(fs.readFileSync(path.join(repositoryRoot, BASELINE_FILE), 'utf8'));
+  const intact = runTypeCost(
+    schemaRoot((text) => text),
+    schemaOptions,
+  );
+  assert.deepEqual(
+    intact.problems.filter((problem) => problem.startsWith('usage') || problem.includes('exited')),
+    [],
+  );
+  for (const compiler of COMPILERS) {
+    for (const options of OPTION_SETS) {
+      const row = intact.rows.find(
+        (entry) => entry.subject === 'usage/schema-object' && entry.compiler === compiler && entry.options === options,
+      );
+      assert.equal(row?.instantiations, recorded.get(`usage/schema-object ${compiler} ${options}`), 'as recorded');
+    }
+  }
+
+  const flat = 'type Flatten<T> = {\n    [K in keyof T]: T[K];\n} & {};';
+  const withoutFlatten = runTypeCost(
+    schemaRoot((text) => {
+      assert.ok(text.includes(flat), 'the declaration to change is still there');
+      return text.replace(flat, 'type Flatten<T> = T;');
+    }),
+    schemaOptions,
+  );
+  const inference =
+    "export type InferOutput<S extends StandardSchema> = NonNullable<S['~standard']['types']>['output'];";
+  const recursive = runTypeCost(
+    schemaRoot((text) => {
+      assert.ok(text.includes(inference), 'the declaration to change is still there');
+      return text.replace(
+        inference,
+        'type Deep<T, D extends number = 6> = D extends 0 ? T : T extends object ' +
+          '? { [K in keyof T]: Deep<T[K], [0, 0, 1, 2, 3, 4, 5][D]> } : T;\n' +
+          "export type InferOutput<S extends StandardSchema> = Deep<NonNullable<S['~standard']['types']>['output']>;",
+      );
+    }),
+    schemaOptions,
+  );
+  for (const compiler of COMPILERS) {
+    const count = usageCount(intact, compiler);
+    assert.ok(count !== undefined);
+    assert.ok((usageCount(withoutFlatten, compiler) ?? count) < count, `${compiler}: fewer without Flatten`);
+    assert.match(recursive.problems.join('\n'), new RegExp(`usage schema-object adds [0-9]+ .* under ${compiler} `));
+  }
+  // The schema an engine reads: a usage that left out `withMessages` stayed green when its type grew.
+  const signature =
+    'export declare function withMessages<S extends Schema<unknown, unknown>>(schema: S, format: IssueFormatter): S;';
+  const worded = runTypeCost(
+    schemaRoot((text) => {
+      assert.ok(text.includes(signature), 'the declaration to change is still there');
+      return text.replace(
+        signature,
+        'type Wrapped<T> = { readonly [K in keyof T]: T[K] };\n' +
+          signature.replace('format: IssueFormatter): S;', 'format: IssueFormatter): Wrapped<S> & S;'),
+      );
+    }),
+    schemaOptions,
+  );
+  for (const compiler of COMPILERS) {
+    assert.notEqual(usageCount(worded, compiler), usageCount(intact, compiler), `${compiler}: withMessages is counted`);
+  }
+  const moved = describeChanges(recorded, withoutFlatten.rows);
+  for (const compiler of COMPILERS) {
+    assert.ok(
+      moved.some((change) => new RegExp(`^usage/schema-object ${compiler} exact: [0-9]+ -> [0-9]+ \\(-`).test(change)),
+      `the baseline sees the count move under ${compiler}`,
+    );
+  }
+});
+
 test('two runs count the same instantiations: the first records them, the second finds nothing changed', () => {
   const root = fixtureRoot({ [CEILING_FILE]: CEILING_HEADER });
   const first = runTypeCost(root, { referenceFiles: 10, compilers: ['ts7'], update: true });
@@ -213,32 +326,43 @@ test('two runs count the same instantiations: the first records them, the second
     first.rows.map((row) => `${row.subject} ${row.compiler} ${row.options}`),
     ['reference ts7 exact', 'reference ts7 loose'],
   );
-  assert.equal(first.time, undefined, 'without a usage, no time is judged');
+  assert.deepEqual(first.times, [], 'without a usage, no time is judged');
   const second = runTypeCost(root, { referenceFiles: 10, compilers: ['ts7'] });
   assert.deepEqual(second.problems, []);
   assert.deepEqual(second.rows, first.rows);
   assert.deepEqual(second.changes, []);
 });
 
-test('with usages, the check time of the reference project is judged on interleaved passes', () => {
+test('the check time of the reference project is judged for each usage alone, on interleaved passes', () => {
   const root = fixtureRoot({
     [`${USAGE_DIR}/bounded.ts`]: pathsUsage('Bounded', 4),
-    [CEILING_FILE]: `${CEILING_HEADER}bounded\tts7\t6000\ttest\nbounded\tts6\t6000\ttest\n`,
+    [`${USAGE_DIR}/second.ts`]: pathsUsage('Second', 3),
+    [CEILING_FILE]:
+      `${CEILING_HEADER}bounded\tts7\t6000\ttest\nbounded\tts6\t6000\ttest\n` +
+      'second\tts7\t6000\ttest\nsecond\tts6\t6000\ttest\n',
   });
   const report = runTypeCost(root, { referenceFiles: 10, fixtureFiles: 3, passes: 3, compilers: ['ts7'] });
-  assert.ok(report.time !== undefined);
-  assert.ok(
-    report.time.without.min <= report.time.without.median && report.time.without.median <= report.time.without.max,
+  assert.deepEqual(
+    report.times.map((time) => time.usage),
+    ['bounded', 'second'],
   );
+  for (const time of report.times) {
+    assert.ok(time.without.min <= time.without.median && time.without.median <= time.without.max);
+  }
   // Times of a few milliseconds may land on either side of the budget: the only problem allowed is that verdict.
   const timeProblems = report.problems.filter((problem) =>
-    /^with every usage the reference project checks [0-9.]+ % slower under ts7/.test(problem),
+    /^with (bounded|second) in every file the reference project checks [0-9.]+ % slower under ts7/.test(problem),
   );
-  assert.equal(timeProblems.length, report.time.ok ? 0 : 1);
+  assert.equal(timeProblems.length, report.times.filter((time) => !time.ok).length);
   // No baseline in the fixture: that difference is the only other problem.
   assert.equal(report.problems.length, timeProblems.length + 1);
   assert.deepEqual(
     report.rows.map((row) => row.subject).filter((subject, index, all) => all.indexOf(subject) === index),
-    ['reference', 'reference+usages', 'fixture', 'usage/bounded'],
+    ['reference', 'reference+bounded', 'reference+second', 'fixture', 'usage/bounded', 'usage/second'],
+  );
+  // A project with a usage in every file is checked once, the one the time verdict reads.
+  assert.deepEqual(
+    report.rows.filter((row) => row.subject === 'reference+bounded').map((row) => row.options),
+    ['exact'],
   );
 });
