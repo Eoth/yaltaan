@@ -379,11 +379,12 @@ Each domain is described by its scope, its decisions, what it does not do, and i
 - An API of functions, not methods, on the pattern of valibot: it is the condition for tree-shaking. valibot is the size reference to beat or to match.
 - An interpreted implementation, without `new Function` (compatibility with a strict Content Security Policy).
 - Unknown keys: `'strip' | 'reject' | 'passthrough'`. Default `strip`: a field added on the server must not break deployed clients. `reject` is recommended for untrusted input. Decided in ADR 0008.
-- A missing key, `undefined` and `null` are three distinct states; `optional` accepts absence, and the `exactOptional` option refuses an explicit `undefined`.
+- A missing key, `undefined` and `null` are three distinct states; `optional` accepts absence, and the `exactOptional` option refuses an explicit `undefined`. An object is a plain object, read by its own keys; a number is finite ([ADR 0032](docs/adr/0032-schema-package.md)).
+- An issue carries no message; through `~standard`, its code stands for one until `withMessages(schema, format)` gives it the application's words ([ADR 0032](docs/adr/0032-schema-package.md)).
 - `codec(schema, encode)`: a transformation without `encode` is marked non-reversible at the type level (calling `encode` on it is a compile error).
 - `versioned({ 1: s1, 2: s2 }, migrations)`: chained migrations; an unknown version produces the issue `schema.unknown_version`.
 - Async refinements are separate: the synchronous `parse` refuses an async schema at the type level.
-- Security limits are parse options with finite defaults: depth 64, 10,000 keys, 1,000,000 elements (hypotheses to calibrate by measurement).
+- Security limits are parse options with finite defaults: depth 64, 10,000 keys, 1,000,000 elements (hypotheses to calibrate by measurement), 1,000 issues, since memory follows the issues before it follows the elements: 2.9 MB of JSON once aborted a read ([ADR 0032](docs/adr/0032-schema-package.md)). The elements and issues are constants of the first version.
 - The evaluation order is documented: structure, then children, then the parent's refinements. An `abortEarly` mode is opt-in.
 - Validation never mutates its input. External context is passed explicitly, `parse(schema, input, { context })`, never through a global.
 
