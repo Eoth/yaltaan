@@ -5,6 +5,7 @@ import assert from 'node:assert/strict';
 
 import { Injector, signal } from '@angular/core';
 import { form, validateStandardSchema } from '@angular/forms/signals';
+import { allOrNone, atLeast, each, refine, requiredIf } from '@yaltaan/rules';
 import { array, number, object, optional, string, withMessages } from '@yaltaan/schema';
 import { JSDOM } from 'jsdom';
 
@@ -51,4 +52,41 @@ const list = form(signal({ members: [{ name: 'a' }, { name: '' }] }), (path) => 
 });
 assert.deepEqual(messages(list.members[1].name), ['schema.too_short']);
 assert.deepEqual(messages(list.members), ['schema.too_small']);
-console.log('ok: Angular Signal Forms reads the schemas, each issue on its field');
+const contract = refine(
+  object({
+    country: string(),
+    siren: optional(string()),
+    number: optional(string()),
+    signedOn: optional(string()),
+    phone: optional(string()),
+    email: optional(string()),
+    lines: array(object({ taxable: optional(string()), rate: optional(string()) })),
+  }),
+  [
+    requiredIf({ reads: [['country']], when: (country) => country === 'FR' }, [['siren']]),
+    allOrNone([['number'], ['signedOn']]),
+    atLeast(1, [['phone'], ['email']]),
+    each(['lines'], [allOrNone([['taxable'], ['rate']])]),
+  ],
+);
+// A field the model leaves out has no node here, so an application holds an empty string, which a rule reads as blank.
+const entered = signal({
+  country: 'FR',
+  siren: '',
+  number: 'C-1',
+  signedOn: '',
+  phone: '',
+  email: '',
+  lines: [{ taxable: 'yes', rate: '' }],
+});
+const signed = form(entered, (path) => validateStandardSchema(path, contract), { injector });
+assert.equal(signed().valid(), false);
+assert.deepEqual(messages(signed.siren), ['rules.required_if']);
+assert.deepEqual(messages(signed.signedOn), ['rules.all_or_none']);
+assert.deepEqual(messages(signed.phone), ['rules.at_least']);
+assert.deepEqual(messages(signed.email), ['rules.at_least']);
+assert.deepEqual(messages(signed.lines[0].rate), ['rules.all_or_none']);
+assert.deepEqual(messages(signed.number), []);
+entered.set({ country: 'DE', siren: '', number: '', signedOn: '', phone: '01', email: '', lines: [] });
+assert.equal(signed().valid(), true);
+console.log('ok: Angular Signal Forms reads the schemas and the rules, each issue on its field');

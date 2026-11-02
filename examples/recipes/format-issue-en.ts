@@ -42,6 +42,17 @@ const MESSAGES: Readonly<Record<string, (params: Params) => string>> = {
   'schema.not_integer': () => 'This must be a whole number.',
   'schema.invalid_format': () => 'This does not have the expected format.',
   'schema.too_many_issues': () => 'This has too many errors to list them all.',
+  'rules.required_if': () => 'This is required.',
+  'rules.all_or_none': () => 'This goes with the fields around it: fill it in too, or empty them.',
+  'rules.at_least': (params) =>
+    `At least ${String(params['minimum'])} needed here, and only ${String(params['count'])} given.`,
+  'rules.exactly': (params) =>
+    `Exactly ${String(params['expected'])} needed here, and ${String(params['count'])} given.`,
+  'rules.mutually_exclusive': () => 'Give this or the field beside it, not both.',
+  'rules.unique': () => 'This value is already used in this list.',
+  'rules.ordered': () => 'This comes before the value it must follow.',
+  'rules.too_large': (params) => `This list is too long: at most ${String(params['maximum'])} items.`,
+  'rules.too_many_issues': () => 'This has too many errors to list them all.',
   'issue.external': (params) => String(params['message']),
 };
 

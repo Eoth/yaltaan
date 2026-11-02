@@ -11,7 +11,7 @@ yaltaan/core-ten-primitives	1480	references/es-toolkit-ten-primitives
 yaltaan/core-reactive	1000	references/preact-signals
 yaltaan/schema-login	1500	references/valibot-login
 yaltaan/temporal-layer	1790	references/temporal-polyfill
-yaltaan/rules-five	1000	hypothesis
+yaltaan/rules-five	1550	hypothesis
 yaltaan/form-realistic	7000	hypothesis
 yaltaan/angular-adapter	1500	hypothesis
 yaltaan/react-adapter	1500	hypothesis

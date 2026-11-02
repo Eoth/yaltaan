@@ -3,6 +3,7 @@
 import assert from 'node:assert/strict';
 
 import { FieldApi, FormApi } from '@tanstack/form-core';
+import { allOrNone, atLeast, refine } from '@yaltaan/rules';
 import { number, object, optional, string, withMessages } from '@yaltaan/schema';
 
 const login = object({
@@ -50,4 +51,27 @@ const field = new FieldApi({
 field.mount();
 field.setValue('x');
 assert.deepEqual(field.state.meta.errors, [{ message: 'Too short: schema.too_short' }]);
-console.log('ok: TanStack Form reads the schemas, each issue on its field');
+const contract = refine(
+  object({
+    number: optional(string()),
+    signedOn: optional(string()),
+    phone: optional(string()),
+    email: optional(string()),
+  }),
+  [allOrNone([['number'], ['signedOn']]), atLeast(1, [['phone'], ['email']])],
+);
+const signed = new FormApi({ defaultValues: { number: 'C-1' }, validators: { onChange: contract } });
+signed.mount();
+for (const name of ['number', 'signedOn', 'phone', 'email']) {
+  new FieldApi({ form: signed, name }).mount();
+}
+signed.validateSync('change');
+assert.equal(signed.state.isValid, false);
+assert.deepEqual(signed.getFieldMeta('signedOn')?.errors, [{ message: 'rules.all_or_none', path: ['signedOn'] }]);
+assert.deepEqual(signed.getFieldMeta('phone')?.errors, [{ message: 'rules.at_least', path: ['phone'] }]);
+assert.deepEqual(signed.getFieldMeta('email')?.errors, [{ message: 'rules.at_least', path: ['email'] }]);
+signed.setFieldValue('signedOn', '2026-11-02');
+signed.setFieldValue('phone', '01');
+signed.validateSync('change');
+assert.equal(signed.state.isValid, true);
+console.log('ok: TanStack Form reads the schemas and the rules, each issue on its field');

@@ -32,6 +32,12 @@ flowchart LR
 |---|---|---|---|
 | [Schemas](schema.md) | `@yaltaan/schema` | Read what comes from outside into a typed value or every issue found, with a schema any Standard Schema form engine takes as it is. | A test per field and a cast, a validation library with its own error format. |
 
+## Available in `@yaltaan/rules`
+
+| Page | Import | What you get | Instead of |
+|---|---|---|---|
+| [Rules](rules.md) | `@yaltaan/rules` | State what holds across fields, derive what is required, and hand it to any form engine, whatever the schema. | `if` statements after the schema, one set per engine. |
+
 Every export is `@experimental` until the contracts are frozen: it may change in a minor version, and the [changelog](../../../CHANGELOG.md) says so in bold.
 
 ## Principles you can rely on

@@ -32,6 +32,12 @@ flowchart LR
 |---|---|---|---|
 | [Schémas](schema.md) | `@yaltaan/schema` | Lire ce qui vient de l'extérieur en une valeur typée ou en toutes les issues trouvées, avec un schéma que tout moteur de formulaire Standard Schema prend tel quel. | Un test par champ et un transtypage, une librairie de validation avec son propre format d'erreur. |
 
+## Disponible dans `@yaltaan/rules`
+
+| Page | Import | Ce que vous obtenez | À la place de |
+|---|---|---|---|
+| [Règles](rules.md) | `@yaltaan/rules` | Dire ce qui vaut entre les champs, en déduire ce qui est requis, et le confier à n'importe quel moteur de formulaire, quel que soit le schéma. | Des `if` après le schéma, un jeu par moteur. |
+
 Chaque export reste `@experimental` jusqu'au gel des contrats : il peut changer dans une version mineure, et le [journal des changements](../../../CHANGELOG.md) le signale en gras.
 
 ## Ce sur quoi vous pouvez compter

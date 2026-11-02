@@ -30,5 +30,7 @@ yaltaan/core-result	esbuild	209	144	122	bc01613afe908f27
 yaltaan/core-result	rollup	209	145	121	c9a07d6a9aeb4b45
 yaltaan/core-ten-primitives	esbuild	4052	1623	1472	7c196514ca1f4ee6
 yaltaan/core-ten-primitives	rollup	4123	1617	1466	b0bbf62702f77937
+yaltaan/rules-five	esbuild	3585	1692	1533	b595ba5d8fbc9e62
+yaltaan/rules-five	rollup	3649	1704	1548	8e60a1bfd26b63b4
 yaltaan/schema-login	esbuild	3365	1580	1401	93069f8eb7d68823
 yaltaan/schema-login	rollup	3407	1590	1410	9b4d978b622e94af

@@ -11,6 +11,7 @@
     "examples/**/*.ts",
     "packages/testing/src/**/*.ts",
     "packages/core/src/**/*.ts",
-    "packages/schema/src/**/*.ts"
+    "packages/schema/src/**/*.ts",
+    "packages/rules/src/**/*.ts"
   ]
 }
