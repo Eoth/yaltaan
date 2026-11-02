@@ -45,8 +45,12 @@ function timingFailures(rows: readonly TimeRow[]): string[] {
 }
 
 test('the harness reads an empty function as zero, its own floor as zero, and twice the work as twice the time', () => {
+  // Pinned to one core, the optimizing compiler shares it with the code it compiles: after 30 or 60 ms the longer
+  // chain still runs unoptimized, five times slower, and reads ten times the shorter one on every pass.
   const args = [
     ...pinning(),
+    '--warmup',
+    '200',
     '--passes',
     '3',
     '--budget',
