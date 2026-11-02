@@ -59,9 +59,24 @@ if [ "$working_tree" = true ]; then
     git "${identity[@]}" commit --quiet --message "Working tree of the rehearsed repository"
   fi
 fi
-# The clone builds and checks with the dependencies installed in the repository. The link is no folder, so the
-# "node_modules/" line of .gitignore does not cover it: excluded here, it leaves the working tree clean.
-ln -s "$root/node_modules" node_modules
+# The clone builds and checks with the dependencies installed in the repository, each by a link, and with its own
+# packages: linked whole, `node_modules/@yaltaan/core` would be the repository's, so that a package that depends on
+# another compiled against whatever the repository built last, or failed on a machine that built nothing. A link is no
+# folder, so the "node_modules/" line of .gitignore does not cover the `.bin` one: excluded here, as a whole.
+mkdir -p node_modules/@yaltaan
+for entry in "$root"/node_modules/* "$root"/node_modules/.bin; do
+  if [ "$(basename "$entry")" != @yaltaan ]; then
+    ln -s "$entry" "node_modules/$(basename "$entry")"
+  fi
+done
+for package in "$root"/node_modules/@yaltaan/*; do
+  name=$(basename "$package")
+  ln -s "../../packages/$name" "node_modules/@yaltaan/$name"
+  if [ "$(realpath "node_modules/@yaltaan/$name")" != "$(realpath "packages/$name")" ]; then
+    echo "error: @yaltaan/$name resolves outside the clone: $(realpath "node_modules/@yaltaan/$name")" >&2
+    exit 1
+  fi
+done
 echo node_modules >> .git/info/exclude
 
 version=$(node scripts/release-prepare.ts --rehearsal | tail -n 1)
