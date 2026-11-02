@@ -207,7 +207,7 @@ Une décision réservée au propriétaire (nom, licence, API publique, contrat t
 - **Pourquoi** : un chemin typé attrape à la compilation ce qu'un chemin texte laisse au runtime, à condition de ne pas faire exploser le contrôle des types.
 - **Faire** : chemins typés, profondeur bornée (hypothèse 8, calibrée par T0.3), dégradation explicite et documentée vers un chemin non typé au-delà ; plafond du nombre de chemins générés.
 - **Où** : `packages/core/src/path/`.
-- **Accepté si** : budget du coût des types tenu : premier usage d'un type public, `bench/types/usages/path.ts` (code d'application sur le `Model` de `bench/types/model.ts`, qui importe `@yaltaan/core` construit), son plafond d'instanciations par compilateur dans `bench/types/ceilings.tsv` et le seuil de +10 % calibrés par ADR (`node scripts/type-cost.ts`, sous TypeScript 7 et 6.0) ; tests de types ; messages d'erreur de compilation relus et lisibles.
+- **Accepté si** : budget du coût des types tenu : usage `bench/types/usages/path.ts` (code d'application sur le `Model` de `bench/types/model.ts`, qui importe `@yaltaan/core` construit), son plafond d'instanciations par compilateur dans `bench/types/ceilings.tsv` calibré par ADR, et son rapport de temps, seul dans son projet, sous le budget par usage d'ADR 0033 (`node scripts/type-cost.ts`, sous TypeScript 7 et 6.0) ; tests de types ; messages d'erreur de compilation relus et lisibles.
 - **Taille** M · **Prio** P0 · **Dépend de** T0.3, T1.3
 
 #### T1.6 — Graphe réactif (`ReadableNode`)
