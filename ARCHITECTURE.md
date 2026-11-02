@@ -397,7 +397,7 @@ Declarative relational rules over a set of values. Pure and stateless, they retu
 ```ts
 requiredIf(cond, paths)        allOrNone(paths)
 atLeast(n, paths)              atMost(n, paths)          exactly(n, paths)
-mutuallyExclusive(paths)       unique(arrayPath, keyFn)  ordered(startPath, endPath)
+mutuallyExclusive(paths)       unique(arrayPath, atPath) ordered(startPath, endPath)
 aggregate(arrayPath, fn, check)  when(discriminantPath, cases)  withContext(ctx => rule)
 ```
 
@@ -406,6 +406,8 @@ aggregate(arrayPath, fn, check)  when(discriminantPath, cases)  withContext(ctx 
 - Each rule declares its dependencies (the paths it reads) and its targets (the paths where it places issues). This enables targeted invalidation, cycle detection and explanation ("why is this field required?"). In test mode, the actual reads are traced and compared with the declared dependencies.
 - Whether a field is required is a derived state (`requiredPaths(rules, values)`), never a mutation of other rules. No rule modifies a rule, so no loop is possible.
 - A rule is also usable as a Standard Schema refinement. It therefore works in Angular Signal Forms or TanStack Form without `@yaltaan/form`.
+
+- Seven rules exist so far, those the pilot form uses, with `each(arrayPath, rules)`, which applies rules to every element of a list, and `refine(schema, rules)`, the refinement; `atLeast` and `exactly` also count the elements of a list; a callback only meets a value that is not blank, typed `unknown`; a rule is a plain object an application can write, and `assertDeclaredReads(rule, values)` is the test mode above ([ADR 0034](docs/adr/0034-rules-package.md)).
 
 **Invariants**: determinism; a rule reads only its declared dependencies; `atLeast(n)` is monotonic (filling one more field cannot create an error).
 
@@ -466,7 +468,7 @@ The energy consumed by a JavaScript function cannot be measured reliably. What i
 
 Every import scenario of `bench/size/` is bundled for real, by esbuild and by Rollup, minified with `"sideEffects"` honoured, then measured raw, gzip and brotli. [docs/size-baseline.tsv](docs/size-baseline.tsv) records each figure, and a byte that moves fails the gate until the baseline is rewritten by a commit that explains the change ([ADR 0009](docs/adr/0009-size-harness-bundlers-and-references.md)). Reference libraries are measured by the same harness: es-toolkit (primitives), valibot (schemas), temporal-polyfill (the polyfill of ADR 0005), `@preact/signals-core` (reactive graph).
 
-The budgets, in bytes minified and brotli-compressed under every bundler, live in one file, [bench/size/budgets.tsv](bench/size/budgets.tsv). Each is the tighter of the design's first hypothesis and one and a half times the reference for the same scenario, but for the ten core primitives, measured at about 2.2 times es-toolkit for the checks their contracts require ([ADR 0027](docs/adr/0027-ten-primitives-budget.md), awaiting the owner); the temporal layer gets a tenth of the polyfill it sits on; the rules, the form and the adapters, which no library matches, keep their hypothesis until the pilot form is measured against the same form written with Angular Signal Forms alone ([ADR 0010](docs/adr/0010-import-size-budgets.md)).
+The budgets, in bytes minified and brotli-compressed under every bundler, live in one file, [bench/size/budgets.tsv](bench/size/budgets.tsv). Each is the tighter of the design's first hypothesis and one and a half times the reference for the same scenario, but for the ten core primitives, measured at about 2.2 times es-toolkit for the checks their contracts require ([ADR 0027](docs/adr/0027-ten-primitives-budget.md), awaiting the owner); the temporal layer gets a tenth of the polyfill it sits on; the rules, the form and the adapters, which no library matches, keep their hypothesis (the rules' raised once to what five rules with the contracts of §7.10 weigh, [ADR 0034](docs/adr/0034-rules-package.md)) until the pilot form is measured against the same form written with Angular Signal Forms alone ([ADR 0010](docs/adr/0010-import-size-budgets.md)).
 
 Parse time and execution time at cold start are to be measured for the same scenarios.
 
