@@ -164,7 +164,7 @@ export async function runRelease(root: string, options: ReleaseOptions): Promise
   const stages: [string, () => Promise<string[]> | string[]][] = [
     ['reproducibility: a second build in another folder', () => reproduce(root, tarballs)],
     ['inspection of the tarballs', () => inspectAll(root, tarballs)],
-    ['SBOM of each tarball', () => tarballs.flatMap((tarball) => writeSbom(tarball, options.out))],
+    ['SBOM of each tarball', () => tarballs.flatMap((tarball) => writeSbom(tarball, tarballs, options.out))],
     ['a consumer installs, imports, requires and compiles', () => checkConsumer(tarballs)],
   ];
   for (const [name, run] of stages) {
@@ -372,13 +372,22 @@ export function checkSbom(sbom: unknown, manifest: JsonObject): string[] {
  * Writes the SBOM of one tarball next to it. `npm sbom` names the component after the folder it runs in, so the
  * tarball is extracted as `node_modules/<name>`, the folder an installation would give it.
  */
-function writeSbom(tarball: ReleaseTarball, out: string): string[] {
+function writeSbom(tarball: ReleaseTarball, tarballs: readonly ReleaseTarball[], out: string): string[] {
   const folder = fs.mkdtempSync(path.join(os.tmpdir(), 'yaltaan-sbom-'));
+  const unpack = (from: ReleaseTarball, into: string): void => {
+    for (const [file, bytes] of unpackFiles(fs.readFileSync(from.file), from.dir).files) {
+      fs.mkdirSync(path.dirname(path.join(into, file)), { recursive: true });
+      fs.writeFileSync(path.join(into, file), bytes);
+    }
+  };
   try {
     const packageFolder = path.join(folder, 'node_modules', ...tarball.name.split('/'));
-    for (const [file, bytes] of unpackFiles(fs.readFileSync(tarball.file), tarball.dir).files) {
-      fs.mkdirSync(path.dirname(path.join(packageFolder, file)), { recursive: true });
-      fs.writeFileSync(path.join(packageFolder, file), bytes);
+    unpack(tarball, packageFolder);
+    // npm refuses a tree without the dependencies a manifest declares: those of this release, from their tarballs.
+    const dependencies = tarball.manifest['dependencies'];
+    const declared = isJsonObject(dependencies) ? Object.keys(dependencies) : [];
+    for (const dependency of tarballs.filter(({ name }) => declared.includes(name))) {
+      unpack(dependency, path.join(packageFolder, 'node_modules', ...dependency.name.split('/')));
     }
     const result = runNpm(['sbom', '--sbom-format', 'cyclonedx', '--sbom-type', 'library'], packageFolder);
     if (result.status !== 0) {

@@ -217,6 +217,13 @@ export function inspectFiles(files: ReadonlyMap<string, Buffer>, dir: string, li
       fs.mkdirSync(path.dirname(path.join(folder, file)), { recursive: true });
       fs.writeFileSync(path.join(folder, file), bytes);
     }
+    // Its declared dependencies, where a consumer's install would put them: an import of anything else stays an error.
+    const dependencies = isJsonObject(manifest['dependencies']) ? Object.keys(manifest['dependencies']) : [];
+    for (const name of dependencies) {
+      const link = path.join(folder, 'node_modules', name);
+      fs.mkdirSync(path.dirname(link), { recursive: true });
+      fs.symlinkSync(path.join(repositoryRoot, 'node_modules', name), link, 'junction');
+    }
     declarations = followDeclarations(folder, entries.targets);
   } finally {
     fs.rmSync(folder, { recursive: true, force: true });

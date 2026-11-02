@@ -32,6 +32,9 @@ export const ADAPTER_PACKAGES: readonly string[] = ['angular', 'react', 'vue'];
 export const NPM_SCOPE = '@yaltaan';
 
 const EXACT_VERSION = /^(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)$/;
+// A package of the workspace may carry a pre-release version, as a rehearsal of the release does: still one version.
+const EXACT_WORKSPACE_VERSION =
+  /^(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/;
 
 // Every field through which a package pulls third-party code at install time; peers are allowed to adapters only.
 // "dependencies" is read apart: it holds the edges of the graph between the workspace packages, and nothing else.
@@ -302,7 +305,7 @@ function checkInternalDependencies(dependencies: unknown, file: string): string[
     if (!name.startsWith(`${NPM_SCOPE}/`)) {
       return [`${file}: dependencies["${name}"] must be absent: a package has zero third-party runtime dependency`];
     }
-    if (typeof spec !== 'string' || !EXACT_VERSION.test(spec)) {
+    if (typeof spec !== 'string' || !EXACT_WORKSPACE_VERSION.test(spec)) {
       return [`${file}: dependencies["${name}"] is ${JSON.stringify(spec)}, not an exact version x.y.z`];
     }
     return [];

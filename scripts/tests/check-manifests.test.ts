@@ -224,6 +224,19 @@ test('a package has zero third-party runtime dependency', () => {
   assertOneProblem(checkPackageManifest({ ...validPackage(), dependencies: [] }, 'packages/core'), 'must be an object');
 });
 
+test('a rehearsal version is an exact version for a dependency of the workspace, not a range', () => {
+  const pinned = (spec: string): string[] => {
+    const manifest = { ...validPackage('schema'), dependencies: { '@yaltaan/core': spec } };
+    return checkPackageManifest(manifest, 'packages/schema');
+  };
+  for (const spec of ['0.1.0', '0.1.0-rehearsal.0', '1.2.3-rc.1']) {
+    assert.deepEqual(pinned(spec), [], spec);
+  }
+  for (const spec of ['0.1', '0.1.x', 'latest', '0.1.0-', '^0.1.0-rehearsal.0']) {
+    assertOneProblem(pinned(spec), 'not an exact version x.y.z');
+  }
+});
+
 test('a package depends on the workspace packages below it, at an exact version, never as peers', () => {
   const schema = { ...validPackage('schema'), dependencies: { '@yaltaan/core': '0.0.0' } };
   assert.deepEqual(checkPackageManifest(schema, 'packages/schema'), []);

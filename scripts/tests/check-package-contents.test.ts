@@ -74,10 +74,12 @@ test('every file git tracks in a package and its exports do not reach, slipped i
       fs.writeFileSync(path.join(copy, file), bytes);
     }
     // A source beside its declarations: the compiler would load it in their place, through their `./x.ts` imports.
+    const source = slipped.find((file) => /^src\/(?:.*\/)?index\.ts$/.test(file)) ?? '';
+    assert.notEqual(source, '', `no source among ${slipped.join(', ')}`);
     const fabricated = {
-      'dist/result/index.test.js': 'export {};\n',
+      'dist/index.test.js': 'export {};\n',
       'dist/notes.js': 'export const note = 1;\n',
-      'dist/result/index.ts': fs.readFileSync(path.join(workspacePackage.path, 'src/result/index.ts'), 'utf8'),
+      [source.replace(/^src\//, 'dist/')]: fs.readFileSync(path.join(workspacePackage.path, source), 'utf8'),
     };
     for (const file of slipped) {
       fs.mkdirSync(path.dirname(path.join(copy, file)), { recursive: true });
@@ -133,8 +135,11 @@ test('every file a package needs, taken out of its tarball, is reported', () => 
     for (const file of [...files.keys()].filter((name) => !needed.includes(name))) {
       assert.ok(file.endsWith('.d.ts') && needed.includes(file.replace(/\.d\.ts$/, '.js')), `${file} is not needed`);
     }
+    // A package of one module has no declaration that another imports; one of several must have some, or the scan above
+    // reads nothing.
+    const modules = [...files.keys()].filter((file) => file.endsWith('.d.ts'));
     assert.ok(
-      needed.some((file) => file.endsWith('.d.ts') && !targets.has(file)),
+      modules.length === 1 || needed.some((file) => file.endsWith('.d.ts') && !targets.has(file)),
       'no declaration imported by another',
     );
     for (const file of needed) {
