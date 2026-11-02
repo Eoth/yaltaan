@@ -25,14 +25,14 @@ Outillage de développement (empreinte installée, à ne laisser croître que pa
 
 ## 2. Ordre d'exécution
 
-Une version utilisable d'abord (décision du propriétaire du 2026-10-23, §3) : la 0.1.0 livre `@yaltaan/core`, les utilitaires que les équipes recodent, sur les contrats de §5 d'`ARCHITECTURE.md` ; la 0.2.0 ajoute schéma et règles, validés sur le formulaire pilote ; la 0.3.0 le formulaire et Angular. L'outillage qui reste attend d'être utile. Les contrats se gèlent après le pilote (T2.7), pas avant. Une itération peut prendre deux tickets S ou M d'un même domaine.
+Une version utilisable d'abord (décision du propriétaire du 2026-10-23, §3) : la 0.1.0 livre `@yaltaan/core`, les utilitaires que les équipes recodent, sur les contrats de §5 d'`ARCHITECTURE.md` ; la 0.2.0 ajoute schéma et règles, validés sur le formulaire pilote ; la 0.3.0 le formulaire et Angular. L'outillage qui reste attend d'être utile. Ces versions sont des jalons de travail : **rien n'est publié avant la v1** (décision du propriétaire du 2026-11-02, §3). Les contrats se gèlent après le pilote (T2.7), pas avant. Une itération peut prendre deux tickets S ou M d'un même domaine.
 
-**Avancement** : 25 étapes closes sur 89 ; prochaine : T0.23.
+**Avancement** : 25 étapes closes sur 89 ; prochaine : T2.1 a.
 
 | # | Lot | Tickets, dans l'ordre | Avancement | Sortie |
 |---|---|---|---|---|
 | 1 | 0 — Outillage | T0.1, T0.2, T0.7, T0.6, T0.5, T0.3, T0.4 a, b | 8 / 8 clos, terminé | Paquets vides qui passent toute la CI ; taille, coût des types, instructions et temps mesurés. |
-| 2 | 0.1.0 — `@yaltaan/core` utilisable | T1.1, T1.3, T1.2, T1.5, T3.1 a, b, T0.17, T3.2, T0.20 a, T3.3 a, b, T3.5, T3.4, T0.16, T0.10, T0.23 | 15 / 16 clos ; prochain : T0.23 | `Result`, `Issue`, `Path`, `equal`, objets et accès par chemin, collections, nombres, chaînes ; version 0.1.0 étiquetée, archive vérifiée, publiée sur npm dès que l'organisation `@yaltaan` est réservée. |
+| 2 | 0.1.0 — `@yaltaan/core` utilisable | T1.1, T1.3, T1.2, T1.5, T3.1 a, b, T0.17, T3.2, T0.20 a, T3.3 a, b, T3.5, T3.4, T0.16, T0.10 | 15 / 15 clos, terminé | `Result`, `Issue`, `Path`, `equal`, objets et accès par chemin, collections, nombres, chaînes ; workflow de publication répété à chaque poussée, archive vérifiée, rien de publié. |
 | 3 | 0.2.0 — Schéma et règles sur le pilote | T2.1 a, b, T2.8, T2.2, T2.9, T2.3, T1.4, T0.20 b | 2 / 8 clos ; prochain : T2.1 a | Schéma Standard Schema minimal et règles relationnelles, scénarios du pilote verts sans `form`. |
 | 4 | 0.3.0 — Formulaire et Angular | T0.14, T1.6 a, T1.6 b, T2.4 a, b, c, T2.5, T2.6, T2.7 | 0 / 9 clos ; prochain : T0.14 | Pilote de bout en bout dans Angular, mesures, **ADR go/no-go de `form`**, gel des contrats. |
 | 5 | Outillage reporté | T0.18, T0.19, T0.21, T0.22, T0.24, T0.8, T0.9, T0.13, T0.15 | 0 / 9 clos ; prochain : T0.18 | Selon le besoin réel des versions précédentes. |
@@ -40,7 +40,7 @@ Une version utilisable d'abord (décision du propriétaire du 2026-10-23, §3) :
 | 7 | 4 — Temporal | T4.5, T4.1, T4.2, T4.3, T4.4 | 0 / 5 clos ; prochain : T4.5 | Tests sur l'implémentation native et sur le polyfill recommandé. |
 | 8 | 5 — Schéma et règles complets | T5.1 a, b, T5.2, T5.3, T5.4, T5.5, T5.6, T5.7 | 0 / 8 clos ; prochain : T5.1 a | Interopérabilité Standard Schema vérifiée avec au moins deux moteurs tiers. |
 | 9 | 6 — Formulaire complet (si go) | T6.1, T6.2, T6.3, T6.4, T6.5, T6.6 | 0 / 6 clos ; prochain : T6.1 | Second projet pilote. |
-| 10 | 7 — Durcissement | T0.11, T0.12, T7.1, T7.2, T7.3, T7.6, T7.4, T7.5 | 0 / 8 clos ; prochain : T0.11 | 1.0 = uniquement des modules `@stable`. |
+| 10 | 7 — Durcissement | T0.11, T0.12, T7.1, T7.2, T7.3, T7.6, T7.4, T7.5, T0.23 | 0 / 9 clos ; prochain : T0.11 | 1.0 = uniquement des modules `@stable`. |
 
 `core/async` et `core/cache` (`ARCHITECTURE.md` §7.6, §7.7) n'avaient pas de phase : ils entrent au lot 3 (T3.7, T3.8). Si le formulaire montre que sa validation asynchrone en a besoin plus tôt, T3.7 a remonte avant T2.4 c.
 
@@ -77,7 +77,7 @@ Une décision réservée au propriétaire (nom, licence, API publique, contrat t
 | arethetypeswrong (ADR 0030) | Faut-il installer `@arethetypeswrong/cli` pour juger les types publiés ? | **Recommandation, à valider** : non. 56 entrées de verrou, 34 324 474 octets (`node_modules` +36 %), un TypeScript 5.6.1-rc épinglé, hors des versions prises en charge (6.0 et 7.x), qui dit `require` impossible là où Node ≥ 22.12 le fait. À la place : les archives installées dans un projet vide, chaque sous-chemin compilé par TypeScript 7.0.2 et 6.0.3 sous `nodenext` et `bundler`, chargé par Node par `import` et par `require` (déjà en place, aucun paquet ajouté). La ligne d'`ARCHITECTURE.md` §11 qui promet arethetypeswrong change selon la réponse. |
 | Juges du schéma (ADR 0031) | Quels juges extérieurs pour `@yaltaan/schema`, puisque Standard Schema ne publie aucune suite de tests exécutable ? | **Décidé le 2026-11-01 (choix technique interne)** : `@standard-schema/spec` 1.1.0 en dépendance de développement (types seuls, 22 634 octets, MIT, sans dépendance, jamais importé par un fichier publié), pour comparer nos interfaces recopiées, dans les deux sens ; une table de 13 exigences nommées tirée de l'interface (`STANDARD_SCHEMA_TABLE`), appliquée à tout ce qu'un schéma renvoie par `~standard` ; le consommateur générique de la spécification recopié ; valibot 1.5.0, déjà installé, en juge différentiel sur des schémas décrits en données et des entrées générées (même verdict, même sortie, mêmes chemins d'issue, lus par `~standard` des deux côtés), par `createJudge` d'ADR 0022. Sous-chemin `@yaltaan/testing/schema-judge`, pour qu'un test de `core` ne charge pas valibot. Écartés : ne rien faire ; `@standard-schema/utils` (un paquet pour lire un chemin) ; Zod ou ArkType (un paquet de plus pour les mêmes questions, reportés à T5.7). |
 | Paquet `@yaltaan/schema` (ADR 0032) | Que dit le message d'une issue Standard Schema, qu'est-ce qu'un objet, et avec quoi le scénario de connexion borne-t-il un texte sans raffinements ? | **Décidé le 2026-11-01 par délégation du propriétaire (choix de conception)** : API en fonctions (`string`, `number`, `literal`, `optional`, `nullable`, `array`, `object`, `discriminatedUnion`, `parse`, `withMessages`), bornes en options du schéma qu'elles bornent (`minLength`, `maxLength`, `pattern`, `min`, `max`, `integer`, les noms des attributs HTML) ; le message d'une issue est son code, et `withMessages(schema, format)` donne les mots de l'application au schéma qu'un moteur lit ; `object` ne lit que les clés propres d'un objet simple (une classe, un tableau, une `Map` : `schema.invalid_type`) ; `number` ne prend que des nombres finis ; un `pattern` n'est pas testé au-delà de `maxLength` ; `__proto__`, `constructor`, `prototype` ne se déclarent pas (`TypeError`). Écartés : un `pipe` dès maintenant (T5.1) ; un message anglais par défaut (§5.2 : la librairie n'écrit aucun message) ; `libraryOptions.format` (les moteurs n'en passent pas) ; la lecture par `in` de valibot (un prototype pollué satisferait un champ). |
-| `@yaltaan/schema` dans la 0.1.0 | La publication prend tous les paquets non internes : `v0.1.0` emporterait `@yaltaan/schema`, prévu en 0.2.0, et échouerait à mi-chemin si son nom n'existe pas sur npm. Le publier aussi ? | **Recommandation, à valider** : oui si T2.1 b et T2.3 ne sont pas finis quand les recherches de marque aboutissent, en `@experimental` comme `core` : réserver un nom de plus ne coûte qu'une commande, aucune mécanique de retenue à écrire ni à tester. Si non : un ticket retient le paquet (champ de manifeste lu par `release-prepare.ts` et `release.ts`). Publication irréversible : rien ne part sans le propriétaire (T0.23). |
+| Première publication | Publier une 0.1.0, avec ou sans `@yaltaan/schema` ? | **Acté par le propriétaire le 2026-11-02** : non, pas de précipitation : aucune publication avant la v1, aucune version intermédiaire sur npm. T0.23 passe après T7.5. Le workflow de publication et sa répétition restent dans la porte ; les numéros 0.1 à 0.3 et les `@since` qui les citent sont des jalons de travail. Écartée : la recommandation de publier le schéma en `@experimental` avec une 0.1.0. |
 
 ## 4. Non-objectifs (exclusions motivées)
 
@@ -185,12 +185,12 @@ Une décision réservée au propriétaire (nom, licence, API publique, contrat t
 - **Accepté si** : la mutation « tamisage qui ne descend pas » de `topK` fait rougir `topK: callbacks` en moins d'une seconde sans borne locale ; chaque déclaration `callbacks` existante reste verte.
 - **Taille** S · **Prio** P2 · **Dépend de** T0.5
 
-#### T0.23 — Première publication : 0.1.0 sur npm
-- **Pourquoi** : la 0.1.0 n'existe pour un utilisateur qu'installable, avec sa provenance ; le workflow de T0.10 n'a encore publié que des répétitions.
-- **Faire** : quand le propriétaire a fait ses recherches de marque, réservé l'organisation npm `yaltaan`, créé le nom de chaque paquet (`@yaltaan/core` et, depuis T2.2, `@yaltaan/schema` : §3) par une première publication à la main (npm ne configure un trusted publisher que pour un paquet qui existe : version de réservation sans code recommandée, ADR 0029), configuré un trusted publisher par paquet (ce dépôt, `release.yml`, environnement `npm`) et l'environnement GitHub `npm` avec son relecteur : `node scripts/release-prepare.ts 0.1.0`, la mention « Not published yet » retirée de `packages/core/README.md` et de `packages/schema/README.md` (elle partirait dans l'archive), `@since` de `@yaltaan/schema` et la colonne `Since` de son registre passés à 0.1 si le paquet part dans cette version, commit, étiquette `v0.1.0`, poussée ; lire le workflow ; vérifier dans un projet vide `npm install @yaltaan/core` puis `npm audit signatures` (provenance vérifiée), et la release GitHub (archive, sommes, SBOM).
+#### T0.23 — Première publication : la v1 sur npm
+- **Pourquoi** : la v1 n'existe pour un utilisateur qu'installable, avec sa provenance ; le workflow de T0.10 n'a encore publié que des répétitions. Rien ne part avant elle (§3).
+- **Faire** : quand le propriétaire a fait ses recherches de marque, réservé l'organisation npm `yaltaan`, créé le nom de chaque paquet publié par une première publication à la main (npm ne configure un trusted publisher que pour un paquet qui existe : version de réservation sans code recommandée, ADR 0029), configuré un trusted publisher par paquet (ce dépôt, `release.yml`, environnement `npm`) et l'environnement GitHub `npm` avec son relecteur : `node scripts/release-prepare.ts 1.0.0`, la mention « Not published yet » retirée du README de chaque paquet (elle partirait dans l'archive), commit, étiquette `v1.0.0`, poussée ; lire le workflow ; vérifier dans un projet vide `npm install` de chaque paquet puis `npm audit signatures` (provenance vérifiée), et la release GitHub (archive, sommes, SBOM).
 - **Où** : `package.json` des paquets, `CHANGELOG.md`, `.github/workflows/release.yml`.
-- **Accepté si** : `npm view @yaltaan/core@0.1.0 dist.attestations` donne une provenance qui nomme ce dépôt et ce workflow ; le SHA-512 de l'archive publiée est celui d'une répétition du même commit sur le poste ; aucun jeton créé.
-- **Taille** S · **Prio** P0 · **Dépend de** T0.10, recherches de marque, organisation npm et environnement `npm` (propriétaire)
+- **Accepté si** : `npm view @yaltaan/core@1.0.0 dist.attestations` donne une provenance qui nomme ce dépôt et ce workflow ; le SHA-512 de l'archive publiée est celui d'une répétition du même commit sur le poste ; aucun jeton créé.
+- **Taille** S · **Prio** P1 · **Dépend de** T7.5, recherches de marque, organisation npm et environnement `npm` (propriétaire)
 
 #### T0.24 — Carnet : un ticket de l'ordre ni ouvert ni clos passe la porte
 - **Pourquoi** : le 2026-11-01, le corps de T0.10 retiré de §5 sans sa ligne en §9 laissait `check-roadmap-tickets.sh` et `check-roadmap-progress.ts` verts, alors que §2 le citait encore comme prochain : un ticket peut disparaître du carnet sans être clos.
@@ -506,9 +506,9 @@ Rien d'autre n'est planifié ni refusé. Un besoin qui n'apparaît ni en §4 ni 
 
 ## 7. Jalons mesurables
 
-- **0.1.0 expérimentale** : lots 0, 1 et 2 clos ; décision go/no-go de `form` prise ; contrats transverses gelés ; première publication avec provenance.
-- **0.x** : lots 3 à 6, chaque module publié `@experimental` dans ses budgets de taille et de coût des types.
-- **1.0** : lot 7 clos ; uniquement des modules `@stable`.
+- **0.1.0 expérimentale** : lots 0, 1 et 2 clos ; décision go/no-go de `form` prise ; contrats transverses gelés ; rien de publié.
+- **0.x** : lots 3 à 6, chaque module `@experimental` dans ses budgets de taille et de coût des types ; rien de publié.
+- **1.0** : lot 7 clos ; uniquement des modules `@stable` ; première publication avec provenance (T0.23).
 
 ## 8. Définition de fini (commune à tous les tickets)
 
