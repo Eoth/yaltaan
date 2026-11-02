@@ -453,7 +453,7 @@ aggregate(arrayPath, fn, check)  when(discriminantPath, cases)  withContext(ctx 
 
 - A reference project, produced by a script (about 2,000 files), uses `Path<T>` and schema and form inference intensively.
 - Measured by the verification gate through `--extendedDiagnostics`: check time, instantiations, memory, under TypeScript 6.0 and 7, with and without `exactOptionalPropertyTypes` ([ADR 0014](docs/adr/0014-type-cost-harness-and-typescript-6.md)). Instantiation counts are deterministic: they are recorded, and compared with a ceiling per public type and per compiler, since the two compilers count differently.
-- At most +10 % check time compared to the same project without the library, judged under TypeScript 7 on the median of five interleaved passes, with the spread printed; the ceilings and the +10 % are hypotheses to calibrate by measurement. A regression blocks.
+- For each usage alone in every file of the reference project, at most +900 % check time compared to the same project without the library, judged under TypeScript 7 on the median of five interleaved passes, with the spread printed ([ADR 0033](docs/adr/0033-type-cost-of-the-schema.md): 40 schemas in 2,000 files cost +10.5 %, too little for a verdict to measure). A regression blocks.
 - Rules: bounded recursion; named interfaces rather than deep intersections; the number of generated paths is capped, with an explicit degradation beyond the cap.
 
 **Type tests**: type-equality assertions in the style of `expectTypeOf`, and `@ts-expect-error` fixtures. Expected compile errors are tested, and their readability is reviewed.
