@@ -55,7 +55,7 @@ if (january.ok && february.ok && april.ok) {
 interval(day('2024-02-01'), day('2024-01-01')).ok; // → false
 ```
 
-`mergeAll` donne le moins de plages possible, dans l'ordre, `gaps` ce qui se trouve entre elles, `union` et `intersect` travaillent sur deux. Une liste de plus d'un million d'intervalles est refusée sans être lue. Deux valeurs de classes, d'implémentations ou de calendriers différents lèvent une `TypeError` : `compare` de Temporal répondrait de façon inégale, et seul un programme peut le provoquer.
+`interval` rend un `Result` : une liste prend ce qu'il contient, et un `Result` donné à une liste est une `TypeError`, pas un intervalle vide. `start` les distingue : un intervalle qui contient quelque chose en a un, `emptyInterval` a `undefined`, et TypeScript s'y rétrécit. `mergeAll` donne le moins de plages possible, dans l'ordre, `gaps` ce qui se trouve entre elles, `union` et `intersect` travaillent sur deux. Une liste de plus d'un million d'intervalles est refusée sans être lue. Deux valeurs de classes, d'implémentations ou de calendriers différents lèvent une `TypeError` : `compare` de Temporal répondrait de façon inégale, et seul un programme peut le provoquer.
 
 ## Lire une date
 

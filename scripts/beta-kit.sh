@@ -31,10 +31,17 @@ cp "$work"/release/yaltaan-core-*.tgz "$work"/release/yaltaan-temporal-*.tgz "$o
 for guide in README.md README.fr.md; do
   sed "s/{commit}/$commit/g" "docs/beta/$guide" > "$out/$guide"
 done
-cp docs/beta/FEEDBACK.md docs/beta/try.mjs docs/comparisons/dayjs.md docs/comparisons/dayjs-migration.md \
-  docs/comparisons/dayjs-measures.md "$out/"
-cp docs/test262/README.md "$out/test262.md"
-(cd "$out" && sha256sum -- * > SHA256SUMS)
+cp docs/beta/FEEDBACK.md docs/beta/try.mjs "$out/"
+# The documents keep their folders, so that their links between them hold in the kit.
+mkdir -p "$out/docs/guide/en" "$out/docs/guide/fr" "$out/docs/reference" "$out/docs/issue-codes" "$out/docs/adr"
+cp docs/guide/en/temporal.md "$out/docs/guide/en/"
+cp docs/guide/fr/temporal.md "$out/docs/guide/fr/"
+cp docs/reference/temporal.md "$out/docs/reference/"
+cp docs/issue-codes/temporal.md "$out/docs/issue-codes/"
+cp docs/adr/0005-temporal-as-a-platform-peer.md docs/adr/0035-test262-judge.md docs/adr/0036-comparison-with-dayjs.md \
+  docs/adr/0037-temporal-package.md "$out/docs/adr/"
+cp -r docs/comparisons docs/test262 "$out/docs/"
+(cd "$out" && find . -type f ! -name SHA256SUMS | LC_ALL=C sort | xargs sha256sum > SHA256SUMS)
 
 judge() {
   local node_bin=$1 project

@@ -205,10 +205,10 @@ const code = (text) => `\`${text.replaceAll('|', '\\|')}\``;
 const migrationTable = (lang, header) => {
   const rows = MIGRATION.map((step) => {
     const summary = bySummary.get(step.family);
-    if (summary === undefined) {
+    if (step.family !== undefined && summary === undefined) {
       throw new Error(`no results for the family ${step.family}`);
     }
-    const count = `${summary.dayjsWrong + summary.undecided} / ${summary.cases}`;
+    const count = summary === undefined ? 'not compared' : `${summary.dayjsWrong} / ${summary.cases}`;
     return `| ${step[lang]} | ${code(step.dayjs)} | ${code(step.instead)} | ${count} |`;
   });
   return [header, '|---|---|---|---:|', ...rows];
@@ -220,6 +220,11 @@ const migration = [
     'notes say which of these lines are conventions. The last column counts generated cases on transitions since ' +
     '2000, chosen where dates go wrong, not an average of what an application meets.',
   '',
+  '`zoned` is a `Temporal.ZonedDateTime`, `date` a `Temporal.PlainDate`, `wall` a `Temporal.PlainDateTime`, `span` ' +
+    'an interval. The functions of `@yaltaan/temporal` that can fail return a `Result`: read its `value` after ' +
+    'testing its `ok`. `parseZonedDateTime` reads `yyyy-MM-ddTHH:mm:ss` unless a format says otherwise, and refuses ' +
+    'a wall clock that does not exist or exists twice, which dayjs accepts, unless `disambiguation` decides.',
+  '',
   ...migrationTable('en', '| Need | dayjs | Temporal or `@yaltaan/temporal` | dayjs differs / cases |'),
   '',
   '## Le même tableau, en français',
@@ -229,6 +234,12 @@ const migration = [
     'changements ' +
     "d'heure depuis 2000, choisis là où les dates se trompent : ce n'est pas une moyenne de ce que rencontre une " +
     'application.',
+  '',
+  '`zoned` est un `Temporal.ZonedDateTime`, `date` un `Temporal.PlainDate`, `wall` un `Temporal.PlainDateTime`, ' +
+    '`span` un intervalle. Les fonctions de `@yaltaan/temporal` qui peuvent échouer rendent un `Result` : lisez sa ' +
+    '`value` après avoir testé son `ok`. `parseZonedDateTime` lit `yyyy-MM-ddTHH:mm:ss` sauf si un format dit autre ' +
+    "chose, et refuse une heure qui n'existe pas ou existe deux fois, ce que dayjs accepte, sauf si `disambiguation` " +
+    'décide.',
   '',
   ...migrationTable('fr', '| Besoin | dayjs | Temporal ou `@yaltaan/temporal` | dayjs diffère / cas |'),
   '',

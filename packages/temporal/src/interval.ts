@@ -54,7 +54,16 @@ export type Interval<T extends IntervalBound> = Span<T> | EmptyInterval;
  */
 export const emptyInterval: EmptyInterval = { start: undefined, end: undefined };
 
-const isSpan = <T extends IntervalBound>(one: Interval<T>): one is Span<T> => one.start !== undefined;
+/**
+ * Whether an interval holds something. What is neither, the `Result` of `interval` first among them, would read as
+ * empty and vanish from a list without a word.
+ */
+function isSpan<T extends IntervalBound>(one: Interval<T>): one is Span<T> {
+  if (typeof one.start !== 'object' && (one.start !== undefined || !('start' in one))) {
+    throw new TypeError('Not an interval: read the Result of interval');
+  }
+  return one.start !== undefined;
+}
 
 function order(one: IntervalBound, other: IntervalBound): number {
   const kind = one.constructor as unknown as { compare(a: IntervalBound, b: IntervalBound): number };
@@ -62,7 +71,7 @@ function order(one: IntervalBound, other: IntervalBound): number {
     (kind as unknown) !== other.constructor ||
     (one as Temporal.PlainDate).calendarId !== (other as Temporal.PlainDate).calendarId
   ) {
-    throw new TypeError('These values cannot be ordered: they differ by class, implementation or calendar');
+    throw new TypeError('Mixed classes, implementations or calendars');
   }
   return kind.compare(one, other);
 }

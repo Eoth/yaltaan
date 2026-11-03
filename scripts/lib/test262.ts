@@ -251,8 +251,8 @@ export function formatSummary(
   const lines = [
     '# Temporal under test262',
     '',
-    'Written by `bash scripts/test262.sh --write`, compared by the gate. Each table of this folder lists the tests ' +
-      'that did not pass on one implementation, with their error; ' +
+    'Written by `bash scripts/test262.sh --write`, compared by the gate. Each `.tsv` file of this folder lists the ' +
+      'tests that did not pass on one implementation, with their error; ' +
       '[ADR 0035](../adr/0035-test262-judge.md) says how they are run and what they mean for `@yaltaan/temporal`.',
     '',
     `test262 commit \`${commit}\`; ${runtime}.`,

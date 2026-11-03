@@ -226,6 +226,27 @@ test(
   },
 );
 
+testOnEach('what is not an interval is refused, never read as empty: the Result of interval first among them', (T) => {
+  const start = T.PlainDate.from('2024-01-01');
+  const made = interval(start, start.add({ days: 1 }));
+  assert.ok(made.ok);
+  for (const bad of [made, {}, { start: '2024-01-01', end: '2024-02-01' }, { start: 1, end: 2 }]) {
+    const wrong = bad as unknown as Interval<Temporal.PlainDate>;
+    assert.throws(() => mergeAll([wrong]), TypeError);
+    assert.throws(() => gaps([wrong]), TypeError);
+    assert.throws(() => contains(wrong, start), TypeError);
+    assert.throws(() => overlaps(wrong, made.value), TypeError);
+    assert.throws(() => overlaps(made.value, wrong), TypeError);
+    assert.throws(() => intersect(wrong, made.value), TypeError);
+    assert.throws(() => union(made.value, wrong), TypeError);
+    assert.throws(() => gaps([made.value], { within: wrong }), TypeError);
+  }
+  const [empty] = [emptyInterval];
+  assert.deepEqual(mergeAll([empty]), { ok: true, value: [] });
+  assert.equal(contains(empty, start), false);
+  assert.deepEqual(gaps([made.value], { within: empty }), { ok: true, value: [] });
+});
+
 testOnEach('limits: a list over a million intervals is refused without being read', (T) => {
   const tooLong = new Array(1_000_001) as Interval<Temporal.PlainDate>[];
   const expected = { ok: false, error: { code: 'temporal.too_large', path: [], params: { maximum: 1_000_000 } } };

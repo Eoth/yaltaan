@@ -55,7 +55,7 @@ if (january.ok && february.ok && april.ok) {
 interval(day('2024-02-01'), day('2024-01-01')).ok; // → false
 ```
 
-`mergeAll` gives the fewest spans in order, `gaps` what lies between them, `union` and `intersect` work on two. A list of more than a million intervals is refused unread. Two values of different classes, implementations or calendars throw a `TypeError`: `compare` of Temporal would answer unevenly, and only a program can cause it.
+`interval` returns a `Result`: a list takes what is inside it, and a `Result` given to a list is a `TypeError`, not an empty interval. `start` tells them apart: an interval that holds something has one, `emptyInterval` has `undefined`, and TypeScript narrows on it. `mergeAll` gives the fewest spans in order, `gaps` what lies between them, `union` and `intersect` work on two. A list of more than a million intervals is refused unread. Two values of different classes, implementations or calendars throw a `TypeError`: `compare` of Temporal would answer unevenly, and only a program can cause it.
 
 ## Reading a date
 

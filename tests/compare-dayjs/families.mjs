@@ -436,6 +436,24 @@ export const FAMILIES = {
 /** What a project leaving dayjs writes instead, with the family of the comparison that says what dayjs does there. */
 export const MIGRATION = [
   {
+    en: 'Today, now',
+    fr: "Aujourd'hui, maintenant",
+    dayjs: 'dayjs()',
+    instead: 'Temporal.Now.plainDateISO(zone), Temporal.Now.zonedDateTimeISO(zone)',
+  },
+  {
+    en: 'Show a date with a pattern',
+    fr: 'Afficher une date selon un motif',
+    dayjs: "d.format('YYYY-MM-DD HH:mm')",
+    instead: "zoned.toPlainDateTime().toString({ smallestUnit: 'minute' }).replace('T', ' ')",
+  },
+  {
+    en: 'Show a date to a person',
+    fr: 'Afficher une date à une personne',
+    dayjs: "d.format('DD/MM/YYYY')",
+    instead: "date.toLocaleString('fr-FR')",
+  },
+  {
     family: 'add-months',
     en: 'Add months to a date',
     fr: 'Ajouter des mois à une date',
@@ -549,8 +567,8 @@ export const MIGRATION = [
   },
   {
     family: 'two-digit-year',
-    en: 'A two-digit year',
-    fr: 'Une année sur deux chiffres',
+    en: 'A two-digit year: pivots differ, there is no truth',
+    fr: "Une année sur deux chiffres : les pivots diffèrent, il n'y a pas de vérité",
     dayjs: "dayjs(text, 'DD/MM/YY')",
     instead: "parsePlainDate(text, { format: 'dd/MM/yy', pivotYear: 1969 })",
   },

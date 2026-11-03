@@ -9,8 +9,19 @@ if (typeof globalThis.Temporal === 'undefined') {
   console.log(`Temporal: native, on Node ${process.versions.node}`);
 }
 
-const { addBusinessDays, contains, endOf, fromDate, interval, parsePlainDate, parseZonedDateTime, startOf, toDate } =
-  await import('@yaltaan/temporal');
+const {
+  addBusinessDays,
+  contains,
+  endOf,
+  fromDate,
+  gaps,
+  interval,
+  mergeAll,
+  parsePlainDate,
+  parseZonedDateTime,
+  startOf,
+  toDate,
+} = await import('@yaltaan/temporal');
 const { ok } = await import('@yaltaan/core/result');
 
 const day = (text) => Temporal.PlainDate.from(text);
@@ -35,4 +46,24 @@ const workdays = { weekend: [6, 7], holidays: [day('2024-05-01')] };
 assert.equal(String(addBusinessDays(day('2024-04-30'), { ...workdays, days: 1 }).value), '2024-05-02');
 
 assert.deepEqual(ok(1), { ok: true, value: 1 });
+
+const span = (from, to) => {
+  const made = interval(day(from), day(to));
+  if (!made.ok) throw new Error(made.error.code);
+  return made.value;
+};
+const busy = [span('2024-03-01', '2024-04-01'), span('2024-01-01', '2024-02-01'), span('2024-01-15', '2024-02-15')];
+assert.equal(mergeAll(busy).value.length, 2);
+const holes = gaps(busy, { within: span('2024-01-01', '2025-01-01') }).value;
+assert.deepEqual(
+  holes.map(({ start, end }) => `${start} to ${end}`),
+  ['2024-02-15 to 2024-03-01', '2024-04-01 to 2025-01-01'],
+);
+const read = parseZonedDateTime('2024-03-09T23:00:00', newYork);
+assert.ok(read.ok);
+assert.equal(
+  read.value.add({ hours: 3 }).toPlainDateTime().toString({ smallestUnit: 'minute' }).replace('T', ' '),
+  '2024-03-10 03:00',
+);
+assert.equal(typeof String(Temporal.Now.plainDateISO('Europe/Paris')), 'string');
 console.log('ok: @yaltaan/core and @yaltaan/temporal work together on this platform.');

@@ -2,8 +2,13 @@
 
 Written by `bash tests/compare-dayjs/run.sh --write`, from the same results as [the comparison](dayjs.md), whose notes say which of these lines are conventions. The last column counts generated cases on transitions since 2000, chosen where dates go wrong, not an average of what an application meets.
 
+`zoned` is a `Temporal.ZonedDateTime`, `date` a `Temporal.PlainDate`, `wall` a `Temporal.PlainDateTime`, `span` an interval. The functions of `@yaltaan/temporal` that can fail return a `Result`: read its `value` after testing its `ok`. `parseZonedDateTime` reads `yyyy-MM-ddTHH:mm:ss` unless a format says otherwise, and refuses a wall clock that does not exist or exists twice, which dayjs accepts, unless `disambiguation` decides.
+
 | Need | dayjs | Temporal or `@yaltaan/temporal` | dayjs differs / cases |
 |---|---|---|---:|
+| Today, now | `dayjs()` | `Temporal.Now.plainDateISO(zone), Temporal.Now.zonedDateTimeISO(zone)` | not compared |
+| Show a date with a pattern | `d.format('YYYY-MM-DD HH:mm')` | `zoned.toPlainDateTime().toString({ smallestUnit: 'minute' }).replace('T', ' ')` | not compared |
+| Show a date to a person | `d.format('DD/MM/YYYY')` | `date.toLocaleString('fr-FR')` | not compared |
 | Add months to a date | `dayjs.utc(text).add(1, 'month')` | `Temporal.PlainDate.from(text).add({ months: 1 })` | 0 / 5941 |
 | Days between two dates | `a.diff(b, 'day')` | `a.since(b, { largestUnit: 'days' }).days` | 0 / 8570 |
 | Months between two dates | `a.diff(b, 'month')` | `a.since(b, { largestUnit: 'months' }).months` | 162 / 8570 |
@@ -20,14 +25,19 @@ Written by `bash tests/compare-dayjs/run.sh --write`, from the same results as [
 | Inside two bounds, end left out | `x.isBetween(a, b, null, '[)')` | `contains(span, x)` | 266 / 3195 |
 | Read a declared format | `dayjs(text, 'DD/MM/YYYY', true)` | `parsePlainDate(text, { format: 'dd/MM/yyyy' })` | 0 / 9247 |
 | Check that a date exists | `dayjs(text).isValid()` | `parsePlainDate(text).ok` | 483 / 2310 |
-| A two-digit year | `dayjs(text, 'DD/MM/YY')` | `parsePlainDate(text, { format: 'dd/MM/yy', pivotYear: 1969 })` | 69 / 300 |
+| A two-digit year: pivots differ, there is no truth | `dayjs(text, 'DD/MM/YY')` | `parsePlainDate(text, { format: 'dd/MM/yy', pivotYear: 1969 })` | 0 / 300 |
 
 ## Le même tableau, en français
 
 Écrit par `bash tests/compare-dayjs/run.sh --write`, à partir des mêmes résultats que la comparaison, dont les notes disent quelles lignes sont des conventions. La dernière colonne compte des cas générés sur les changements d'heure depuis 2000, choisis là où les dates se trompent : ce n'est pas une moyenne de ce que rencontre une application.
 
+`zoned` est un `Temporal.ZonedDateTime`, `date` un `Temporal.PlainDate`, `wall` un `Temporal.PlainDateTime`, `span` un intervalle. Les fonctions de `@yaltaan/temporal` qui peuvent échouer rendent un `Result` : lisez sa `value` après avoir testé son `ok`. `parseZonedDateTime` lit `yyyy-MM-ddTHH:mm:ss` sauf si un format dit autre chose, et refuse une heure qui n'existe pas ou existe deux fois, ce que dayjs accepte, sauf si `disambiguation` décide.
+
 | Besoin | dayjs | Temporal ou `@yaltaan/temporal` | dayjs diffère / cas |
 |---|---|---|---:|
+| Aujourd'hui, maintenant | `dayjs()` | `Temporal.Now.plainDateISO(zone), Temporal.Now.zonedDateTimeISO(zone)` | not compared |
+| Afficher une date selon un motif | `d.format('YYYY-MM-DD HH:mm')` | `zoned.toPlainDateTime().toString({ smallestUnit: 'minute' }).replace('T', ' ')` | not compared |
+| Afficher une date à une personne | `d.format('DD/MM/YYYY')` | `date.toLocaleString('fr-FR')` | not compared |
 | Ajouter des mois à une date | `dayjs.utc(text).add(1, 'month')` | `Temporal.PlainDate.from(text).add({ months: 1 })` | 0 / 5941 |
 | Jours entre deux dates | `a.diff(b, 'day')` | `a.since(b, { largestUnit: 'days' }).days` | 0 / 8570 |
 | Mois entre deux dates | `a.diff(b, 'month')` | `a.since(b, { largestUnit: 'months' }).months` | 162 / 8570 |
@@ -44,4 +54,4 @@ Written by `bash tests/compare-dayjs/run.sh --write`, from the same results as [
 | Entre deux bornes, fin exclue | `x.isBetween(a, b, null, '[)')` | `contains(span, x)` | 266 / 3195 |
 | Lire un format déclaré | `dayjs(text, 'DD/MM/YYYY', true)` | `parsePlainDate(text, { format: 'dd/MM/yyyy' })` | 0 / 9247 |
 | Vérifier qu'une date existe | `dayjs(text).isValid()` | `parsePlainDate(text).ok` | 483 / 2310 |
-| Une année sur deux chiffres | `dayjs(text, 'DD/MM/YY')` | `parsePlainDate(text, { format: 'dd/MM/yy', pivotYear: 1969 })` | 69 / 300 |
+| Une année sur deux chiffres : les pivots diffèrent, il n'y a pas de vérité | `dayjs(text, 'DD/MM/YY')` | `parsePlainDate(text, { format: 'dd/MM/yy', pivotYear: 1969 })` | 0 / 300 |

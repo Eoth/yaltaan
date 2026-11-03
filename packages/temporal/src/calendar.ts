@@ -134,7 +134,7 @@ function firstDay(date: Temporal.PlainDate, unit: CalendarUnit, options: WeekOpt
     case 'week': {
       const first = options?.firstDayOfWeek ?? 0;
       if (!Number.isInteger(first) || first < 1 || first > 7) {
-        throw new RangeError('firstDayOfWeek is a day from 1, Monday, to 7, Sunday');
+        throw new RangeError('firstDayOfWeek goes from 1 to 7');
       }
       return date.subtract({ days: (date.dayOfWeek - first + 7) % 7 });
     }
@@ -142,7 +142,7 @@ function firstDay(date: Temporal.PlainDate, unit: CalendarUnit, options: WeekOpt
       return date.with({ day: 1 });
     case 'quarter':
       if (date.calendarId !== 'iso8601' && date.calendarId !== 'gregory') {
-        throw new RangeError('A quarter needs the ISO or the Gregorian calendar');
+        throw new RangeError('A quarter needs the ISO or Gregorian calendar');
       }
       return date.with({ month: date.month - ((date.month - 1) % 3), day: 1 });
     case 'year':
@@ -160,7 +160,7 @@ function dateOf(value: DatedValue): Temporal.PlainDate {
     case '[object Temporal.ZonedDateTime]':
       return (value as Temporal.PlainDateTime).toPlainDate();
     default:
-      throw new TypeError('A unit is taken of a PlainDate, a PlainDateTime or a ZonedDateTime');
+      throw new TypeError('Not a date');
   }
 }
 
@@ -231,7 +231,7 @@ export interface BusinessCalendar {
 /** An integer that counts days: exact, as an instant of Temporal is within 2^53 milliseconds. */
 function dayNumber(date: Temporal.PlainDate): number {
   if (Object.prototype.toString.call(date) !== PLAIN_DATE) {
-    throw new TypeError('A business day and a holiday are PlainDate values');
+    throw new TypeError('Not a PlainDate');
   }
   return date.toZonedDateTime('UTC').epochMilliseconds / MS_PER_DAY;
 }
@@ -242,7 +242,7 @@ function checkWeekend(weekend: readonly number[]): void {
     weekend.length > 7 ||
     !weekend.every((day) => Number.isInteger(day) && day >= 1 && day <= 7)
   ) {
-    throw new TypeError('weekend is a list of days from 1, Monday, to 7, Sunday');
+    throw new TypeError('weekend holds days from 1 to 7');
   }
 }
 

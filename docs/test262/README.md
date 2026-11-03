@@ -1,6 +1,6 @@
 # Temporal under test262
 
-Written by `bash scripts/test262.sh --write`, compared by the gate. Each table of this folder lists the tests that did not pass on one implementation, with their error; [ADR 0035](../adr/0035-test262-judge.md) says how they are run and what they mean for `@yaltaan/temporal`.
+Written by `bash scripts/test262.sh --write`, compared by the gate. Each `.tsv` file of this folder lists the tests that did not pass on one implementation, with their error; [ADR 0035](../adr/0035-test262-judge.md) says how they are run and what they mean for `@yaltaan/temporal`.
 
 test262 commit `0b4e0812022b18236b5276d2804948fdd9f71603`; node 26.12.1, v8 14.6.202.34-node.40, icu 78.3, tz 2026e.
 
