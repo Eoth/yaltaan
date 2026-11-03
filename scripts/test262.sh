@@ -7,7 +7,9 @@
 # The run is skipped when nothing it reads has changed since the last green run on this machine; CI, with an empty
 # cache, always runs it. Exit status: 0 same results, 1 different results or a wrong sum, 3 it could not run.
 #
-# Usage: scripts/test262.sh [--write]    --write rewrites the tables after a change of a pin
+# Usage: scripts/test262.sh [--write | --print-node]
+#   --write        rewrites the tables after a change of a pin
+#   --print-node   fetches the pinned Node if needed and prints its path
 set -uo pipefail
 
 node_version=26.12.1
@@ -66,6 +68,10 @@ fetch_test262() {
 node_bin=${YALTAAN_NODE26:-$cache/node-v$node_version-linux-x64/bin/node}
 [ -x "$node_bin" ] || fetch_node
 [ "$("$node_bin" -v)" = "v$node_version" ] || cannot_run "$node_bin is not Node $node_version"
+if [ "${1:-}" = --print-node ]; then
+  echo "$node_bin"
+  exit 0
+fi
 [ -d "$test262" ] || fetch_test262
 digest=$(tree_digest "$test262")
 if [ "$digest" != "$test262_digest" ]; then

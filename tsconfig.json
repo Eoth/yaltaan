@@ -7,6 +7,7 @@
   },
   "include": [
     "scripts/**/*.ts",
+    "tests/**/*.ts",
     "bench/perf/**/*.ts",
     "examples/**/*.ts",
     "packages/testing/src/**/*.ts",
