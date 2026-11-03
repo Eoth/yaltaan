@@ -1704,10 +1704,10 @@ export interface ParsePathOptions {
 
 A type.
 
-Where a value sits in a structure, from its root; the empty path is the root itself.
+Where a value sits in a structure, from its root; the empty path is the root itself. Without a type argument, any path. `Path<T>` is every path `T` holds, down to 8 segments: an array element by its index or a key segment, an optional or nullable field as what it holds. Beyond 8 segments, or under `unknown` and `any`, any segments are accepted: the type says what it knows and stops there, and `PathValue` says `unknown`. A union gives the paths of each of its members. The type lists every path, so its cost follows their number: `Path<T, 3>` stops typing after 3 segments, for a model too wide to list.
 
 ```ts
-export type Path = readonly PathSegment[];
+export type Path<T = unknown, Depth extends 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 = 8> = unknown extends T ? readonly PathSegment[] : readonly [] | PathsOf<NonNullable<T>, Fewer[Depth]>;
 ```
 
 | Contract | Value |
@@ -1775,6 +1775,21 @@ export type PathSegment = string | number | symbol | KeySegment;
 | Contract | Value |
 |---|---|
 | `@since` | 0.1 |
+| `@experimental` | yes |
+
+### `PathValue`
+
+A type.
+
+The value at this path of `T`: `undefined` is added where a step may hold nothing (an optional or nullable field, an array element, a field only some members of a union have); `unknown` for a path `T` does not type.
+
+```ts
+export type PathValue<T, P extends readonly PathSegment[]> = P extends readonly [] ? T : P extends readonly [infer Head, ...infer Rest extends readonly PathSegment[]] ? PathValue<PathStep<T, Head>, Rest> : unknown;
+```
+
+| Contract | Value |
+|---|---|
+| `@since` | 0.3 |
 | `@experimental` | yes |
 
 ### `checkWritablePath`

@@ -14,6 +14,7 @@ import {
   type Path,
   type PathIssue,
   type PathSegment,
+  type PathValue,
 } from './index.ts';
 
 const SUBPATH = '@yaltaan/core/path';
@@ -357,4 +358,140 @@ declareAdversarial(SUBPATH, 'checkWritablePath', {
     }
   },
   async: { na: 'checkWritablePath is synchronous and takes no signal' },
+});
+
+test('Path<T>: every path the type holds, and only those', () => {
+  interface Address {
+    readonly city: string;
+    readonly zip: string | null;
+  }
+  interface Order {
+    readonly id: string;
+    readonly note?: string;
+    readonly customer: { readonly name: string; readonly address?: Address };
+    readonly lines: readonly { readonly sku: string; readonly quantity: number }[];
+    readonly payment:
+      { readonly by: 'card'; readonly last4: string } | { readonly by: 'transfer'; readonly iban: string };
+    readonly at: Date;
+    readonly total: () => number;
+  }
+  const paths: readonly Path<Order>[] = [
+    [],
+    ['id'],
+    ['note'],
+    ['customer'],
+    ['customer', 'address'],
+    ['customer', 'address', 'city'],
+    ['lines'],
+    ['lines', 0],
+    ['lines', 0, 'sku'],
+    ['lines', { key: 'a' }, 'quantity'],
+    ['payment', 'by'],
+    ['payment', 'last4'],
+    ['payment', 'iban'],
+    ['at'],
+    ['total'],
+  ];
+  assert.equal(paths.length, 15);
+  const never = (): void => {
+    // @ts-expect-error: no such field
+    const unknownField: Path<Order> = ['nope'];
+    // @ts-expect-error: no such field under this one
+    const unknownNested: Path<Order> = ['customer', 'nope'];
+    // @ts-expect-error: an array is entered by an index or a key
+    const fieldOfArray: Path<Order> = ['lines', 'sku'];
+    // @ts-expect-error: a string has no field a path reads
+    const insideLeaf: Path<Order> = ['id', 'length'];
+    // @ts-expect-error: a Date is a leaf
+    const insideDate: Path<Order> = ['at', 'getTime'];
+    // @ts-expect-error: a function is a leaf
+    const insideMethod: Path<Order> = ['total', 'name'];
+    // @ts-expect-error: a text is no path: the notation exists at the boundaries only
+    const text: Path<Order> = 'customer.name';
+    void [unknownField, unknownNested, fieldOfArray, insideLeaf, insideDate, insideMethod, text];
+  };
+  assert.equal(typeof never, 'function');
+});
+
+test('PathValue: what the path holds, with undefined where a step may hold nothing', () => {
+  interface Order {
+    readonly id: string;
+    readonly note?: string;
+    readonly zip: string | null;
+    readonly customer: { readonly name: string; readonly address?: { readonly city: string } };
+    readonly lines: readonly { readonly sku: string }[];
+    readonly payment:
+      { readonly by: 'card'; readonly last4: string } | { readonly by: 'transfer'; readonly iban: string };
+  }
+  assertType<Equal<PathValue<Order, []>, Order>>();
+  assertType<Equal<PathValue<Order, ['id']>, string>>();
+  assertType<Equal<PathValue<Order, ['note']>, string | undefined>>();
+  assertType<Equal<PathValue<Order, ['zip']>, string | null>>();
+  assertType<Equal<PathValue<Order, ['customer', 'name']>, string>>();
+  assertType<Equal<PathValue<Order, ['customer', 'address', 'city']>, string | undefined>>();
+  assertType<Equal<PathValue<Order, ['lines', 0]>, { readonly sku: string } | undefined>>();
+  assertType<Equal<PathValue<Order, ['lines', 0, 'sku']>, string | undefined>>();
+  assertType<Equal<PathValue<Order, ['lines', { key: 'a' }, 'sku']>, string | undefined>>();
+  assertType<Equal<PathValue<Order, ['payment', 'by']>, 'card' | 'transfer'>>();
+  assertType<Equal<PathValue<Order, ['payment', 'last4']>, string | undefined>>();
+  assertType<Equal<PathValue<Order, ['nope']>, undefined>>();
+  assertType<Equal<PathValue<Order, readonly PathSegment[]>, unknown>>();
+  assertType<Equal<PathValue<Order, readonly ['id']>, string>>();
+});
+
+test('degradation: the untyped path, unknown and any, and past 8 segments', () => {
+  assertType<Equal<Path, readonly PathSegment[]>>();
+  assertType<Equal<Path<unknown>, readonly PathSegment[]>>();
+  // A `never` holds nothing but its root, and `any` is unknown to a path, not a reason to accept nothing.
+  assertType<Equal<Path<never>, readonly []>>();
+  assertType<Equal<Path<any>, readonly PathSegment[]>>();
+  interface Tree {
+    readonly value: number;
+    readonly children: readonly Tree[];
+  }
+  // Four steps of `children` and an index each make 8 segments; past them, any segments, and an unknown value.
+  const deep: Path<Tree> = ['children', 0, 'children', 0, 'children', 0, 'children', 0, 'anything', Symbol('x'), 5];
+  assert.equal(deep.length, 11);
+  assertType<Equal<PathValue<Tree, ['children', 0, 'value']>, number | undefined>>();
+  const never = (): void => {
+    // @ts-expect-error: within 8 segments, a path is still judged
+    const wrong: Path<Tree> = ['children', 0, 'nope'];
+    void wrong;
+  };
+  assert.equal(typeof never, 'function');
+  const wide: Path<Readonly<Record<string, { readonly a: number }>>> = ['anything', 'a'];
+  assert.equal(wide.length, 2);
+});
+
+test('a depth stops typing where the application says, for a model too wide to list', () => {
+  interface Model {
+    readonly a: { readonly b: { readonly c: string } };
+  }
+  const shallow: Path<Model, 1> = ['a', 'anything', Symbol('x')];
+  const two: Path<Model, 2> = ['a', 'b', 'anything'];
+  assert.equal(shallow.length + two.length, 6);
+  const never = (): void => {
+    // @ts-expect-error: the segments it types are still judged
+    const first: Path<Model, 1> = ['nope'];
+    // @ts-expect-error: the segments it types are still judged
+    const second: Path<Model, 2> = ['a', 'nope'];
+    // @ts-expect-error: a depth goes from 1 to 8
+    const zero: Path<Model, 0> = [];
+    // @ts-expect-error: a depth goes from 1 to 8
+    const nine: Path<Model, 9> = [];
+    void [first, second, zero, nine];
+  };
+  assert.equal(typeof never, 'function');
+});
+
+test('a typed path is a path: what any function of Path accepts', () => {
+  interface Order {
+    readonly customer: { readonly name: string };
+  }
+  const typed: Path<Order> = ['customer', 'name'];
+  const formatted = formatPath(typed);
+  assert.ok(formatted.ok);
+  assert.equal(formatted.value, 'customer.name');
+  const parsed: Path = typed;
+  assert.equal(parsed.length, 2);
 });

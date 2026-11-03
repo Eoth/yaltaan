@@ -81,3 +81,26 @@ Un segment `{ key }` n'a pas de forme texte ; pour le confier à un moteur de fo
 ## Codes
 
 Les issues de ce module (`path.syntax`, `path.too_long`, `path.too_deep`, `path.not_textual`, `path.forbidden_segment`) et leurs paramètres sont listés dans le [registre de `@yaltaan/core`](../../issue-codes/core.md).
+
+## Un chemin que le compilateur vérifie
+
+`Path<T>`, c'est chaque chemin que `T` contient : une faute dans un nom de champ n'attend plus un test, et l'erreur dit ce qui était attendu. `PathValue<T, P>`, c'est la valeur à ce chemin, avec `undefined` là où un pas peut ne rien contenir.
+
+```ts
+import { formatPath, type Path, type PathValue } from '@yaltaan/core/path';
+
+interface Order {
+  readonly customer: { readonly address?: { readonly city: string } };
+  readonly lines: readonly { readonly sku: string }[];
+}
+
+const city: Path<Order> = ['customer', 'address', 'city'];
+const sku: Path<Order> = ['lines', 0, 'sku'];
+
+type City = PathValue<Order, ['customer', 'address', 'city']>; // string | undefined
+
+formatPath(city).ok; // → true
+sku.length; // → 3
+```
+
+Au-delà de 8 segments, tout segment est accepté, et `PathValue` dit `unknown` : le type dit ce qu'il sait et s'arrête là. Il liste chaque chemin, donc son coût suit leur nombre : pour un modèle de milliers de chemins, `Path<Order, 3>` cesse de typer après 3 segments.

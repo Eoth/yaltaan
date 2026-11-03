@@ -25,7 +25,7 @@ An export that runs (a function, a constant that can be called, a class) carries
 
 ## Packages
 
-- [`@yaltaan/core`](core.md): 96 public export(s).
+- [`@yaltaan/core`](core.md): 97 public export(s).
 - [`@yaltaan/rules`](rules.md): 21 public export(s).
 - [`@yaltaan/schema`](schema.md): 34 public export(s).
 - [`@yaltaan/temporal`](temporal.md): 31 public export(s).

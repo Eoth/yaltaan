@@ -81,3 +81,26 @@ A `{ key }` segment has no text form; to hand it to a form engine that only know
 ## Codes
 
 The issues of this module (`path.syntax`, `path.too_long`, `path.too_deep`, `path.not_textual`, `path.forbidden_segment`) and their parameters are listed in the [registry of `@yaltaan/core`](../../issue-codes/core.md).
+
+## A path the compiler checks
+
+`Path<T>` is every path `T` holds: a typo in a field name no longer waits for a test, and the error says what was expected. `PathValue<T, P>` is the value at that path, with `undefined` where a step may hold nothing.
+
+```ts
+import { formatPath, type Path, type PathValue } from '@yaltaan/core/path';
+
+interface Order {
+  readonly customer: { readonly address?: { readonly city: string } };
+  readonly lines: readonly { readonly sku: string }[];
+}
+
+const city: Path<Order> = ['customer', 'address', 'city'];
+const sku: Path<Order> = ['lines', 0, 'sku'];
+
+type City = PathValue<Order, ['customer', 'address', 'city']>; // string | undefined
+
+formatPath(city).ok; // → true
+sku.length; // → 3
+```
+
+Past 8 segments any segment is accepted, and `PathValue` says `unknown`: the type says what it knows and stops there. It lists every path, so its cost follows their number: for a model with thousands of paths, `Path<Order, 3>` stops typing after 3 segments.

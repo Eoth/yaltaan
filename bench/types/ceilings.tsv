@@ -5,3 +5,5 @@
 usage	compiler	instantiations	basis
 schema-object	ts7	16000	ADR 0033: measured 14466, valibot on the same shape 58622
 schema-object	ts6	12700	ADR 0033: measured 11544, valibot on the same shape 30364
+path	ts7	24100	ADR 0038: measured 21867
+path	ts6	9700	ADR 0038: measured 8812

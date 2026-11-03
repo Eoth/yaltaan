@@ -42,11 +42,62 @@ export interface KeySegment {
 export type PathSegment = string | number | symbol | KeySegment;
 
 /**
- * Where a value sits in a structure, from its root; the empty path is the root itself.
+ * Where a value sits in a structure, from its root; the empty path is the root itself. Without a type argument, any
+ * path. `Path<T>` is every path `T` holds, down to 8 segments: an array element by its index or a key segment, an
+ * optional or nullable field as what it holds. Beyond 8 segments, or under `unknown` and `any`, any segments are
+ * accepted: the type says what it knows and stops there, and `PathValue` says `unknown`. A union gives the paths of
+ * each of its members. The type lists every path, so its cost follows their number: `Path<T, 3>` stops typing after 3
+ * segments, for a model too wide to list.
  * @since 0.1
  * @experimental
  */
-export type Path = readonly PathSegment[];
+export type Path<T = unknown, Depth extends 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 = 8> = unknown extends T
+  ? readonly PathSegment[]
+  : readonly [] | PathsOf<NonNullable<T>, Fewer[Depth]>;
+
+/** What ends a path: a value with no field a path reads. A method is not a place, so a function ends it too. */
+type PathLeaf = string | number | bigint | boolean | symbol | ((...args: never[]) => unknown) | Date | RegExp;
+
+/** Countdown of the segments left after this one, an index being a segment. */
+type Fewer = [never, 0, 1, 2, 3, 4, 5, 6, 7];
+
+type PathsOf<T, Depth extends number> = [Depth] extends [never]
+  ? readonly PathSegment[]
+  : T extends PathLeaf
+    ? never
+    : T extends readonly (infer Element)[]
+      ? ElementPath<Element, Fewer[Depth]>
+      : T extends object
+        ? { [K in keyof T & string]-?: FieldPath<K, T[K], Fewer[Depth]> }[keyof T & string]
+        : never;
+
+type ElementPath<Element, Depth extends number> =
+  readonly [number | KeySegment] | readonly [number | KeySegment, ...PathsOf<NonNullable<Element>, Depth>];
+
+type FieldPath<K extends string, Value, Depth extends number> =
+  readonly [K] | readonly [K, ...PathsOf<NonNullable<Value>, Depth>];
+
+/**
+ * The value at this path of `T`: `undefined` is added where a step may hold nothing (an optional or nullable field, an
+ * array element, a field only some members of a union have); `unknown` for a path `T` does not type.
+ * @since 0.3
+ * @experimental
+ */
+export type PathValue<T, P extends readonly PathSegment[]> = P extends readonly []
+  ? T
+  : P extends readonly [infer Head, ...infer Rest extends readonly PathSegment[]]
+    ? PathValue<PathStep<T, Head>, Rest>
+    : unknown;
+
+type PathStep<T, Head> = T extends null | undefined
+  ? undefined
+  : T extends readonly (infer Element)[]
+    ? Head extends number | KeySegment
+      ? Element | undefined
+      : undefined
+    : Head extends keyof T
+      ? T[Head]
+      : undefined;
 
 /**
  * Why a path could not be read, written as text, or used for a write. `path` is the path concerned, empty for a text
