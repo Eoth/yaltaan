@@ -1,0 +1,40 @@
+# test262 on one implementation of Temporal: the tests that did not pass; written by scripts/test262.ts --write.
+# test262 commit: 0b4e0812022b18236b5276d2804948fdd9f71603
+# implementation: temporal-polyfill 1.0.5, global.js
+# runtime: node 26.12.1, v8 14.6.202.34-node.40, icu 78.3, tz 2026e
+# tests: 6634, passed: 5099, not passed: 1535
+# unknown calendar buddhist: 143 tests
+# unknown calendar chinese: 137 tests
+# unknown calendar coptic: 84 tests
+# unknown calendar dangi: 119 tests
+# unknown calendar ethioaa: 84 tests
+# unknown calendar ethiopic: 104 tests
+# unknown calendar hebrew: 133 tests
+# unknown calendar indian: 73 tests
+# unknown calendar islamic-civil: 106 tests
+# unknown calendar islamic-tbla: 98 tests
+# unknown calendar islamic-umalqura: 82 tests
+# unknown calendar islamicc: 13 tests
+# unknown calendar japanese: 142 tests
+# unknown calendar persian: 83 tests
+# unknown calendar roc: 114 tests
+built-ins/Temporal/Duration/call-builtin	Test262Error: should not call Number.isFinite
+built-ins/Temporal/Duration/prototype/total/precision-exact-mathematical-values-5	Test262Error: NudgeToCalendarUnit shou
+built-ins/Temporal/Duration/prototype/total/precision-exact-mathematical-values-6	Test262Error: hours=816, nanoseconds=2
+built-ins/Temporal/Instant/prototype/toZonedDateTimeISO/no-observable-array-iteration	Test262Error: Array should not be
+built-ins/Temporal/PlainDate/prototype/toZonedDateTime/no-observable-array-iteration	Test262Error: Array should not be i
+built-ins/Temporal/PlainDateTime/prototype/toZonedDateTime/no-observable-array-iteration	Test262Error: Array should not
+built-ins/Temporal/PlainYearMonth/prototype/since/builtin-calendar-no-array-iteration	Test262Error: Array should not be
+built-ins/Temporal/PlainYearMonth/prototype/subtract/builtin-calendar-no-array-iteration	Test262Error: Array should not
+intl402/Temporal/PlainDate/from/calendarresolvefields-error-ordering-chinese	Test262Error: Missing year throws TypeError
+intl402/Temporal/PlainDate/from/calendarresolvefields-error-ordering-japanese	Test262Error: Missing year/era throws Type
+intl402/Temporal/PlainDateTime/from/calendarresolvefields-error-ordering-chinese	Test262Error: Missing year throws TypeE
+intl402/Temporal/PlainMonthDay/from/calendarresolvefields-error-ordering-chinese	Test262Error: Missing year throws TypeE
+intl402/Temporal/PlainMonthDay/from/calendarresolvefields-error-ordering-hebrew	Test262Error: Missing year throws TypeEr
+intl402/Temporal/PlainMonthDay/from/calendarresolvefields-error-ordering-islamic	Test262Error: Missing year throws TypeE
+intl402/Temporal/PlainMonthDay/from/fields-underspecified	Test262Error: no monthCode or year specification, non-ISO non-
+intl402/Temporal/PlainYearMonth/from/calendarresolvefields-error-ordering-chinese	Test262Error: Missing year throws Type
+intl402/Temporal/PlainYearMonth/from/calendarresolvefields-error-ordering-japanese	Test262Error: Missing year throws Typ
+intl402/Temporal/ZonedDateTime/from/calendarresolvefields-error-ordering-chinese	Test262Error: Missing year throws TypeE
+intl402/Temporal/ZonedDateTime/links	Test262Error: link=CST6CDT, zone=America/Chicago Expected SameValue(?false?, ?true?
+intl402/Temporal/ZonedDateTime/prototype/withCalendar/calendar-case-insensitive	RangeError: Unknown calendar jApAnEsE; m

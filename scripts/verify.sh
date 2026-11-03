@@ -196,6 +196,21 @@ else
 fi
 rm -f "$rehearsal_log"
 
+step "test262"
+# The judge of the Temporal implementations: a pinned Node and a pinned test262, fetched outside the lockfile. Without
+# network the step is reported skipped, the first time only: they stay in the cache.
+test262_log=$(mktemp)
+bash scripts/test262.sh > "$test262_log" 2>&1
+case $? in
+  0) tail -n 1 "$test262_log" ;;
+  3) skip "$(tail -n 1 "$test262_log")" ;;
+  *)
+    cat "$test262_log"
+    failed
+    ;;
+esac
+rm -f "$test262_log"
+
 step "audit"
 # Both commands ask the registry. Without network the step is reported skipped, never passed; CI runs it online.
 audit_log=$(mktemp)

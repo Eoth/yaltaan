@@ -1,0 +1,32 @@
+# test262 on one implementation of Temporal: the tests that did not pass; written by scripts/test262.ts --write.
+# test262 commit: 0b4e0812022b18236b5276d2804948fdd9f71603
+# implementation: native Temporal
+# runtime: node 26.12.1, v8 14.6.202.34-node.40, icu 78.3, tz 2026e
+# tests: 6634, passed: 6607, not passed: 27
+built-ins/Temporal/Duration/prototype/round/exact-multiple-of-larger-unit-plaindate	Test262Error: P31D weeks..months cei
+built-ins/Temporal/Duration/prototype/round/exact-multiple-of-larger-unit-zoned	Test262Error: P7D days..weeks ceil: days
+built-ins/Temporal/PlainDate/prototype/since/exact-multiple-of-larger-unit	Test262Error: P1M weeks..months ceil: weeks r
+built-ins/Temporal/PlainDate/prototype/until/exact-multiple-of-larger-unit	Test262Error: P1M weeks..months ceil: weeks r
+built-ins/Temporal/PlainDateTime/prototype/since/exact-multiple-of-larger-unit	Test262Error: P1M weeks..months ceil: wee
+built-ins/Temporal/PlainDateTime/prototype/until/exact-multiple-of-larger-unit	Test262Error: P1M weeks..months ceil: wee
+built-ins/Temporal/PlainYearMonth/prototype/since/exact-multiple-of-larger-unit	Test262Error: P1Y months..years ceil: mo
+built-ins/Temporal/PlainYearMonth/prototype/until/exact-multiple-of-larger-unit	Test262Error: P1Y months..years ceil: mo
+built-ins/Temporal/ZonedDateTime/prototype/since/exact-multiple-of-larger-unit	Test262Error: P7D days..weeks ceil: days
+built-ins/Temporal/ZonedDateTime/prototype/until/exact-multiple-of-larger-unit	Test262Error: P7D days..weeks ceil: days
+intl402/Temporal/Instant/prototype/toLocaleString/datestyle-not-adjusted-when-no-conflicting-options	Test262Error: Expec
+intl402/Temporal/Instant/prototype/toLocaleString/era	Test262Error: toLocaleString on an Instant with era option should
+intl402/Temporal/Instant/prototype/toLocaleString/hourcycle	Test262Error: output for hour12: false should include 00:00:
+intl402/Temporal/Instant/prototype/toLocaleString/respect-timezone-after-formatting-plaindatetime	Test262Error: Expected
+intl402/Temporal/PlainDate/prototype/toLocaleString/datestyle-not-adjusted-when-no-conflicting-options	Test262Error: Exp
+intl402/Temporal/PlainDate/prototype/toLocaleString/era	Test262Error: toLocaleString on a PlainDate with era option shou
+intl402/Temporal/PlainDate/prototype/toLocaleString/ignore-timezone	Test262Error: Expected true but got false
+intl402/Temporal/PlainDateTime/prototype/toLocaleString/datestyle-not-adjusted-when-no-conflicting-options	Test262Error:
+intl402/Temporal/PlainDateTime/prototype/toLocaleString/era	Test262Error: toLocaleString on a PlainDateTime with era opt
+intl402/Temporal/PlainDateTime/prototype/toLocaleString/hourcycle	Test262Error: output for hour12: false should include
+intl402/Temporal/PlainDateTime/prototype/toLocaleString/ignore-timezone	Test262Error: Expected true but got false
+intl402/Temporal/PlainTime/prototype/toLocaleString/hourcycle	Test262Error: output for hour12: false should include 00:0
+intl402/Temporal/PlainYearMonth/prototype/toLocaleString/era	Test262Error: toLocaleString on a PlainYearMonth with era o
+intl402/Temporal/ZonedDateTime/prototype/round/same-date-starts-twice	RangeError: Temporal error: ZonedDateTime is outsi
+intl402/Temporal/ZonedDateTime/prototype/toLocaleString/datestyle-not-adjusted-when-no-conflicting-options	Test262Error:
+intl402/Temporal/ZonedDateTime/prototype/toLocaleString/era	Test262Error: toLocaleString on a ZonedDateTime with era opt
+intl402/Temporal/ZonedDateTime/prototype/toLocaleString/hourcycle	Test262Error: output for hour12: false should include
