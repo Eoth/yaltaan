@@ -27,13 +27,13 @@ Outillage de développement (empreinte installée, à ne laisser croître que pa
 
 Une version utilisable d'abord (décision du propriétaire du 2026-10-23, §3) : la 0.1.0 livre `@yaltaan/core`, les utilitaires que les équipes recodent, sur les contrats de §5 d'`ARCHITECTURE.md` ; la 0.2.0 ajoute schéma et règles, validés sur le formulaire pilote ; la 0.3.0 le formulaire et Angular. L'outillage qui reste attend d'être utile. Ces versions sont des jalons de travail : **rien n'est publié avant la v1** (décision du propriétaire du 2026-11-02, §3). Les contrats se gèlent après le pilote (T2.7), pas avant. Une itération peut prendre deux tickets S ou M d'un même domaine.
 
-**Avancement** : 34 étapes closes sur 95 ; prochaine : T4.7.
+**Avancement** : 35 étapes closes sur 95 ; prochaine : T2.1 a.
 
 | # | Lot | Tickets, dans l'ordre | Avancement | Sortie |
 |---|---|---|---|---|
 | 1 | 0 — Outillage | T0.1, T0.2, T0.7, T0.6, T0.5, T0.3, T0.4 a, b | 8 / 8 clos, terminé | Paquets vides qui passent toute la CI ; taille, coût des types, instructions et temps mesurés. |
 | 2 | 0.1.0 — `@yaltaan/core` utilisable | T1.1, T1.3, T1.2, T1.5, T3.1 a, b, T0.17, T3.2, T0.20 a, T3.3 a, b, T3.5, T3.4, T0.16, T0.10 | 15 / 15 clos, terminé | `Result`, `Issue`, `Path`, `equal`, objets et accès par chemin, collections, nombres, chaînes ; workflow de publication répété à chaque poussée, archive vérifiée, rien de publié. |
-| 3 | Temporal devant (décision du 2026-11-03, §3) | T4.5, T0.20 b, T4.6, T4.1, T4.2, T4.3, T4.7 | 6 / 7 clos ; prochain : T4.7 | Juge test262 et comparateur dayjs d'abord, puis `@yaltaan/temporal` et un kit d'archives pour les bêta-testeurs, rien de publié. |
+| 3 | Temporal devant (décision du 2026-11-03, §3) | T4.5, T0.20 b, T4.6, T4.1, T4.2, T4.3, T4.7 | 7 / 7 clos, terminé | Juge test262 et comparateur dayjs d'abord, puis `@yaltaan/temporal` et un kit d'archives pour les bêta-testeurs, rien de publié. |
 | 4 | 0.2.0 — Schéma et règles sur le pilote | T2.1 a, b, T2.8, T2.2, T2.9, T2.3, T1.4 | 5 / 7 clos ; prochain : T2.1 a | Schéma Standard Schema minimal et règles relationnelles, scénarios du pilote verts sans `form`. |
 | 5 | 0.3.0 — Formulaire et Angular | T0.14, T1.6 a, T1.6 b, T2.4 a, b, c, T2.5, T2.6, T2.7 | 0 / 9 clos ; prochain : T0.14 | Pilote de bout en bout dans Angular, mesures, **ADR go/no-go de `form`**, gel des contrats. |
 | 6 | Outillage reporté | T1.7, T0.18, T0.19, T0.21, T0.22, T0.24, T0.25, T0.8, T0.9, T0.13, T0.15 | 0 / 11 clos ; prochain : T1.7 | Selon le besoin réel des versions précédentes. |
@@ -333,13 +333,6 @@ Une décision réservée au propriétaire (nom, licence, API publique, contrat t
 - **Accepté si** : `decode(encode(x))` égal à `x` ; le sous-chemin principal de `temporal` n'embarque rien de `schema` (T0.2).
 - **Taille** S · **Prio** P1 · **Dépend de** T4.2, T5.2
 
-#### T4.7 — Kit de bêta : archives et guide pour des testeurs exigeants
-- **Pourquoi** : des bêta-testeurs exigeants sur la performance, la sécurité et la documentation doivent pouvoir installer, comprendre et juger sans le dépôt ni aide.
-- **Faire** : archives `.tgz` de `core` et `temporal`, installées ensemble dans un projet neuf ; API marquées `@experimental` ; guide en anglais et en français : démarrage, passage de dayjs à Temporal (table tirée du comparateur), ce qui est testé et sur quoi, ce qui n'est pas couvert (T0.9 : Firefox et WebKit ; T4.4 : codecs), mesures et commandes pour les rejouer, modèle de retour.
-- **Où** : `scripts/`, `docs/beta/`.
-- **Accepté si** : un agent neuf, sans le dépôt ni le contexte, suit le guide dans un dossier vide ; chaque blocage est corrigé et rejoué ; aucune publication.
-- **Taille** M · **Prio** P1 · **Dépend de** T4.3, T4.6
-
 #### T4.8 — Second polyfill sous test262
 - **Pourquoi** : `ARCHITECTURE.md` §7.8 et ADR 0005 promettent des tests sur `@js-temporal/polyfill` tant qu'il reste très installé ; T4.5 n'a jugé que `temporal-polyfill`, et ce second polyfill n'est dans aucun verrou.
 - **Faire** : l'exécuter sous `scripts/test262.ts` (hors du verrou, comme les autres cibles de ce juge) et faire tourner les lois du paquet sur lui, ou proposer par ADR de retirer la promesse.
@@ -547,3 +540,4 @@ Une ligne par ticket : `identifiant — commit — résultat mesuré — itérat
 | T4.2 | feat(temporal): read declared formats, and add the boundary with Date, units and business days | Quatre lecteurs, une passe sans expression régulière, 64 unités de code au plus, aucun `RangeError` qui s'échappe ; lois aller-retour, fuzz, oracle, limites ; relecture neuve : refus puis acceptation, 9 constats corrigés ; avec les intervalles 1 466 / 1 469 o pour un budget de 1 790 ; lecture d'une date 33 400 instructions (dayjs strict 55 600, `PlainDate.from` natif sur l'ISO 3 940) | 0,5 (M) |
 | T4.3 | feat(temporal): read declared formats, and add the boundary with Date, units and business days | `fromDate`, `toDate`, `startOf`, `endOf`, `isBusinessDay`, `addBusinessDays`, `businessDaysBetween` ; aucune conversion sans fuseau ne compile ; arithmétique des jours ouvrés recoupée par un oracle lent et java.time ; relecture neuve : refus puis tout corrigé, dont `endOf` avant sa valeur dans 8 fuseaux ; paquet entier 2 971 / 2 983 o ; tests 5 258 → 6 401 | 0,5 (M) |
 | T1.4 | docs(adr): type a path by the union of what a type holds ; feat(core): type a path by what a type holds, and the value at a path | `Path<T, Depth = 8>` et `PathValue<T, P>` ; 21 867 / 8 812 instanciations pour des plafonds de 24 100 / 9 700 ; +855 % de temps seul pour +900 % ; erreurs relues, TypeScript propose le bon champ ; réserve : le plafond du nombre de chemins n'existe pas comme tel, seule la profondeur le borne (ADR 0038, T1.7) | 0,5 (M) |
+| T4.7 | feat(beta): build a kit of archives and a guide for testers of the date package ; fix(temporal): refuse the Result of interval where an interval is expected | Kit de `core` et `temporal` par une répétition de publication, guide en anglais et en français, table de migration tirée du comparateur, modèle de retour, installé sur Node 24 (polyfill) et Node 26 (natif), rien de publié ; juge : un agent neuf sans le dépôt, deux passages (146 k et 48 k jetons) : 9 blocages, dont `mergeAll` qui lisait un `Result` comme vide et les liens morts, tous levés sauf du cosmétique ; il dit qu'il continuerait | 0,5 (M) |
