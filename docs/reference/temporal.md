@@ -173,7 +173,7 @@ export interface Span<T extends IntervalBound> {
 
 A type.
 
-An expected failure of this package. An issue never holds the text it refused: - `temporal.inverted_interval`: the start of an interval comes after its end; - `temporal.too_large`: more intervals, holidays or days than `maximum`, or a number of days that is not an integer; - `temporal.ambiguous_format`: no format says how to read this text, or `yy` has no `pivotYear`; - `temporal.invalid_format`: the format cannot be read: an unknown letter, a token used twice, a missing field, or a `pivotYear` that is not an integer from 0 to 9900; - `temporal.format_mismatch`: the text does not follow the format from the code unit `at`; - `temporal.too_long`: the text has more than `maximum` code units; - `temporal.invalid_date`: no such date or time, or an invalid `Date`; - `temporal.invalid_time_zone`, `temporal.invalid_calendar`: Temporal does not know this name; - `temporal.nonexistent_time`: this wall clock does not exist in this zone: the clock jumps over it; - `temporal.ambiguous_time`: this wall clock exists twice in this zone: the clock goes back over it; - `temporal.out_of_range`: the result would fall outside the range of Temporal; - `temporal.no_business_day`: every day of the week is in the weekend.
+An expected failure of this package. An issue never holds the text it refused: - `temporal.inverted_interval`: the start of an interval comes after its end; - `temporal.too_large`: more intervals, holidays or days than `maximum`, or a number of days that is not an integer; - `temporal.ambiguous_format`: no format says how to read this text, or `yy` has no `pivotYear`; - `temporal.invalid_format`: the format cannot be read: an unknown letter, a token used twice, a missing field, `SSS` without `ss`, or a `pivotYear` that is not an integer from 0 to 9900; - `temporal.format_mismatch`: the text does not follow the format from the code unit `at`; - `temporal.too_long`: the text has more than `maximum` code units; - `temporal.invalid_date`: no such date or time, or an invalid `Date`; - `temporal.invalid_time_zone`, `temporal.invalid_calendar`: Temporal does not know this name; - `temporal.nonexistent_time`: this wall clock does not exist in this zone: the clock jumps over it; - `temporal.ambiguous_time`: this wall clock exists twice in this zone: the clock goes back over it; - `temporal.out_of_range`: the result would fall outside the range of Temporal; - `temporal.no_business_day`: every day of the week is in the weekend.
 
 ```ts
 export type TemporalIssue = {
@@ -320,7 +320,7 @@ export declare function contains<T extends IntervalBound>(within: Interval<T>, v
 | `@pure` | yes |
 | `@sharing` | none |
 | `@complexity` | O(1) |
-| `@throws` | TypeError when the values differ by class, implementation or calendar |
+| `@throws` | TypeError when a value is not an interval, as the `Result` of `interval` is not, or values differ by class, implementation or calendar |
 | `@since` | 0.3 |
 | `@experimental` | yes |
 
@@ -418,7 +418,7 @@ export declare function gaps<T extends IntervalBound>(intervals: readonly Interv
 | `@pure` | yes |
 | `@sharing` | identity-preserving |
 | `@complexity` | O(n log n) comparisons (n = intervals), O(n) when they come in order |
-| `@throws` | TypeError when the values differ by class, implementation or calendar |
+| `@throws` | TypeError when a value is not an interval, as the `Result` of `interval` is not, or values differ by class, implementation or calendar |
 | `@since` | 0.3 |
 | `@experimental` | yes |
 
@@ -443,7 +443,7 @@ export declare function intersect<T extends IntervalBound>(one: Interval<T>, oth
 | `@pure` | yes |
 | `@sharing` | identity-preserving |
 | `@complexity` | O(1) |
-| `@throws` | TypeError when the values differ by class, implementation or calendar |
+| `@throws` | TypeError when a value is not an interval, as the `Result` of `interval` is not, or values differ by class, implementation or calendar |
 | `@since` | 0.3 |
 | `@experimental` | yes |
 
@@ -519,7 +519,7 @@ export declare function mergeAll<T extends IntervalBound>(intervals: readonly In
 | `@pure` | yes |
 | `@sharing` | identity-preserving |
 | `@complexity` | O(n log n) comparisons (n = intervals), O(n) when they come in order |
-| `@throws` | TypeError when the values differ by class, implementation or calendar |
+| `@throws` | TypeError when a value is not an interval, as the `Result` of `interval` is not, or values differ by class, implementation or calendar |
 | `@since` | 0.3 |
 | `@experimental` | yes |
 
@@ -544,7 +544,7 @@ export declare function overlaps<T extends IntervalBound>(one: Interval<T>, othe
 | `@pure` | yes |
 | `@sharing` | none |
 | `@complexity` | O(1) |
-| `@throws` | TypeError when the values differ by class, implementation or calendar |
+| `@throws` | TypeError when a value is not an interval, as the `Result` of `interval` is not, or values differ by class, implementation or calendar |
 | `@since` | 0.3 |
 | `@experimental` | yes |
 
@@ -729,7 +729,7 @@ export declare function union<T extends IntervalBound>(one: Interval<T>, other: 
 | `@pure` | yes |
 | `@sharing` | identity-preserving |
 | `@complexity` | O(1) |
-| `@throws` | TypeError when the values differ by class, implementation or calendar |
+| `@throws` | TypeError when a value is not an interval, as the `Result` of `interval` is not, or values differ by class, implementation or calendar |
 | `@since` | 0.3 |
 | `@experimental` | yes |
 

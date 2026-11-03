@@ -8,7 +8,7 @@ This kit is for people who will judge a date library hard on performance, securi
 
 | File | What it is |
 |---|---|
-| `yaltaan-core-*.tgz`, `yaltaan-temporal-*.tgz` | The two packages, installed together. Named `0.1.0-rehearsal.0`: a rehearsal of the release, the only kind of version that exists; `@since 0.3` in a declaration is a working milestone. |
+| `yaltaan-core-*.tgz`, `yaltaan-temporal-*.tgz` | The two packages, installed together. Named `0.1.0-rehearsal.0`: a rehearsal of the release, the only kind of version that exists; `@since 0.3` in a declaration is a working milestone. The links of their READMEs lead to the `docs/` of this kit. |
 | `try.mjs` | A first run that checks one function of each kind on your platform. |
 | `docs/guide/en/temporal.md`, `docs/guide/fr/temporal.md` | **The guide of the package**: read it after section 2. |
 | `docs/reference/temporal.md`, `docs/issue-codes/temporal.md` | Every function with its contract; every issue code. |
@@ -68,7 +68,7 @@ if (!read.ok) throw new Error(read.error.code);
 const later = read.value.add({ hours: 3 });
 console.log(later.toPlainDateTime().toString({ smallestUnit: 'minute' }).replace('T', ' ')); // 2024-03-10 03:00
 
-// Today, and its quarter, in a time zone you name:
+// Today, in a time zone you name:
 console.log(String(Temporal.Now.plainDateISO('Europe/Paris')));
 ```
 
@@ -111,7 +111,7 @@ The repository is public: `https://github.com/Eoth/yaltaan`, at the commit `{com
 ```sh
 git clone https://github.com/Eoth/yaltaan.git && cd yaltaan && git checkout {commit}
 npm ci --ignore-scripts
-bash scripts/test262.sh              # about 30 s; prints ok: test262 gives the tables of docs/test262...
+bash scripts/test262.sh              # about 30 s; ends with a line that starts with ok:
 bash scripts/verify.sh               # about 2 min; the whole gate, ends with OK
 bash tests/compare-dayjs/run.sh      # about 1 min; prints ok: the comparison gives the recorded report, to the byte
 bash tests/compare-dayjs/measure.sh  # about 4 min; rewrites docs/comparisons/dayjs-measures.md: read git diff

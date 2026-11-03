@@ -9,8 +9,8 @@ import type { Path } from '@yaltaan/core/path';
  * - `temporal.inverted_interval`: the start of an interval comes after its end;
  * - `temporal.too_large`: more intervals, holidays or days than `maximum`, or a number of days that is not an integer;
  * - `temporal.ambiguous_format`: no format says how to read this text, or `yy` has no `pivotYear`;
- * - `temporal.invalid_format`: the format cannot be read: an unknown letter, a token used twice, a missing field, or a
- *   `pivotYear` that is not an integer from 0 to 9900;
+ * - `temporal.invalid_format`: the format cannot be read: an unknown letter, a token used twice, a missing field, `SSS`
+ *   without `ss`, or a `pivotYear` that is not an integer from 0 to 9900;
  * - `temporal.format_mismatch`: the text does not follow the format from the code unit `at`;
  * - `temporal.too_long`: the text has more than `maximum` code units;
  * - `temporal.invalid_date`: no such date or time, or an invalid `Date`;

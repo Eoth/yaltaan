@@ -99,7 +99,8 @@ export function interval<T extends IntervalBound>(start: T, end: T): Result<Inte
  * @pure
  * @sharing none
  * @complexity O(1)
- * @throws TypeError when the values differ by class, implementation or calendar
+ * @throws TypeError when a value is not an interval, as the `Result` of `interval` is not, or values differ by class,
+ * implementation or calendar
  * @since 0.3
  * @experimental
  * @example contains(span, span.start) // true
@@ -113,7 +114,8 @@ export function contains<T extends IntervalBound>(within: Interval<T>, value: T)
  * @pure
  * @sharing none
  * @complexity O(1)
- * @throws TypeError when the values differ by class, implementation or calendar
+ * @throws TypeError when a value is not an interval, as the `Result` of `interval` is not, or values differ by class,
+ * implementation or calendar
  * @since 0.3
  * @experimental
  * @example overlaps(january, february) // false
@@ -127,7 +129,8 @@ export function overlaps<T extends IntervalBound>(one: Interval<T>, other: Inter
  * @pure
  * @sharing identity-preserving
  * @complexity O(1)
- * @throws TypeError when the values differ by class, implementation or calendar
+ * @throws TypeError when a value is not an interval, as the `Result` of `interval` is not, or values differ by class,
+ * implementation or calendar
  * @since 0.3
  * @experimental
  * @example intersect(january, february) // emptyInterval
@@ -165,7 +168,8 @@ function merged<T extends IntervalBound>(list: readonly Interval<T>[]): Span<T>[
  * @pure
  * @sharing identity-preserving
  * @complexity O(1)
- * @throws TypeError when the values differ by class, implementation or calendar
+ * @throws TypeError when a value is not an interval, as the `Result` of `interval` is not, or values differ by class,
+ * implementation or calendar
  * @since 0.3
  * @experimental
  * @example union(january, february) // one span, from January to the end of February
@@ -179,7 +183,8 @@ export function union<T extends IntervalBound>(one: Interval<T>, other: Interval
  * @pure
  * @sharing identity-preserving
  * @complexity O(n log n) comparisons (n = intervals), O(n) when they come in order
- * @throws TypeError when the values differ by class, implementation or calendar
+ * @throws TypeError when a value is not an interval, as the `Result` of `interval` is not, or values differ by class,
+ * implementation or calendar
  * @since 0.3
  * @experimental
  * @example mergeAll([february, january]) // ok: one span
@@ -198,7 +203,8 @@ export function mergeAll<T extends IntervalBound>(
  * @pure
  * @sharing identity-preserving
  * @complexity O(n log n) comparisons (n = intervals), O(n) when they come in order
- * @throws TypeError when the values differ by class, implementation or calendar
+ * @throws TypeError when a value is not an interval, as the `Result` of `interval` is not, or values differ by class,
+ * implementation or calendar
  * @since 0.3
  * @experimental
  * @example gaps([january, march]) // ok: February, as one span

@@ -8,7 +8,7 @@ Ce kit s'adresse à celles et ceux qui jugeront durement une librairie de dates 
 
 | Fichier | Ce que c'est |
 |---|---|
-| `yaltaan-core-*.tgz`, `yaltaan-temporal-*.tgz` | Les deux paquets, installés ensemble. Nommés `0.1.0-rehearsal.0` : une répétition de la publication, la seule sorte de version qui existe ; `@since 0.3` dans une déclaration est un jalon de travail. |
+| `yaltaan-core-*.tgz`, `yaltaan-temporal-*.tgz` | Les deux paquets, installés ensemble. Nommés `0.1.0-rehearsal.0` : une répétition de la publication, la seule sorte de version qui existe ; `@since 0.3` dans une déclaration est un jalon de travail. Les liens de leurs READMEs mènent au `docs/` de ce kit. |
 | `try.mjs` | Un premier passage qui vérifie une fonction de chaque sorte sur votre plateforme. |
 | `docs/guide/fr/temporal.md`, `docs/guide/en/temporal.md` | **Le guide du paquet** : à lire après la section 2. |
 | `docs/reference/temporal.md`, `docs/issue-codes/temporal.md` | Chaque fonction avec son contrat ; chaque code d'issue. |
@@ -68,7 +68,7 @@ if (!read.ok) throw new Error(read.error.code);
 const later = read.value.add({ hours: 3 });
 console.log(later.toPlainDateTime().toString({ smallestUnit: 'minute' }).replace('T', ' ')); // 2024-03-10 03:00
 
-// Today, and its quarter, in a time zone you name:
+// Today, in a time zone you name:
 console.log(String(Temporal.Now.plainDateISO('Europe/Paris')));
 ```
 
@@ -111,7 +111,7 @@ Le dépôt est public : `https://github.com/Eoth/yaltaan`, au commit `{commit}`,
 ```sh
 git clone https://github.com/Eoth/yaltaan.git && cd yaltaan && git checkout {commit}
 npm ci --ignore-scripts
-bash scripts/test262.sh              # 30 s environ ; affiche ok: test262 gives the tables of docs/test262...
+bash scripts/test262.sh              # 30 s environ ; finit par une ligne qui commence par ok:
 bash scripts/verify.sh               # 2 min environ ; toute la porte, finit par OK
 bash tests/compare-dayjs/run.sh      # 1 min environ ; affiche ok: the comparison gives the recorded report, to the byte
 bash tests/compare-dayjs/measure.sh  # 4 min environ ; réécrit docs/comparisons/dayjs-measures.md : lisez git diff
