@@ -199,6 +199,12 @@ export function generate() {
       point.zone,
       '()',
     );
+    const stop = wallOf(after.toPlainDateTime());
+    add(`interval-contains${old}`, first, first, stop, point.zone);
+    add(`interval-contains${old}`, stop, first, stop, point.zone);
+    add(`interval-contains${old}`, wallOf(instantWall.add({ hours: 1 })), first, stop, point.zone);
+    add(`interval-overlaps${old}`, first, stop, wallOf(after.add({ hours: 1 }).toPlainDateTime()), stop, point.zone);
+    add(`interval-overlaps${old}`, first, stop, stop, wallOf(after.add({ hours: 1 }).toPlainDateTime()), point.zone);
     const other = zones[Math.floor(rand() * zones.length)];
     const same = safe.withTimeZone(other);
     add(`compare${old}`, first, point.zone, wallOf(same.toPlainDateTime()), other);

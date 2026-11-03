@@ -63,7 +63,8 @@ const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
  * Each family: `dayjs(args, dayjs)` and `temporal(args, T)`; `host`, the time zone the process runs in for dayjs's
  * answer, a function of the case for the families that depend on it, UTC otherwise; `clock`, the date the machine says
  * it is for dayjs's answer, `JANUARY` otherwise, because `dayjs.tz` starts from the offset of the zone today. Java's
- * answer is in Oracle.java, under the family's name.
+ * answer is in Oracle.java, under the family's name. `yaltaan(args, Y, T)`, where the library has this function: it
+ * runs on the native Temporal and on the polyfill, each as `globalThis.Temporal`.
  */
 export const FAMILIES = {
   'add-months': {
@@ -225,6 +226,36 @@ export const FAMILIES = {
         T.ZonedDateTime.compare(zoned(T, high, zone), at),
         kind,
       );
+    },
+  },
+  'interval-contains': {
+    dayjs: ([x, low, high, zone], d) =>
+      d.tz(x, zone).isBetween(d.tz(low, zone), d.tz(high, zone), null, '[)') ? 'in' : 'out',
+    temporal: ([x, low, high, zone], T) => {
+      const at = zoned(T, x, zone);
+      const inside =
+        T.ZonedDateTime.compare(zoned(T, low, zone), at) <= 0 && T.ZonedDateTime.compare(at, zoned(T, high, zone)) < 0;
+      return inside ? 'in' : 'out';
+    },
+    yaltaan: ([x, low, high, zone], Y, T) => {
+      const made = Y.interval(zoned(T, low, zone), zoned(T, high, zone));
+      return made.ok && Y.contains(made.value, zoned(T, x, zone)) ? 'in' : 'out';
+    },
+  },
+  'interval-overlaps': {
+    dayjs: ([a, b, c, e, zone], d) => {
+      const [a1, b1, c1, e1] = [d.tz(a, zone), d.tz(b, zone), d.tz(c, zone), d.tz(e, zone)];
+      return a1.isBefore(e1) && c1.isBefore(b1) ? 'yes' : 'no';
+    },
+    temporal: ([a, b, c, e, zone], T) =>
+      T.ZonedDateTime.compare(zoned(T, a, zone), zoned(T, e, zone)) < 0 &&
+      T.ZonedDateTime.compare(zoned(T, c, zone), zoned(T, b, zone)) < 0
+        ? 'yes'
+        : 'no',
+    yaltaan: ([a, b, c, e, zone], Y, T) => {
+      const one = Y.interval(zoned(T, a, zone), zoned(T, b, zone));
+      const other = Y.interval(zoned(T, c, zone), zoned(T, e, zone));
+      return one.ok && other.ok && Y.overlaps(one.value, other.value) ? 'yes' : 'no';
     },
   },
   'validate-permissive': {

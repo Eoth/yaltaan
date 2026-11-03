@@ -1,0 +1,35 @@
+{
+  "name": "@yaltaan/temporal",
+  "version": "0.0.0",
+  "private": true,
+  "description": "What Temporal does not provide: intervals, declared formats, the boundary with Date, business days.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Eoth/yaltaan.git",
+    "directory": "packages/temporal"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist/",
+    "!dist/**/*.test.*"
+  ],
+  "engines": {
+    "node": ">=22.12"
+  },
+  "dependencies": {
+    "@yaltaan/core": "0.0.0"
+  }
+}

@@ -138,6 +138,18 @@ public final class Oracle {
         boolean below = a[4].charAt(1) == ']' ? !x.isAfter(high) : x.isBefore(high);
         return above && below ? "between" : "outside";
       }
+      case "interval-contains": {
+        Instant x = zoned(a[0], a[3]).toInstant();
+        boolean inside = !x.isBefore(zoned(a[1], a[3]).toInstant()) && x.isBefore(zoned(a[2], a[3]).toInstant());
+        return inside ? "in" : "out";
+      }
+      case "interval-overlaps": {
+        Instant first = zoned(a[0], a[4]).toInstant();
+        Instant firstEnd = zoned(a[1], a[4]).toInstant();
+        Instant second = zoned(a[2], a[4]).toInstant();
+        Instant secondEnd = zoned(a[3], a[4]).toInstant();
+        return first.isBefore(secondEnd) && second.isBefore(firstEnd) ? "yes" : "no";
+      }
       case "validate-permissive":
       case "validate-strict":
       case "parse-permissive":

@@ -211,6 +211,23 @@ case $? in
 esac
 rm -f "$test262_log"
 
+step "temporal on the native implementation"
+# The tests of the gate run on Node 24, which has no Temporal: the laws of the package also run on the pinned Node.
+if temporal_node=$(bash scripts/test262.sh --print-node 2> /dev/null) && [ -x "$temporal_node" ]; then
+  temporal_log=$(mktemp)
+  "$temporal_node" --import ./scripts/test-env.ts --test 'packages/temporal/src/*.test.ts' > "$temporal_log" 2>&1
+  temporal_status=$?
+  grep -E '^ℹ (tests|pass|fail) ' "$temporal_log"
+  if [ "$temporal_status" != 0 ] || ! grep -q '^ℹ pass [1-9]' "$temporal_log" ||
+    ! grep -q '^ℹ fail 0$' "$temporal_log"; then
+    grep -E -A20 '^✖ failing tests:' "$temporal_log" | head -40
+    failed
+  fi
+  rm -f "$temporal_log"
+else
+  skip "the pinned Node with Temporal cannot be fetched"
+fi
+
 step "audit"
 # Both commands ask the registry. Without network the step is reported skipped, never passed; CI runs it online.
 audit_log=$(mktemp)

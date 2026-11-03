@@ -24,6 +24,8 @@ export interface FamilySummary {
   readonly javaAlone: number;
   readonly undecided: number;
   readonly sidesApart: number;
+  /** Where `@yaltaan/temporal`, on either implementation, answers otherwise than Temporal or, without it, java.time. */
+  readonly yaltaanApart: number;
   /** Among the cases where dayjs differs and answers a stamp: only the wall clock, only the instant, both. */
   readonly stamps: { readonly wall: number; readonly instant: number; readonly both: number };
   /** Among the cases where Temporal differs and answers a stamp: those where only the instant differs. */
@@ -35,6 +37,7 @@ const REFEREE = 'java.time';
 const NATIVE = 'native';
 const POLYFILL = 'polyfill';
 const DAYJS = 'dayjs';
+const YALTAAN = 'yaltaan';
 
 /** The sides grouped by answer: `dayjs | java.time=native=polyfill`, stable whatever the order of the sides. */
 export function signatureOf(answers: Readonly<Record<string, string>>): string {
@@ -80,15 +83,24 @@ export function summarize(family: string, cases: readonly Case[]): FamilySummary
   let javaAlone = 0;
   let undecided = 0;
   let sidesApart = 0;
+  let yaltaanApart = 0;
   const stamps = { wall: 0, instant: 0, both: 0 };
   let temporalSameWall = 0;
   const examples = new Map<string, Case & { count: number }>();
   for (const one of cases) {
     const { answers } = one;
-    const distinct = new Set(Object.values(answers));
+    const others = Object.entries(answers).filter(([side]) => !side.startsWith(YALTAAN));
+    const reference = answers[NATIVE] ?? answers[REFEREE];
+    const apart = Object.entries(answers).some(([side, answer]) => side.startsWith(YALTAAN) && answer !== reference);
+    if (apart) {
+      yaltaanApart += 1;
+    }
+    const distinct = new Set(others.map(([, answer]) => answer));
     if (distinct.size <= 1) {
       agree += 1;
-      continue;
+      if (!apart) {
+        continue;
+      }
     }
     const java = answers[REFEREE];
     const native = answers[NATIVE];
@@ -96,7 +108,9 @@ export function summarize(family: string, cases: readonly Case[]): FamilySummary
     if (native !== undefined && answers[POLYFILL] !== undefined && native !== answers[POLYFILL]) {
       sidesApart += 1;
     }
-    if (java === undefined || native === undefined || dayjs === undefined) {
+    if (distinct.size <= 1) {
+      // Agreed by the three others: only a side of this library is apart, and it is counted above.
+    } else if (java === undefined || native === undefined || dayjs === undefined) {
       undecided += 1;
     } else if (dayjs !== java && native === java) {
       dayjsWrong += 1;
@@ -134,6 +148,7 @@ export function summarize(family: string, cases: readonly Case[]): FamilySummary
     javaAlone,
     undecided,
     sidesApart,
+    yaltaanApart,
     stamps,
     temporalSameWall,
     examples: [...examples]
@@ -153,12 +168,30 @@ export function formatReport(
   const lines = [...preamble, ''];
   lines.push(
     '| Family | Cases | All agree | dayjs differs | Temporal differs | java.time alone | Undecided ' +
-      '| Native and polyfill differ |',
+      '| Native and polyfill differ | `@yaltaan/temporal` differs |',
   );
-  lines.push('|---|---:|---:|---:|---:|---:|---:|---:|');
-  const total = { cases: 0, agree: 0, dayjsWrong: 0, temporalWrong: 0, javaAlone: 0, undecided: 0, sidesApart: 0 };
+  lines.push('|---|---:|---:|---:|---:|---:|---:|---:|---:|');
+  const total = {
+    cases: 0,
+    agree: 0,
+    dayjsWrong: 0,
+    temporalWrong: 0,
+    javaAlone: 0,
+    undecided: 0,
+    sidesApart: 0,
+    yaltaanApart: 0,
+  };
   for (const s of summaries) {
-    const row = [s.cases, s.agree, s.dayjsWrong, s.temporalWrong, s.javaAlone, s.undecided, s.sidesApart];
+    const row = [
+      s.cases,
+      s.agree,
+      s.dayjsWrong,
+      s.temporalWrong,
+      s.javaAlone,
+      s.undecided,
+      s.sidesApart,
+      s.yaltaanApart,
+    ];
     lines.push(`| ${s.family} | ${row.join(' | ')} |`);
     total.cases += s.cases;
     total.agree += s.agree;
@@ -167,6 +200,7 @@ export function formatReport(
     total.javaAlone += s.javaAlone;
     total.undecided += s.undecided;
     total.sidesApart += s.sidesApart;
+    total.yaltaanApart += s.yaltaanApart;
   }
   lines.push(`| **All** | ${Object.values(total).join(' | ')} |`, '');
   if (notes.length > 0) {

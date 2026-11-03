@@ -12,6 +12,7 @@ import { parseArgs } from 'node:util';
 import { Temporal as Polyfill } from 'temporal-polyfill/implementation';
 import { FAMILIES, JANUARY, NOT_APPLICABLE, REFUSED } from './families.mjs';
 import { generate } from './generate.mjs';
+import * as yaltaan from '../../packages/temporal/dist/index.js';
 import { formatReport, reportDifferences, stampDifference, summarize } from './report.ts';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -39,6 +40,14 @@ const native = globalThis.Temporal;
 if (native === undefined || Polyfill === native || Polyfill.PlainDate === native.PlainDate) {
   throw new Error('the native side and the polyfill side must be two implementations: run on Node 26');
 }
+const onImplementation = (temporal, ask) => {
+  globalThis.Temporal = temporal;
+  try {
+    return ask();
+  } finally {
+    globalThis.Temporal = native;
+  }
+};
 const answerOf = (ask) => {
   try {
     return ask();
@@ -134,6 +143,12 @@ for (const name of names) {
       polyfill: answerOf(() => family.temporal(args, Polyfill)),
       'java.time': java[i],
     };
+    if (family.yaltaan !== undefined) {
+      answers.yaltaan = answerOf(() => onImplementation(native, () => family.yaltaan(args, yaltaan, native)));
+      answers['yaltaan on polyfill'] = answerOf(() =>
+        onImplementation(Polyfill, () => family.yaltaan(args, yaltaan, Polyfill)),
+      );
+    }
     for (const side of Object.keys(answers)) {
       if (answers[side] === NOT_APPLICABLE) {
         delete answers[side];

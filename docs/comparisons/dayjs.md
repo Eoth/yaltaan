@@ -6,72 +6,76 @@ A disagreement goes to java.time, which shares no code with the others: "dayjs d
 
 Sides: dayjs 1.11.23 with its `utc`, `timezone`, `customParseFormat`, `isBetween`, `quarterOfYear` and `isoWeek` plugins; native Temporal of Node 26.12.1 (ICU 78.3, time zone data 2026e); temporal-polyfill 1.0.5 on the same Node; java 17.0.20.1, tzdb 2026b. Time zones: 418, read from `Intl.supportedValuesOf('timeZone')`. The process runs in UTC unless a family says otherwise. dayjs sees a machine clock fixed at 15 January 2026, because `dayjs.tz` reads the clock, and a report must not depend on the day.
 
-| Family | Cases | All agree | dayjs differs | Temporal differs | java.time alone | Undecided | Native and polyfill differ |
-|---|---:|---:|---:|---:|---:|---:|---:|
-| add-days | 4570 | 4570 | 0 | 0 | 0 | 0 | 0 |
-| add-months | 5941 | 5941 | 0 | 0 | 0 | 0 | 0 |
-| between | 3195 | 2751 | 444 | 0 | 0 | 0 | 0 |
-| between:old | 2088 | 1792 | 296 | 0 | 0 | 0 | 0 |
-| compare | 3195 | 2886 | 307 | 0 | 2 | 0 | 0 |
-| compare:old | 2088 | 1729 | 359 | 0 | 0 | 0 | 0 |
-| date-to-zone | 5325 | 5325 | 0 | 0 | 0 | 0 | 0 |
-| date-to-zone:old | 3480 | 2619 | 855 | 0 | 3 | 3 | 3 |
-| date-to-zone@new-york | 5325 | 5316 | 9 | 0 | 0 | 0 | 0 |
-| date-to-zone@new-york:old | 3480 | 2470 | 1004 | 0 | 3 | 3 | 3 |
-| date-to-zone@paris | 5325 | 5153 | 172 | 0 | 0 | 0 | 0 |
-| date-to-zone@paris:old | 3480 | 1981 | 1493 | 0 | 3 | 3 | 3 |
-| diff-days | 8570 | 8570 | 0 | 0 | 0 | 0 | 0 |
-| diff-months | 8570 | 8408 | 162 | 0 | 0 | 0 | 0 |
-| diff-years | 8570 | 8568 | 2 | 0 | 0 | 0 | 0 |
-| end-of-plain | 2742 | 2742 | 0 | 0 | 0 | 0 | 0 |
-| end-of-zoned | 6808 | 6801 | 0 | 0 | 7 | 0 | 0 |
-| end-of-zoned:old | 4176 | 1670 | 2500 | 0 | 2 | 4 | 4 |
-| extreme-add-month | 17 | 9 | 6 | 0 | 2 | 0 | 0 |
-| extreme-add-year | 17 | 9 | 6 | 0 | 2 | 0 | 0 |
-| extreme-read | 17 | 11 | 5 | 0 | 1 | 0 | 0 |
-| far-date-to-zone | 836 | 829 | 0 | 0 | 7 | 0 | 0 |
-| gap-in-zone | 1602 | 1602 | 0 | 0 | 0 | 0 | 0 |
-| gap-in-zone:old | 1392 | 1386 | 0 | 0 | 3 | 3 | 3 |
-| gap-local | 1602 | 1602 | 0 | 0 | 0 | 0 | 0 |
-| gap-local:old | 1392 | 1386 | 0 | 0 | 3 | 3 | 3 |
-| old-date-to-zone | 836 | 805 | 31 | 0 | 0 | 0 | 0 |
-| overlap-in-zone | 1593 | 210 | 1383 | 0 | 0 | 0 | 0 |
-| overlap-in-zone:old | 696 | 354 | 342 | 0 | 0 | 0 | 0 |
-| overlap-in-zone@july | 1593 | 1419 | 174 | 0 | 0 | 0 | 0 |
-| overlap-in-zone@july:old | 696 | 410 | 286 | 0 | 0 | 0 | 0 |
-| overlap-local | 1593 | 1593 | 0 | 0 | 0 | 0 | 0 |
-| overlap-local:old | 696 | 696 | 0 | 0 | 0 | 0 | 0 |
-| parse-permissive | 121 | 35 | 80 | 0 | 6 | 0 | 0 |
-| parse-strict | 9247 | 9247 | 0 | 0 | 0 | 0 | 0 |
-| same-day | 2130 | 2047 | 83 | 0 | 0 | 0 | 0 |
-| same-day:old | 1392 | 1338 | 54 | 0 | 0 | 0 | 0 |
-| start-of-plain | 2742 | 2742 | 0 | 0 | 0 | 0 | 0 |
-| start-of-zoned | 6808 | 6469 | 339 | 0 | 0 | 0 | 0 |
-| start-of-zoned:old | 4176 | 3038 | 1137 | 1 | 0 | 0 | 1 |
-| two-digit-year | 300 | 231 | 0 | 0 | 0 | 69 | 0 |
-| validate-permissive | 2310 | 1827 | 483 | 0 | 0 | 0 | 0 |
-| validate-strict | 2310 | 2310 | 0 | 0 | 0 | 0 | 0 |
-| zone-to-date | 1483 | 1482 | 1 | 0 | 0 | 0 | 0 |
-| zone-to-date:old | 696 | 678 | 18 | 0 | 0 | 0 | 0 |
-| zone-to-date@new-york | 1065 | 1064 | 1 | 0 | 0 | 0 | 0 |
-| zone-to-date@new-york:old | 696 | 678 | 18 | 0 | 0 | 0 | 0 |
-| zone-to-date@paris | 1065 | 1064 | 1 | 0 | 0 | 0 | 0 |
-| zone-to-date@paris:old | 696 | 678 | 18 | 0 | 0 | 0 | 0 |
-| zone-to-utc | 1065 | 1064 | 1 | 0 | 0 | 0 | 0 |
-| zone-to-utc:old | 696 | 678 | 18 | 0 | 0 | 0 | 0 |
-| zone-to-zone | 1065 | 1064 | 1 | 0 | 0 | 0 | 0 |
-| zone-to-zone:old | 696 | 666 | 30 | 0 | 0 | 0 | 0 |
-| zoned-add-days | 2130 | 531 | 1068 | 531 | 0 | 0 | 0 |
-| zoned-add-days:old | 1392 | 221 | 937 | 230 | 0 | 4 | 2 |
-| zoned-add-hours | 6390 | 2128 | 4262 | 0 | 0 | 0 | 0 |
-| zoned-add-hours:old | 4176 | 1318 | 2854 | 4 | 0 | 0 | 4 |
-| zoned-add-months | 1065 | 705 | 360 | 0 | 0 | 0 | 0 |
-| zoned-add-months:old | 696 | 68 | 627 | 1 | 0 | 0 | 1 |
-| zoned-diff-days | 1065 | 1065 | 0 | 0 | 0 | 0 | 0 |
-| zoned-diff-days:old | 696 | 692 | 4 | 0 | 0 | 0 | 0 |
-| zoned-diff-hours | 1065 | 1063 | 2 | 0 | 0 | 0 | 0 |
-| zoned-diff-hours:old | 696 | 690 | 4 | 0 | 1 | 1 | 1 |
-| **All** | 161636 | 138494 | 22237 | 767 | 45 | 93 | 28 |
+| Family | Cases | All agree | dayjs differs | Temporal differs | java.time alone | Undecided | Native and polyfill differ | `@yaltaan/temporal` differs |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| add-days | 4570 | 4570 | 0 | 0 | 0 | 0 | 0 | 0 |
+| add-months | 5941 | 5941 | 0 | 0 | 0 | 0 | 0 | 0 |
+| between | 3195 | 2751 | 444 | 0 | 0 | 0 | 0 | 0 |
+| between:old | 2088 | 1792 | 296 | 0 | 0 | 0 | 0 | 0 |
+| compare | 3195 | 2886 | 307 | 0 | 2 | 0 | 0 | 0 |
+| compare:old | 2088 | 1729 | 359 | 0 | 0 | 0 | 0 | 0 |
+| date-to-zone | 5325 | 5325 | 0 | 0 | 0 | 0 | 0 | 0 |
+| date-to-zone:old | 3480 | 2619 | 855 | 0 | 3 | 3 | 3 | 0 |
+| date-to-zone@new-york | 5325 | 5316 | 9 | 0 | 0 | 0 | 0 | 0 |
+| date-to-zone@new-york:old | 3480 | 2470 | 1004 | 0 | 3 | 3 | 3 | 0 |
+| date-to-zone@paris | 5325 | 5153 | 172 | 0 | 0 | 0 | 0 | 0 |
+| date-to-zone@paris:old | 3480 | 1981 | 1493 | 0 | 3 | 3 | 3 | 0 |
+| diff-days | 8570 | 8570 | 0 | 0 | 0 | 0 | 0 | 0 |
+| diff-months | 8570 | 8408 | 162 | 0 | 0 | 0 | 0 | 0 |
+| diff-years | 8570 | 8568 | 2 | 0 | 0 | 0 | 0 | 0 |
+| end-of-plain | 2742 | 2742 | 0 | 0 | 0 | 0 | 0 | 0 |
+| end-of-zoned | 6808 | 6801 | 0 | 0 | 7 | 0 | 0 | 0 |
+| end-of-zoned:old | 4176 | 1670 | 2500 | 0 | 2 | 4 | 4 | 0 |
+| extreme-add-month | 17 | 9 | 6 | 0 | 2 | 0 | 0 | 0 |
+| extreme-add-year | 17 | 9 | 6 | 0 | 2 | 0 | 0 | 0 |
+| extreme-read | 17 | 11 | 5 | 0 | 1 | 0 | 0 | 0 |
+| far-date-to-zone | 836 | 829 | 0 | 0 | 7 | 0 | 0 | 0 |
+| gap-in-zone | 1602 | 1602 | 0 | 0 | 0 | 0 | 0 | 0 |
+| gap-in-zone:old | 1392 | 1386 | 0 | 0 | 3 | 3 | 3 | 0 |
+| gap-local | 1602 | 1602 | 0 | 0 | 0 | 0 | 0 | 0 |
+| gap-local:old | 1392 | 1386 | 0 | 0 | 3 | 3 | 3 | 0 |
+| interval-contains | 3195 | 2929 | 266 | 0 | 0 | 0 | 0 | 0 |
+| interval-contains:old | 2088 | 1829 | 259 | 0 | 0 | 0 | 0 | 0 |
+| interval-overlaps | 2130 | 1913 | 217 | 0 | 0 | 0 | 0 | 0 |
+| interval-overlaps:old | 1392 | 1312 | 80 | 0 | 0 | 0 | 0 | 0 |
+| old-date-to-zone | 836 | 805 | 31 | 0 | 0 | 0 | 0 | 0 |
+| overlap-in-zone | 1593 | 210 | 1383 | 0 | 0 | 0 | 0 | 0 |
+| overlap-in-zone:old | 696 | 354 | 342 | 0 | 0 | 0 | 0 | 0 |
+| overlap-in-zone@july | 1593 | 1419 | 174 | 0 | 0 | 0 | 0 | 0 |
+| overlap-in-zone@july:old | 696 | 410 | 286 | 0 | 0 | 0 | 0 | 0 |
+| overlap-local | 1593 | 1593 | 0 | 0 | 0 | 0 | 0 | 0 |
+| overlap-local:old | 696 | 696 | 0 | 0 | 0 | 0 | 0 | 0 |
+| parse-permissive | 121 | 35 | 80 | 0 | 6 | 0 | 0 | 0 |
+| parse-strict | 9247 | 9247 | 0 | 0 | 0 | 0 | 0 | 0 |
+| same-day | 2130 | 2047 | 83 | 0 | 0 | 0 | 0 | 0 |
+| same-day:old | 1392 | 1338 | 54 | 0 | 0 | 0 | 0 | 0 |
+| start-of-plain | 2742 | 2742 | 0 | 0 | 0 | 0 | 0 | 0 |
+| start-of-zoned | 6808 | 6469 | 339 | 0 | 0 | 0 | 0 | 0 |
+| start-of-zoned:old | 4176 | 3038 | 1137 | 1 | 0 | 0 | 1 | 0 |
+| two-digit-year | 300 | 231 | 0 | 0 | 0 | 69 | 0 | 0 |
+| validate-permissive | 2310 | 1827 | 483 | 0 | 0 | 0 | 0 | 0 |
+| validate-strict | 2310 | 2310 | 0 | 0 | 0 | 0 | 0 | 0 |
+| zone-to-date | 1483 | 1482 | 1 | 0 | 0 | 0 | 0 | 0 |
+| zone-to-date:old | 696 | 678 | 18 | 0 | 0 | 0 | 0 | 0 |
+| zone-to-date@new-york | 1065 | 1064 | 1 | 0 | 0 | 0 | 0 | 0 |
+| zone-to-date@new-york:old | 696 | 678 | 18 | 0 | 0 | 0 | 0 | 0 |
+| zone-to-date@paris | 1065 | 1064 | 1 | 0 | 0 | 0 | 0 | 0 |
+| zone-to-date@paris:old | 696 | 678 | 18 | 0 | 0 | 0 | 0 | 0 |
+| zone-to-utc | 1065 | 1064 | 1 | 0 | 0 | 0 | 0 | 0 |
+| zone-to-utc:old | 696 | 678 | 18 | 0 | 0 | 0 | 0 | 0 |
+| zone-to-zone | 1065 | 1064 | 1 | 0 | 0 | 0 | 0 | 0 |
+| zone-to-zone:old | 696 | 666 | 30 | 0 | 0 | 0 | 0 | 0 |
+| zoned-add-days | 2130 | 531 | 1068 | 531 | 0 | 0 | 0 | 0 |
+| zoned-add-days:old | 1392 | 221 | 937 | 230 | 0 | 4 | 2 | 0 |
+| zoned-add-hours | 6390 | 2128 | 4262 | 0 | 0 | 0 | 0 | 0 |
+| zoned-add-hours:old | 4176 | 1318 | 2854 | 4 | 0 | 0 | 4 | 0 |
+| zoned-add-months | 1065 | 705 | 360 | 0 | 0 | 0 | 0 | 0 |
+| zoned-add-months:old | 696 | 68 | 627 | 1 | 0 | 0 | 1 | 0 |
+| zoned-diff-days | 1065 | 1065 | 0 | 0 | 0 | 0 | 0 | 0 |
+| zoned-diff-days:old | 696 | 692 | 4 | 0 | 0 | 0 | 0 | 0 |
+| zoned-diff-hours | 1065 | 1063 | 2 | 0 | 0 | 0 | 0 | 0 |
+| zoned-diff-hours:old | 696 | 690 | 4 | 0 | 1 | 1 | 1 | 0 |
+| **All** | 170441 | 146477 | 23059 | 767 | 45 | 93 | 28 | 0 |
 
 ## How to read it
 
@@ -83,6 +87,7 @@ Sides: dayjs 1.11.23 with its `utc`, `timezone`, `customParseFormat`, `isBetween
 - `two-digit-year`: no truth, only pivots: dayjs reads 69 as 1969, java.time as 2069, Temporal reads no such text.
 - `parse-strict`, `validate-strict`: with a format and `true`, dayjs agrees everywhere: a project that always uses its strict mode does not meet the errors of `validate-permissive`.
 - `parse-strict` is answered by Temporal only for `YYYY-MM-DD`: it reads ISO 8601 and nothing else.
+- `@yaltaan/temporal` answers where it has the function, on the native Temporal and on the polyfill, each as `globalThis.Temporal`; its column counts the cases where it differs from the native Temporal, or from java.time where Temporal has no answer.
 - Time zones where the native Temporal and the polyfill differ, read from the results: Africa/El_Aaiun.
 - Time zones where Temporal differs by more than the side of an overlap, read from the results: America/Bogota. The time zone data of Node are newer than those of Java.
 
@@ -205,6 +210,22 @@ Sides: dayjs 1.11.23 with its `utc`, `timezone`, `customParseFormat`, `isBetween
 
 - `dayjs=java.time=native \| polyfill`, 3 cases. `["1976-04-14T00:00:00","Africa/El_Aaiun"]` → dayjs: `1976-4-14T1:0:0.0 198291600000`; java.time: `1976-4-14T1:0:0.0 198291600000`; native: `1976-4-14T1:0:0.0 198291600000`; polyfill: `1976-4-14T0:0:0.0 198291600000`
 - `dayjs=native=polyfill \| java.time`, 3 cases. `["1992-05-02T00:00:00","America/Bogota"]` → dayjs: `1992-5-2T1:0:0.0 704782800000`; java.time: `1992-5-2T0:0:0.0 704782800000`; native: `1992-5-2T1:0:0.0 704782800000`; polyfill: `1992-5-2T1:0:0.0 704782800000`
+
+### interval-contains
+
+- `dayjs \| java.time=native=polyfill=yaltaan=yaltaan on polyfill`, 266 cases. `["2009-06-19T20:00:00","2009-06-19T20:00:00","2009-06-20T03:00:00","Asia/Dhaka"]` → dayjs: `out`; java.time: `in`; native: `in`; polyfill: `in`; yaltaan: `in`; yaltaan on polyfill: `in`
+
+### interval-contains:old
+
+- `dayjs \| java.time=native=polyfill=yaltaan=yaltaan on polyfill`, 259 cases. `["1919-11-13T21:00:00","1919-11-13T21:00:00","1919-11-14T03:06:30","Asia/Omsk"]` → dayjs: `out`; java.time: `in`; native: `in`; polyfill: `in`; yaltaan: `in`; yaltaan on polyfill: `in`
+
+### interval-overlaps
+
+- `dayjs \| java.time=native=polyfill=yaltaan=yaltaan on polyfill`, 217 cases. `["2023-11-04T23:00:00","2023-11-05T04:00:00","2023-11-05T04:00:00","2023-11-05T05:00:00","America/Adak"]` → dayjs: `yes`; java.time: `no`; native: `no`; polyfill: `no`; yaltaan: `no`; yaltaan on polyfill: `no`
+
+### interval-overlaps:old
+
+- `dayjs \| java.time=native=polyfill=yaltaan=yaltaan on polyfill`, 80 cases. `["1881-05-11T21:00:00","1881-05-12T02:28:37","1881-05-12T02:28:37","1881-05-12T03:28:37","Africa/Tunis"]` → dayjs: `yes`; java.time: `no`; native: `no`; polyfill: `no`; yaltaan: `no`; yaltaan on polyfill: `no`
 
 ### old-date-to-zone
 

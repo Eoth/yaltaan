@@ -169,6 +169,12 @@ export async function checkDocExamples(root: string): Promise<DocExamplesVerdict
       path.join(folder, 'node_modules', '@yaltaan'),
       'junction',
     );
+    // The polyfill an example of Temporal imports, as a reader on a platform without Temporal does.
+    fs.symlinkSync(
+      path.join(root, 'node_modules', 'temporal-polyfill'),
+      path.join(folder, 'node_modules', 'temporal-polyfill'),
+      'junction',
+    );
     const names = blocks.map((_, index) => `example-${index}.ts`);
     blocks.forEach((block, index) => {
       fs.writeFileSync(path.join(folder, names[index] ?? ''), `${block.code}\n`);

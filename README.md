@@ -13,7 +13,7 @@ Dependencies flow one way and never back: `core ← temporal`, and `core ← sch
 | Package | Status | Purpose |
 |---|---|---|
 | [`@yaltaan/core`](packages/core/README.md) | experimental, unpublished | The shared contracts (`Result`, `Issue`, `Path`, reactive nodes) and the data primitives the platform lacks: objects, collections, strings, numbers, deep equality, diff, async control, bounded caches. |
-| `@yaltaan/temporal` | planned | What Temporal does not provide: intervals, parsing of declared formats, `Date` conversions that require an explicit time zone. Temporal itself comes from the platform or from a polyfill the application installs. |
+| `@yaltaan/temporal` | experimental, not published | What Temporal does not provide: intervals, parsing of declared formats, `Date` conversions that require an explicit time zone. Temporal itself comes from the platform or from a polyfill the application installs. |
 | [`@yaltaan/schema`](packages/schema/README.md) | experimental, unpublished | Schemas implementing Standard Schema v1, usable by any engine that reads it; reversible codecs are planned. |
 | [`@yaltaan/rules`](packages/rules/README.md) | experimental, unpublished | Declarative relational rules (required if, all or none, at least n of) that work in any form engine, with or without `@yaltaan/form`. |
 | `@yaltaan/form` | planned | A form model on reactive nodes, conditional: built only if a vertical slice on a real form shows its value over Angular Signal Forms and TanStack Form, a go/no-go decision recorded in [docs/adr/](docs/adr/). |

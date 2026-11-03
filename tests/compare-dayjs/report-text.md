@@ -15,5 +15,6 @@ Sides: dayjs {dayjs} with its `utc`, `timezone`, `customParseFormat`, `isBetween
 - `two-digit-year`: no truth, only pivots: dayjs reads 69 as 1969, java.time as 2069, Temporal reads no such text.
 - `parse-strict`, `validate-strict`: with a format and `true`, dayjs agrees everywhere: a project that always uses its strict mode does not meet the errors of `validate-permissive`.
 - `parse-strict` is answered by Temporal only for `YYYY-MM-DD`: it reads ISO 8601 and nothing else.
+- `@yaltaan/temporal` answers where it has the function, on the native Temporal and on the polyfill, each as `globalThis.Temporal`; its column counts the cases where it differs from the native Temporal, or from java.time where Temporal has no answer.
 - Time zones where the native Temporal and the polyfill differ, read from the results: {polyfillApart}.
 - Time zones where Temporal differs by more than the side of an overlap, read from the results: {temporalApart}. The time zone data of Node are newer than those of Java.

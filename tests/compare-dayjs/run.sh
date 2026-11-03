@@ -25,6 +25,7 @@ trap 'rm -rf "$work"' EXIT
     exit 1
   fi
 )
+bash scripts/build.sh > /dev/null
 javac -d "$work/classes" tests/compare-dayjs/Oracle.java
 TZ=UTC "$node_bin" --disable-warning=ExperimentalWarning tests/compare-dayjs/compare.mjs \
   --dayjs "$work" --java "$work/classes" "$@"
