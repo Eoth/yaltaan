@@ -27,13 +27,13 @@ Outillage de développement (empreinte installée, à ne laisser croître que pa
 
 Une version utilisable d'abord (décision du propriétaire du 2026-10-23, §3) : la 0.1.0 livre `@yaltaan/core`, les utilitaires que les équipes recodent, sur les contrats de §5 d'`ARCHITECTURE.md` ; la 0.2.0 ajoute schéma et règles, validés sur le formulaire pilote ; la 0.3.0 le formulaire et Angular. L'outillage qui reste attend d'être utile. Ces versions sont des jalons de travail : **rien n'est publié avant la v1** (décision du propriétaire du 2026-11-02, §3). Les contrats se gèlent après le pilote (T2.7), pas avant. Une itération peut prendre deux tickets S ou M d'un même domaine.
 
-**Avancement** : 30 étapes closes sur 94 ; prochaine : T4.1.
+**Avancement** : 33 étapes closes sur 94 ; prochaine : T4.7.
 
 | # | Lot | Tickets, dans l'ordre | Avancement | Sortie |
 |---|---|---|---|---|
 | 1 | 0 — Outillage | T0.1, T0.2, T0.7, T0.6, T0.5, T0.3, T0.4 a, b | 8 / 8 clos, terminé | Paquets vides qui passent toute la CI ; taille, coût des types, instructions et temps mesurés. |
 | 2 | 0.1.0 — `@yaltaan/core` utilisable | T1.1, T1.3, T1.2, T1.5, T3.1 a, b, T0.17, T3.2, T0.20 a, T3.3 a, b, T3.5, T3.4, T0.16, T0.10 | 15 / 15 clos, terminé | `Result`, `Issue`, `Path`, `equal`, objets et accès par chemin, collections, nombres, chaînes ; workflow de publication répété à chaque poussée, archive vérifiée, rien de publié. |
-| 3 | Temporal devant (décision du 2026-11-03, §3) | T4.5, T0.20 b, T4.6, T4.1, T4.2, T4.3, T4.7 | 3 / 7 clos ; prochain : T4.1 | Juge test262 et comparateur dayjs d'abord, puis `@yaltaan/temporal` et un kit d'archives pour les bêta-testeurs, rien de publié. |
+| 3 | Temporal devant (décision du 2026-11-03, §3) | T4.5, T0.20 b, T4.6, T4.1, T4.2, T4.3, T4.7 | 6 / 7 clos ; prochain : T4.7 | Juge test262 et comparateur dayjs d'abord, puis `@yaltaan/temporal` et un kit d'archives pour les bêta-testeurs, rien de publié. |
 | 4 | 0.2.0 — Schéma et règles sur le pilote | T2.1 a, b, T2.8, T2.2, T2.9, T2.3, T1.4 | 4 / 7 clos ; prochain : T2.1 a | Schéma Standard Schema minimal et règles relationnelles, scénarios du pilote verts sans `form`. |
 | 5 | 0.3.0 — Formulaire et Angular | T0.14, T1.6 a, T1.6 b, T2.4 a, b, c, T2.5, T2.6, T2.7 | 0 / 9 clos ; prochain : T0.14 | Pilote de bout en bout dans Angular, mesures, **ADR go/no-go de `form`**, gel des contrats. |
 | 6 | Outillage reporté | T0.18, T0.19, T0.21, T0.22, T0.24, T0.25, T0.8, T0.9, T0.13, T0.15 | 0 / 10 clos ; prochain : T0.18 | Selon le besoin réel des versions précédentes. |
@@ -325,27 +325,6 @@ Une décision réservée au propriétaire (nom, licence, API publique, contrat t
 
 ### Lot 4 — Temporal
 
-#### T4.1 — Intervalles
-- **Pourquoi** : Temporal n'a pas d'intervalle ; chaque application en réécrit un.
-- **Faire** : `Interval<T>` semi-ouvert `[start, end)` par défaut, intervalle inversé refusé à la construction, intervalle vide explicite ; `overlaps`, `contains`, `intersect`, `union`, `gaps`, `mergeAll`.
-- **Où** : `packages/temporal/`.
-- **Accepté si** : intersection commutative et associative, `union` d'intervalles disjoints qui conserve la mesure (propriétés), sur Temporal natif et sur le polyfill recommandé.
-- **Taille** M · **Prio** P1 · **Dépend de** T1.1, décision §3 (Temporal)
-
-#### T4.2 — Lecture de formats déclarés
-- **Pourquoi** : une chaîne de date ambiguë ne doit jamais être devinée.
-- **Faire** : `parsePlainDate(text, { format, pivotYear })` et suivants → `Result` ; sans format explicite, une chaîne ambiguë donne l'issue `temporal.ambiguous_format`.
-- **Où** : `packages/temporal/`.
-- **Accepté si** : `parse(format(x, f), f)` égal à `x` pour chaque format déclaré ; fuzz du lecteur.
-- **Taille** M · **Prio** P1 · **Dépend de** T4.1
-
-#### T4.3 — Conversions de frontière et calendrier ouvré
-- **Pourquoi** : la frontière `Date` ↔ Temporal est la première source de bugs de fuseau.
-- **Faire** : `fromDate` et `toDate` qui exigent un fuseau explicite ; `startOf`/`endOf` (semaine avec `firstDayOfWeek` explicite, trimestre) ; jours ouvrés avec jours fériés injectés (aucune donnée embarquée).
-- **Où** : `packages/temporal/`.
-- **Accepté si** : aucune conversion sans fuseau ne compile ; tests sous plusieurs fuseaux forcés.
-- **Taille** M · **Prio** P1 · **Dépend de** T4.1
-
 #### T4.4 — Codecs des types Temporal
 - **Pourquoi** : sérialiser un formulaire qui contient des dates sans code de colle.
 - **Faire** : codecs `schema` pour les types Temporal, dans un sous-chemin séparé pour ne pas faire dépendre `temporal` de `schema`.
@@ -563,3 +542,6 @@ Une ligne par ticket : `identifiant — commit — résultat mesuré — itérat
 | T4.5 | docs(adr): judge the Temporal implementations by test262 before writing on them ; test(temporal): run test262 on the native Temporal and on the polyfill in the gate | test262 `0b4e0812`, 6 634 tests : natif de Node 26.12.1 6 607 réussis, `temporal-polyfill` 1.0.5 entrée par défaut 5 099 (1 515 échecs ne disent que « calendrier absent »), entrée `full` 6 612 ; aucun test en échec sur les trois ; tables `docs/test262/` rejouées à l'identique, mode non strict identique, polyfill sous Node 24 : 1 test de différence (données de fuseau 2026c contre 2026e) ; second moyen, un processus Node par test sans `vm` : 327 sur 327 d'accord ; un fichier retouché rougit par sa somme, un test rendu faux rougit la comparaison ; étape 21,8 s, 0,6 s si rien n'a bougé ; 5 242 → 5 252 tests | 0,5 (M) |
 | T0.20 b | bilan, aucun code | Dix tickets après la cure (T3.3 b à T4.5) contre dix avant : 8,5 → 8,5 itérations, 45 → 50 commits, `fix` ou `revert` 0 → 3, clôture rouverte 0 → 0, erreur qu'une règle déplacée aurait évitée 0 sur 3 (`ab6820c` : défaut de fichiers du 2026-10-19, antérieurs à la cure ; `b0d5de4` : la règle Unicode est restée dans les consignes, et c'est une loi qui l'a trouvé ; `77b95bb` : aucune règle n'en parlait). Mots au départ : consignes 2 655 → 1 221, passation 1 040 → 2 401, §0 et §2 784 → 841, total 4 479 → 4 463 (−0,4 %) : la passation a mangé le gain (T0.25). Les écarts montent, sans lien trouvé avec la cure : question posée au propriétaire, cure gardée en attendant. | 0,1 (S) |
 | T4.6 | docs(adr): compare dayjs with Temporal on generated cases, java.time as the referee ; test(temporal): compare dayjs, the native Temporal and the polyfill, java.time as the referee | 161 636 cas générés, 418 fuseaux, rapport rejoué à l'octet (33 à 46 s) ; sur 121 268 cas récents : dayjs diffère sur 9 383 où java.time et Temporal s'accordent, Temporal sur 531 (convention de l'heure double), java.time seul sur 27 (données 2026b contre 2026e), 69 sans vérité (pivot de deux chiffres) ; dayjs gagne le poids face au polyfill (6 131 contre 17 851 o) et 4 opérations sur 8 en instructions face au polyfill, le natif gagne les 8 et pèse 0 o ; `dayjs.tz` dépend du jour et du fuseau de la machine ; tests 5 252 → 5 258 | 0,5 (M) |
+| T4.1 | docs(adr): add a temporal package of free functions, whose failures say what data caused ; feat(temporal): add half-open intervals over any Temporal value that can be ordered | `Interval`, `contains`, `overlaps`, `intersect`, `union`, `mergeAll`, `gaps`, sept fonctions jugées par des lois contre les jours qu'elles contiennent, sur le natif et le polyfill ; mélange de classes, d'implémentations ou de calendriers refusé ; un million d'intervalles fusionnés en 3,9 s sur le natif ; 665 / 672 o | 0,5 (M) |
+| T4.2 | feat(temporal): read declared formats, and add the boundary with Date, units and business days | Quatre lecteurs, une passe sans expression régulière, 64 unités de code au plus, aucun `RangeError` qui s'échappe ; lois aller-retour, fuzz, oracle, limites ; relecture neuve : refus puis acceptation, 9 constats corrigés ; avec les intervalles 1 466 / 1 469 o pour un budget de 1 790 ; lecture d'une date 33 400 instructions (dayjs strict 55 600, `PlainDate.from` natif sur l'ISO 3 940) | 0,5 (M) |
+| T4.3 | feat(temporal): read declared formats, and add the boundary with Date, units and business days | `fromDate`, `toDate`, `startOf`, `endOf`, `isBusinessDay`, `addBusinessDays`, `businessDaysBetween` ; aucune conversion sans fuseau ne compile ; arithmétique des jours ouvrés recoupée par un oracle lent et java.time ; relecture neuve : refus puis tout corrigé, dont `endOf` avant sa valeur dans 8 fuseaux ; paquet entier 2 971 / 2 983 o ; tests 5 258 → 6 401 | 0,5 (M) |
