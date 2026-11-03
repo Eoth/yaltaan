@@ -103,4 +103,4 @@ formatPath(city).ok; // → true
 sku.length; // → 3
 ```
 
-Au-delà de 8 segments, tout segment est accepté, et `PathValue` dit `unknown` : le type dit ce qu'il sait et s'arrête là. Il liste chaque chemin, donc son coût suit leur nombre : pour un modèle de milliers de chemins, `Path<Order, 3>` cesse de typer après 3 segments.
+Au-delà de 6 segments, tout segment est accepté (`Path<Order, 8>` va plus loin), et `PathValue` dit `unknown` : le type dit ce qu'il sait et s'arrête là. Il liste chaque chemin, donc son coût suit leur nombre : pour un modèle de milliers de chemins, `Path<Order, 3>` cesse de typer après 3 segments.

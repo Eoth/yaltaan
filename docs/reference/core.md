@@ -1704,10 +1704,10 @@ export interface ParsePathOptions {
 
 A type.
 
-Where a value sits in a structure, from its root; the empty path is the root itself. Without a type argument, any path. `Path<T>` is every path `T` holds, down to 8 segments: an array element by its index or a key segment, an optional or nullable field as what it holds. Beyond 8 segments, or under `unknown` and `any`, any segments are accepted: the type says what it knows and stops there, and `PathValue` says `unknown`. A union gives the paths of each of its members. The type lists every path, so its cost follows their number: `Path<T, 3>` stops typing after 3 segments, for a model too wide to list.
+Where a value sits in a structure, from its root; the empty path is the root itself. Without a type argument, any path. `Path<T>` is every path `T` holds, down to 6 segments: an array element by its index or a key segment, an optional or nullable field as what it holds. Beyond 6 segments, or under `unknown` and `any`, any segments are accepted: the type says what it knows and stops there, and `PathValue` says `unknown`. A union gives the paths of each of its members. The type lists every path, so its cost follows their number: `Path<T, 3>` stops typing after 3 segments, for a model too wide to list, and `Path<T, 8>` goes further, for a model that needs it.
 
 ```ts
-export type Path<T = unknown, Depth extends 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 = 8> = unknown extends T ? readonly PathSegment[] : readonly [] | PathsOf<NonNullable<T>, Fewer[Depth]>;
+export type Path<T = unknown, Depth extends 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 = 6> = unknown extends T ? readonly PathSegment[] : readonly [] | PathsOf<NonNullable<T>, Fewer[Depth]>;
 ```
 
 | Contract | Value |

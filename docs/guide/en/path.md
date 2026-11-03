@@ -103,4 +103,4 @@ formatPath(city).ok; // → true
 sku.length; // → 3
 ```
 
-Past 8 segments any segment is accepted, and `PathValue` says `unknown`: the type says what it knows and stops there. It lists every path, so its cost follows their number: for a model with thousands of paths, `Path<Order, 3>` stops typing after 3 segments.
+Past 6 segments any segment is accepted (`Path<Order, 8>` goes further), and `PathValue` says `unknown`: the type says what it knows and stops there. It lists every path, so its cost follows their number: for a model with thousands of paths, `Path<Order, 3>` stops typing after 3 segments.

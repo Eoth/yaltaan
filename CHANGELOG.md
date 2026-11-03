@@ -8,7 +8,7 @@ No entry predates the first published version; user-visible changes only.
 
 ### Added
 
-- `@yaltaan/core/path`: `Path<T>`, every path a type holds down to 8 segments, and `PathValue<T, P>`, the value at a path; `Path` without an argument is unchanged.
+- `@yaltaan/core/path`: `Path<T>`, every path a type holds down to 6 segments, and `PathValue<T, P>`, the value at a path; `Path` without an argument is unchanged.
 - `@yaltaan/temporal`: `parsePlainDate`, `parsePlainTime`, `parsePlainDateTime`, `parseZonedDateTime`, which read a declared format and return a `Result`: no guess, no `RangeError`, a wall clock that does not exist or exists twice refused by default; `fromDate` and `toDate`, which always name a time zone; `startOf` and `endOf`; `isBusinessDay`, `addBusinessDays`, `businessDaysBetween`, with holidays injected. See `docs/comparisons/dayjs-migration.md` to move from dayjs.
 - `@yaltaan/temporal`: `Interval`, half-open, the empty one explicit, with `interval`, `contains`, `overlaps`, `intersect`, `union`, `mergeAll`, `gaps`, on the native Temporal or the polyfill; two values of different classes, implementations or calendars are refused, where `compare` of Temporal would answer unevenly.
 - `@yaltaan/core/result`: the `Result<T, E>` type, a read-only object discriminated by `ok`, and the free functions `ok`, `err`, `mapResult` and `unwrapOr` (`@experimental`).

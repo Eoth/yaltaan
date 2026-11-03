@@ -439,7 +439,7 @@ test('PathValue: what the path holds, with undefined where a step may hold nothi
   assertType<Equal<PathValue<Order, readonly ['id']>, string>>();
 });
 
-test('degradation: the untyped path, unknown and any, and past 8 segments', () => {
+test('degradation: the untyped path, unknown and any, and past 6 segments', () => {
   assertType<Equal<Path, readonly PathSegment[]>>();
   assertType<Equal<Path<unknown>, readonly PathSegment[]>>();
   // A `never` holds nothing but its root, and `any` is unknown to a path, not a reason to accept nothing.
@@ -449,14 +449,18 @@ test('degradation: the untyped path, unknown and any, and past 8 segments', () =
     readonly value: number;
     readonly children: readonly Tree[];
   }
-  // Four steps of `children` and an index each make 8 segments; past them, any segments, and an unknown value.
-  const deep: Path<Tree> = ['children', 0, 'children', 0, 'children', 0, 'children', 0, 'anything', Symbol('x'), 5];
-  assert.equal(deep.length, 11);
+  // Three steps of `children` and an index each make 6 segments; past them, any segments, and an unknown value.
+  const deep: Path<Tree> = ['children', 0, 'children', 0, 'children', 0, 'anything', Symbol('x'), 5];
+  assert.equal(deep.length, 9);
+  const further: Path<Tree, 8> = ['children', 0, 'children', 0, 'children', 0, 'children', 0];
+  assert.equal(further.length, 8);
   assertType<Equal<PathValue<Tree, ['children', 0, 'value']>, number | undefined>>();
   const never = (): void => {
-    // @ts-expect-error: within 8 segments, a path is still judged
+    // @ts-expect-error: within 6 segments, a path is still judged
     const wrong: Path<Tree> = ['children', 0, 'nope'];
-    void wrong;
+    // @ts-expect-error: with a depth of 8, the seventh segment is still judged
+    const seventh: Path<Tree, 8> = ['children', 0, 'children', 0, 'children', 0, 'nope'];
+    void [wrong, seventh];
   };
   assert.equal(typeof never, 'function');
   const wide: Path<Readonly<Record<string, { readonly a: number }>>> = ['anything', 'a'];

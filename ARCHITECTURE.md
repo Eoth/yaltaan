@@ -162,7 +162,7 @@ type Path = readonly PathSegment[];
 
 - The `{ key }` segment designates an array element by stable identity rather than by index. This is what lets errors and form state follow a moved element, and lets server errors survive a reordering.
 - The text notation (`'items[3].name'`) exists only at the boundaries (`parsePath`, `formatPath`), with defined escaping rules. Never internally.
-- Typed `Path<T>` and `PathValue<T, P>`, with a bounded depth of 8 levels (a hypothesis to calibrate by measurement); beyond it, an explicit and documented degradation to an untyped path.
+- Typed `Path<T>` and `PathValue<T, P>`, with a bounded depth of 6 segments by default, calibrated by measurement, and up to 8 on request ([ADR 0038](docs/adr/0038-typed-paths.md)); beyond it, an explicit and documented degradation to an untyped path.
 - On writes, the segments `__proto__`, `constructor` and `prototype` are refused by default, with an explicit error, never silently ignored.
 
 ### 5.4 Schema = Standard Schema
