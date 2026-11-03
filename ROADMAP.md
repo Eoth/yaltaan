@@ -27,16 +27,16 @@ Outillage de développement (empreinte installée, à ne laisser croître que pa
 
 Une version utilisable d'abord (décision du propriétaire du 2026-10-23, §3) : la 0.1.0 livre `@yaltaan/core`, les utilitaires que les équipes recodent, sur les contrats de §5 d'`ARCHITECTURE.md` ; la 0.2.0 ajoute schéma et règles, validés sur le formulaire pilote ; la 0.3.0 le formulaire et Angular. L'outillage qui reste attend d'être utile. Ces versions sont des jalons de travail : **rien n'est publié avant la v1** (décision du propriétaire du 2026-11-02, §3). Les contrats se gèlent après le pilote (T2.7), pas avant. Une itération peut prendre deux tickets S ou M d'un même domaine.
 
-**Avancement** : 33 étapes closes sur 94 ; prochaine : T4.7.
+**Avancement** : 34 étapes closes sur 95 ; prochaine : T4.7.
 
 | # | Lot | Tickets, dans l'ordre | Avancement | Sortie |
 |---|---|---|---|---|
 | 1 | 0 — Outillage | T0.1, T0.2, T0.7, T0.6, T0.5, T0.3, T0.4 a, b | 8 / 8 clos, terminé | Paquets vides qui passent toute la CI ; taille, coût des types, instructions et temps mesurés. |
 | 2 | 0.1.0 — `@yaltaan/core` utilisable | T1.1, T1.3, T1.2, T1.5, T3.1 a, b, T0.17, T3.2, T0.20 a, T3.3 a, b, T3.5, T3.4, T0.16, T0.10 | 15 / 15 clos, terminé | `Result`, `Issue`, `Path`, `equal`, objets et accès par chemin, collections, nombres, chaînes ; workflow de publication répété à chaque poussée, archive vérifiée, rien de publié. |
 | 3 | Temporal devant (décision du 2026-11-03, §3) | T4.5, T0.20 b, T4.6, T4.1, T4.2, T4.3, T4.7 | 6 / 7 clos ; prochain : T4.7 | Juge test262 et comparateur dayjs d'abord, puis `@yaltaan/temporal` et un kit d'archives pour les bêta-testeurs, rien de publié. |
-| 4 | 0.2.0 — Schéma et règles sur le pilote | T2.1 a, b, T2.8, T2.2, T2.9, T2.3, T1.4 | 4 / 7 clos ; prochain : T2.1 a | Schéma Standard Schema minimal et règles relationnelles, scénarios du pilote verts sans `form`. |
+| 4 | 0.2.0 — Schéma et règles sur le pilote | T2.1 a, b, T2.8, T2.2, T2.9, T2.3, T1.4 | 5 / 7 clos ; prochain : T2.1 a | Schéma Standard Schema minimal et règles relationnelles, scénarios du pilote verts sans `form`. |
 | 5 | 0.3.0 — Formulaire et Angular | T0.14, T1.6 a, T1.6 b, T2.4 a, b, c, T2.5, T2.6, T2.7 | 0 / 9 clos ; prochain : T0.14 | Pilote de bout en bout dans Angular, mesures, **ADR go/no-go de `form`**, gel des contrats. |
-| 6 | Outillage reporté | T0.18, T0.19, T0.21, T0.22, T0.24, T0.25, T0.8, T0.9, T0.13, T0.15 | 0 / 10 clos ; prochain : T0.18 | Selon le besoin réel des versions précédentes. |
+| 6 | Outillage reporté | T1.7, T0.18, T0.19, T0.21, T0.22, T0.24, T0.25, T0.8, T0.9, T0.13, T0.15 | 0 / 11 clos ; prochain : T1.7 | Selon le besoin réel des versions précédentes. |
 | 7 | 3 — Données (suite) | T3.13, T3.3 c, T3.10, T3.11, T3.12 a, b, T3.6 a, b, c, T3.7 a, b, T3.8, T3.9 | 0 / 13 clos ; prochain : T3.13 | Modules `@experimental`. |
 | 8 | 4 — Temporal (suite) | T4.4, T4.8 | 0 / 2 clos ; prochain : T4.4 | Codecs des types Temporal, après T5.2 ; second polyfill. |
 | 9 | 5 — Schéma et règles complets | T5.1 a, b, T5.2, T5.3, T5.4, T5.5, T5.6, T5.7 | 0 / 8 clos ; prochain : T5.1 a | Interopérabilité Standard Schema vérifiée avec au moins deux moteurs tiers. |
@@ -84,6 +84,7 @@ Une décision réservée au propriétaire (nom, licence, API publique, contrat t
 | Temporal devant (ADR 0005 inchangé) | Le lot 4 attend-il la fin de la 0.2.0 et T1.4 ? | **Acté par le propriétaire le 2026-11-03** : non. Un projet réel sous dayjs se trompe dans ses calculs et ses vérifications de dates : T4.5, puis le comparateur dayjs (T4.6), puis T4.1, T4.2, T4.3 et un kit d'archives (T4.7) passent devant T1.4 ; aucun ticket du lot 4 n'en dépend. But : prouver si Temporal et `@yaltaan/temporal` font mieux que dayjs sur toutes les variantes, lignes perdues comprises, puis préparer des archives pour des bêta-testeurs exigeants sur la performance, la sécurité et la documentation. Le calcul reste à Temporal (§4 inchangé) ; un manque face à dayjs se règle dans le guide par Temporal ou `Intl`, ou par un ticket. Rien ne part sur npm (décision du 2026-11-02 inchangée) : le propriétaire remet les archives. T4.4 reste après T5.2. |
 | Juge test262 (ADR 0035) | Comment juger le Temporal natif et le polyfill avant d'écrire `@yaltaan/temporal` ? | **Décidé le 2026-11-03 (choix technique interne)** : un exécuteur du dépôt (`scripts/test262.ts`, un royaume `vm` par test), Node 26.12.1 et un commit de test262 téléchargés et vérifiés par somme, hors du verrou npm ; 6 634 tests sur le natif (6 607 réussis), `temporal-polyfill` entrée par défaut (5 099, dont 1 515 échecs qui ne disent que « calendrier absent ») et entrée `full` (6 612) ; tables dans `docs/test262/`, comparées par la porte ; un fichier changé rougit par sa somme, un test rendu faux exprès rougit la comparaison. T4.1 à T4.3 n'emploient ni `round` sur un `ZonedDateTime`, ni `smallestUnit` sur `since`/`until`, ni `Duration.total` sur des calendriers, ni `toLocaleString`, qui échouent quelque part. Écarté : `test262-harness` (dépendance externe, un processus par test ; non mesuré, installation refusée sur le poste). |
 | Comparaison à dayjs (ADR 0036) | Comment prouver si Temporal fait mieux que dayjs, lignes perdues comprises ? | **Décidé le 2026-11-03 (choix technique interne)** : cas générés depuis la plateforme (418 fuseaux, leurs propres transitions, bords de calendrier, graine fixe), dayjs 1.11.23 et ses plugins hors du verrou, natif, polyfill par `temporal-polyfill/implementation` (l'entrée principale rend le natif s'il existe), java.time en départage ; horloge de la machine figée pour dayjs, car `dayjs.tz` la lit ; rapport `docs/comparisons/dayjs.md` rejoué à l'octet, hors de la porte. Écarté : une liste de bogues connus (ne couvre que ce qu'on a déjà vu). |
+| Chemins typés (ADR 0038) | Comment typer un chemin, et que borne son coût ? | **Décidé le 2026-11-03 par délégation du propriétaire (choix de conception)** : `Path<T, Depth = 8>`, une union de tuples, sans argument le type d'avant ; `PathValue<T, P>` ajoute `undefined` là où un pas peut ne rien contenir. **Réserve sur le ticket** : un type ne sait pas compter une union sans la construire ; le plafond est la profondeur, que l'application baisse, puis le refus du compilateur vers un million de chemins ; 168 420 chemins compilent en 16 s et 2,3 Go sans un mot. T1.7 tient la solution par chemin si un modèle réel en a besoin. Écarté : un second nom `TypedPath<T>` (double ce qu'on lit). |
 
 ## 4. Non-objectifs (exclusions motivées)
 
@@ -207,19 +208,19 @@ Une décision réservée au propriétaire (nom, licence, API publique, contrat t
 
 ### Lot 1 — Colonne vertébrale
 
-#### T1.4 — `Path<T>` et `PathValue<T, P>` typés
-- **Pourquoi** : un chemin typé attrape à la compilation ce qu'un chemin texte laisse au runtime, à condition de ne pas faire exploser le contrôle des types.
-- **Faire** : chemins typés, profondeur bornée (hypothèse 8, calibrée par T0.3), dégradation explicite et documentée vers un chemin non typé au-delà ; plafond du nombre de chemins générés.
-- **Où** : `packages/core/src/path/`.
-- **Accepté si** : budget du coût des types tenu : usage `bench/types/usages/path.ts` (code d'application sur le `Model` de `bench/types/model.ts`, qui importe `@yaltaan/core` construit), son plafond d'instanciations par compilateur dans `bench/types/ceilings.tsv` calibré par ADR, et son rapport de temps, seul dans son projet, sous le budget par usage d'ADR 0033 (`node scripts/type-cost.ts`, sous TypeScript 7 et 6.0) ; tests de types ; messages d'erreur de compilation relus et lisibles.
-- **Taille** M · **Prio** P0 · **Dépend de** T0.3, T1.3
-
 #### T1.6 — Graphe réactif (`ReadableNode`)
 - **Pourquoi** : tout le formulaire en dépend, et sa sémantique ne doit pas dépendre d'un framework (`ARCHITECTURE.md` §5.5).
 - **Faire** : (a) nœuds source et dérivés, `get` et `subscribe` (le contrat de `useSyncExternalStore`), graphe push-pull paresseux sans glitch, batch explicite porté par une instance ou un appel, ordre topologique, aucun ordonnanceur global ; (b) détection des cycles à la construction, propriétés (aucun glitch observable sous entrelacements fast-check, aucun abonné qui fuit), conversion en signal Angular et en `customRef` Vue documentée.
 - **Où** : `packages/core/src/reactive/`.
 - **Accepté si** : (a) tests de glitch et de paresse ; (b) cycle refusé à la construction, budget ≤ 1 000 o brotli tenu (scénario `yaltaan/core-reactive`, ADR 0010).
 - **Taille** L → (a) M, (b) M · **Prio** P0 · **Dépend de** T0.5
+
+#### T1.7 — Vérifier un chemin le long de lui-même, pour un modèle trop large à lister
+- **Pourquoi** : `Path<T>` liste tous les chemins : 168 420 chemins compilent en 16 s et 2,3 Go sans un mot, et le type ne peut pas se plafonner lui-même (ADR 0038).
+- **Faire** : `ValidPath<T, P>`, générique, dont le coût suit la longueur du chemin ; le mesurer sur les modèles larges d'ADR 0038 ; décider s'il remplace `Path<T>` dans les signatures de `core/object`.
+- **Où** : `packages/core/src/path/`, `bench/types/usages/`.
+- **Accepté si** : un modèle de 20 champs sur 4 niveaux coûte moins de 100 000 instanciations ; messages d'erreur relus.
+- **Taille** S · **Prio** P3 · **Dépend de** T1.4, un modèle réel qui en a besoin
 
 ### Lot 2 — Tranche verticale
 
@@ -545,3 +546,4 @@ Une ligne par ticket : `identifiant — commit — résultat mesuré — itérat
 | T4.1 | docs(adr): add a temporal package of free functions, whose failures say what data caused ; feat(temporal): add half-open intervals over any Temporal value that can be ordered | `Interval`, `contains`, `overlaps`, `intersect`, `union`, `mergeAll`, `gaps`, sept fonctions jugées par des lois contre les jours qu'elles contiennent, sur le natif et le polyfill ; mélange de classes, d'implémentations ou de calendriers refusé ; un million d'intervalles fusionnés en 3,9 s sur le natif ; 665 / 672 o | 0,5 (M) |
 | T4.2 | feat(temporal): read declared formats, and add the boundary with Date, units and business days | Quatre lecteurs, une passe sans expression régulière, 64 unités de code au plus, aucun `RangeError` qui s'échappe ; lois aller-retour, fuzz, oracle, limites ; relecture neuve : refus puis acceptation, 9 constats corrigés ; avec les intervalles 1 466 / 1 469 o pour un budget de 1 790 ; lecture d'une date 33 400 instructions (dayjs strict 55 600, `PlainDate.from` natif sur l'ISO 3 940) | 0,5 (M) |
 | T4.3 | feat(temporal): read declared formats, and add the boundary with Date, units and business days | `fromDate`, `toDate`, `startOf`, `endOf`, `isBusinessDay`, `addBusinessDays`, `businessDaysBetween` ; aucune conversion sans fuseau ne compile ; arithmétique des jours ouvrés recoupée par un oracle lent et java.time ; relecture neuve : refus puis tout corrigé, dont `endOf` avant sa valeur dans 8 fuseaux ; paquet entier 2 971 / 2 983 o ; tests 5 258 → 6 401 | 0,5 (M) |
+| T1.4 | docs(adr): type a path by the union of what a type holds ; feat(core): type a path by what a type holds, and the value at a path | `Path<T, Depth = 8>` et `PathValue<T, P>` ; 21 867 / 8 812 instanciations pour des plafonds de 24 100 / 9 700 ; +855 % de temps seul pour +900 % ; erreurs relues, TypeScript propose le bon champ ; réserve : le plafond du nombre de chemins n'existe pas comme tel, seule la profondeur le borne (ADR 0038, T1.7) | 0,5 (M) |
