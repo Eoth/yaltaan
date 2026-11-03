@@ -13,7 +13,11 @@ import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
 import java.time.format.ResolverStyle;
 import java.time.temporal.ChronoUnit;
+import java.time.zone.ZoneRulesException;
 import java.time.zone.ZoneRulesProvider;
+import java.util.Arrays;
+import java.util.HashSet;
+import java.util.Set;
 
 /**
  * The independent side of the comparison: java.time, which shares no code with dayjs or Temporal. Reads a family and
@@ -96,24 +100,30 @@ public final class Oracle {
       case "overlap-local":
         return stamp(zoned(a[0], a[1]));
       case "zoned-add-days":
+      case "local-add-days":
         return stamp(zoned(a[0], a[1]).plusDays(Long.parseLong(a[2])));
       case "zoned-add-months":
+      case "local-add-months":
         return stamp(zoned(a[0], a[1]).plusMonths(Long.parseLong(a[2])));
       case "zoned-add-hours":
+      case "local-add-hours":
         return stamp(zoned(a[0], a[1]).plusHours(Long.parseLong(a[2])));
       case "zoned-diff-hours":
         return String.valueOf(ChronoUnit.HOURS.between(zoned(a[1], a[2]), zoned(a[0], a[2])));
       case "zoned-diff-days":
         return String.valueOf(ChronoUnit.DAYS.between(zoned(a[1], a[2]), zoned(a[0], a[2])));
       case "start-of-zoned":
+      case "local-start-of":
         return stamp(unitStart(zoned(a[0], a[1]).toLocalDate(), a[2]).atStartOfDay(ZoneId.of(a[1])));
-      case "end-of-zoned": {
+      case "end-of-zoned":
+      case "local-end-of": {
         LocalDate start = unitStart(zoned(a[0], a[1]).toLocalDate(), a[2]);
         return stamp(unitNext(start, a[2]).atStartOfDay(ZoneId.of(a[1])).minusNanos(1_000_000));
       }
       case "date-to-zone":
       case "old-date-to-zone":
       case "far-date-to-zone":
+      case "all-transitions-instant":
         return stamp(Instant.ofEpochMilli(Long.parseLong(a[0])).atZone(ZoneId.of(a[1])));
       case "zone-to-date":
         return String.valueOf(zoned(a[0], a[1]).toInstant().toEpochMilli());
@@ -150,6 +160,38 @@ public final class Oracle {
         Instant secondEnd = zoned(a[3], a[4]).toInstant();
         return first.isBefore(secondEnd) && second.isBefore(firstEnd) ? "yes" : "no";
       }
+      case "wall-clock-strict":
+      case "all-transitions-wall": {
+        LocalDateTime wall = LocalDateTime.parse(a[0]);
+        ZoneId zone = ZoneId.of(a[1]);
+        return zone.getRules().getValidOffsets(wall).size() == 1 ? stamp(wall.atZone(zone)) : REFUSED;
+      }
+      case "business-days-add": {
+        Set<String> off = holidays(a[2]);
+        LocalDate at = LocalDate.parse(a[0]);
+        long days = Long.parseLong(a[1]);
+        for (long left = Math.abs(days); left > 0; ) {
+          at = at.plusDays(Long.signum(days));
+          if (at.getDayOfWeek().getValue() < 6 && !off.contains(at.toString())) {
+            left -= 1;
+          }
+        }
+        return date(at);
+      }
+      case "business-days-between": {
+        Set<String> off = holidays(a[2]);
+        LocalDate first = LocalDate.parse(a[0]);
+        LocalDate second = LocalDate.parse(a[1]);
+        LocalDate low = first.isAfter(second) ? second : first;
+        LocalDate high = first.isAfter(second) ? first : second;
+        long count = 0;
+        for (LocalDate at = low; at.isBefore(high); at = at.plusDays(1)) {
+          if (at.getDayOfWeek().getValue() < 6 && !off.contains(at.toString())) {
+            count += 1;
+          }
+        }
+        return String.valueOf(first.isAfter(second) ? -count : count);
+      }
       case "validate-permissive":
       case "validate-strict":
       case "parse-permissive":
@@ -170,13 +212,8 @@ public final class Oracle {
     }
   }
 
-  private static boolean unknownZone(String[] a) {
-    for (String value : a) {
-      if (value.contains("/") && !value.contains(":") && !value.matches("[0-9/ -]*")) {
-        return !ZoneId.getAvailableZoneIds().contains(value);
-      }
-    }
-    return false;
+  private static Set<String> holidays(String list) {
+    return list.isEmpty() ? Set.of() : new HashSet<>(Arrays.asList(list.split(",")));
   }
 
   public static void main(String[] args) throws Exception {
@@ -190,10 +227,12 @@ public final class Oracle {
       String line;
       while ((line = in.readLine()) != null) {
         String[] fields = line.split("\t", -1);
-        String[] a = java.util.Arrays.copyOfRange(fields, 1, fields.length);
+        String[] a = Arrays.copyOfRange(fields, 1, fields.length);
         String result;
         try {
-          result = unknownZone(a) ? NOT_APPLICABLE : answer(fields[0], a);
+          result = answer(fields[0], a);
+        } catch (ZoneRulesException e) {
+          result = NOT_APPLICABLE;
         } catch (DateTimeException | ArithmeticException | IllegalArgumentException e) {
           result = REFUSED;
         }

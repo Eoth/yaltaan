@@ -25,7 +25,13 @@ const target = path.join(here, '..', '..', 'docs', 'comparisons', 'dayjs-measure
 const V8 = ['--predictable', '--random-seed=1', '--hash-seed=1', '--single-threaded', '--v8-pool-size=0'];
 const CALLS = 2000;
 const JOBS = Math.min(6, os.availableParallelism());
-const SIDES = ['dayjs', 'native', 'polyfill'];
+const SIDES = ['dayjs', 'native', 'polyfill', 'yaltaan'];
+const HAS = {
+  dayjs: (op) => op.dayjs !== undefined,
+  native: (op) => op.temporal !== undefined,
+  polyfill: (op) => op.temporal !== undefined,
+  yaltaan: (op) => op.yaltaan !== undefined,
+};
 const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'compare-dayjs-'));
 
 function countOnce(side, op, calls) {
@@ -58,7 +64,7 @@ function countOnce(side, op, calls) {
 async function countAll() {
   const jobs = [];
   for (const op of Object.keys(OPS)) {
-    for (const side of SIDES) {
+    for (const side of SIDES.filter((one) => HAS[one](OPS[op]))) {
       jobs.push({ op, side, calls: CALLS }, { op, side, calls: 2 * CALLS });
     }
   }
@@ -75,7 +81,7 @@ async function countAll() {
   const table = {};
   for (const op of Object.keys(OPS)) {
     table[op] = {};
-    for (const side of SIDES) {
+    for (const side of SIDES.filter((one) => HAS[one](OPS[op]))) {
       table[op][side] = (results.get(`${op}|${side}|${2 * CALLS}`) - results.get(`${op}|${side}|${CALLS}`)) / CALLS;
     }
   }
@@ -96,16 +102,16 @@ const SCENARIOS = {
   ].join('\n'),
   'temporal-polyfill, imported': `export { Temporal } from 'temporal-polyfill';\n`,
   'temporal-polyfill, installed as a global': `import 'temporal-polyfill/global';\n`,
+  '@yaltaan/temporal, every function': `export * from '@yaltaan/temporal';\n`,
 };
 
 async function sizes() {
   const root = folder;
   // The polyfill and esbuild are the repository's; the scenario folder holds dayjs. Linking the polyfill keeps the one
   // resolver of the harness.
-  const linked = path.join(root, 'node_modules', 'temporal-polyfill');
-  if (!fs.existsSync(linked)) {
-    fs.symlinkSync(path.join(here, '..', '..', 'node_modules', 'temporal-polyfill'), linked);
-  }
+  const modules = path.join(here, '..', '..', 'node_modules');
+  fs.symlinkSync(path.join(modules, 'temporal-polyfill'), path.join(root, 'node_modules', 'temporal-polyfill'));
+  fs.symlinkSync(path.join(modules, '@yaltaan'), path.join(root, 'node_modules', '@yaltaan'));
   const packages = new PackageIndex(root);
   const rows = {};
   for (const [name, code] of Object.entries(SCENARIOS)) {
@@ -148,14 +154,19 @@ if (!values['skip-count']) {
     `|---|${SIDES.map(() => '---:').join('|')}|---|---|`,
   );
   let dayjsWins = 0;
+  let compared = 0;
   for (const [op, row] of Object.entries(table)) {
-    const fewest = SIDES.reduce((best, side) => (row[side] < row[best] ? side : best), SIDES[0]);
-    const lighter = row.dayjs < row.polyfill ? 'dayjs' : 'polyfill';
-    dayjsWins += lighter === 'dayjs' ? 1 : 0;
-    lines.push(`| ${op} | ${SIDES.map((side) => threeDigits(row[side])).join(' | ')} | ${fewest} | ${lighter} |`);
+    const fewest = Object.keys(row).reduce((best, side) => (row[side] < row[best] ? side : best));
+    let lighter = 'no equivalent';
+    if (row.dayjs !== undefined && row.polyfill !== undefined) {
+      lighter = row.dayjs < row.polyfill ? 'dayjs' : 'polyfill';
+      dayjsWins += lighter === 'dayjs' ? 1 : 0;
+      compared += 1;
+    }
+    const cells = SIDES.map((side) => (row[side] === undefined ? 'none' : threeDigits(row[side])));
+    lines.push(`| ${op} | ${cells.join(' | ')} | ${fewest} | ${lighter} |`);
   }
-  const count = Object.keys(table).length;
-  lines.push('', `dayjs does fewer instructions than the polyfill on ${dayjsWins} operations out of ${count}.`);
+  lines.push('', `dayjs does fewer instructions than the polyfill on ${dayjsWins} operations out of ${compared}.`);
 }
 fs.mkdirSync(path.dirname(target), { recursive: true });
 fs.writeFileSync(target, `${lines.join('\n')}\n`);

@@ -11,6 +11,7 @@ dayjs_version=1.11.23
 root=$(git rev-parse --show-toplevel)
 cd "$root"
 node_bin=$(bash scripts/test262.sh --print-node)
+bash scripts/build.sh > /dev/null
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
 (

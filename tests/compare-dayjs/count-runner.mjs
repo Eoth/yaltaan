@@ -6,6 +6,7 @@ import { createRequire } from 'node:module';
 import path from 'node:path';
 import { Temporal as Polyfill } from 'temporal-polyfill/implementation';
 import { OPS } from './ops.mjs';
+import * as yaltaan from '../../packages/temporal/dist/index.js';
 
 const [folder, side, op, calls] = process.argv.slice(2);
 const operation = OPS[op];
@@ -17,6 +18,8 @@ if (side === 'dayjs') {
     dayjs.extend(require(`dayjs/plugin/${plugin}.js`));
   }
   call = operation.dayjs(dayjs);
+} else if (side === 'yaltaan') {
+  call = operation.yaltaan(yaltaan, globalThis.Temporal);
 } else {
   call = operation.temporal(side === 'native' ? globalThis.Temporal : Polyfill);
 }

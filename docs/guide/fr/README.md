@@ -26,6 +26,12 @@ flowchart LR
 | [Lire et écrire par chemin](access.md) | `@yaltaan/core/object` | Lire un endroit d'une valeur par un `Path`, ou en obtenir une copie où cet endroit est changé, retiré ou créé, le reste partagé, un champ absent distinct d'un champ `undefined`. | `a?.b?.[i]` écrit dans le code, une décomposition par niveau, `lodash.get`/`set` qui modifient leur argument et laissent des trous. |
 | [Issues](issue.md) | `@yaltaan/core/issue` | Une seule forme d'erreur pour tout, vos propres messages dans vos langues, et le pont vers les moteurs de formulaire Standard Schema. | Un format d'erreur par librairie, et le code de colle entre eux. |
 
+## Disponible dans `@yaltaan/temporal`
+
+| Page | Import | Ce que vous obtenez | À la place de |
+|---|---|---|---|
+| [Dates](temporal.md) | `@yaltaan/temporal` | Les intervalles, la lecture d'un format déclaré, la frontière avec `Date`, le début et la fin d'une unité, les jours ouvrés, sur le Temporal de la plateforme. | dayjs et ses plugins ; des intervalles et des lecteurs de dates écrits à la main. |
+
 ## Disponible dans `@yaltaan/schema`
 
 | Page | Import | Ce que vous obtenez | À la place de |

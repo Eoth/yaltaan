@@ -140,6 +140,9 @@ testOnEach('gaps hold the days of within that the intervals do not; without with
       );
       const between = gaps(list);
       assert.ok(between.ok);
+      for (const hole of [...inside.value, ...between.value]) {
+        assert.ok(T.PlainDate.compare(hole.start, hole.end) < 0, 'a hole holds something');
+      }
       const days = [...covered].sort((x, y) => x - y);
       const expected = new Set<number>();
       for (let d = days[0] ?? 0; d < (days.at(-1) ?? 0); d += 1) {

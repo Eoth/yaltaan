@@ -124,6 +124,16 @@ export function generate() {
       add('end-of-plain', date, unit);
     }
   }
+  for (const date of calendarDates()) {
+    const start = Temporal.PlainDate.from(date);
+    const holidays = [3, 7, 11].map((days) => dateOf(start.add({ days }))).join(',');
+    for (const days of [-30, -7, -1, 0, 1, 5, 10, 21]) {
+      add('business-days-add', date, days, '');
+      add('business-days-add', date, days, holidays);
+      add('business-days-between', date, dateOf(start.add({ days })), '');
+      add('business-days-between', date, dateOf(start.add({ days })), holidays);
+    }
+  }
   for (const [a, b] of plainPairs(rand, 4000)) {
     add('diff-months', a, b);
     add('diff-days', a, b);
@@ -134,6 +144,7 @@ export function generate() {
     for (const wall of wallsInside(point)) {
       add(`gap-in-zone${tagged(point)}`, wall, point.zone);
       add(`gap-local${tagged(point)}`, wall, point.zone);
+      add(`wall-clock-strict${tagged(point)}`, wall, point.zone);
     }
   }
   for (const point of overlaps) {
@@ -141,6 +152,7 @@ export function generate() {
       add(`overlap-in-zone${tagged(point)}`, wall, point.zone);
       add(`overlap-in-zone@july${tagged(point)}`, wall, point.zone);
       add(`overlap-local${tagged(point)}`, wall, point.zone);
+      add(`wall-clock-strict${tagged(point)}`, wall, point.zone);
     }
   }
   for (const point of moved) {
@@ -148,11 +160,15 @@ export function generate() {
     const middle = wallsInside(point)[1];
     const walk = Temporal.PlainDateTime.from(middle);
     add(`zoned-add-days${old}`, wallOf(walk.subtract({ days: 1 })), point.zone, 1);
+    add(`local-add-days${old}`, wallOf(walk.subtract({ days: 1 })), point.zone, 1);
+    add(`local-add-days${old}`, wallOf(walk.add({ days: 1 })), point.zone, -1);
+    add(`local-add-months${old}`, wallOf(walk.subtract({ months: 1 })), point.zone, 1);
     add(`zoned-add-days${old}`, wallOf(walk.add({ days: 1 })), point.zone, -1);
     add(`zoned-add-months${old}`, wallOf(walk.subtract({ months: 1 })), point.zone, 1);
     const safe = point.instant.toZonedDateTimeISO(point.zone).subtract({ hours: 3 });
     for (const n of [1, 2, 3, 4, 6, 24]) {
       add(`zoned-add-hours${old}`, wallOf(safe.toPlainDateTime()), point.zone, n);
+      add(`local-add-hours${old}`, wallOf(safe.toPlainDateTime()), point.zone, n);
     }
     const after = point.instant.toZonedDateTimeISO(point.zone).add({ hours: 3 });
     add(`zoned-diff-hours${old}`, wallOf(after.toPlainDateTime()), wallOf(safe.toPlainDateTime()), point.zone);
@@ -160,6 +176,8 @@ export function generate() {
     add(`zoned-diff-days${old}`, wallOf(later), wallOf(safe.subtract({ days: 2 }).toPlainDateTime()), point.zone);
     for (const unit of UNITS) {
       add(`start-of-zoned${old}`, wallOf(after.toPlainDateTime()), point.zone, unit);
+      add(`local-start-of${old}`, wallOf(after.toPlainDateTime()), point.zone, unit);
+      add(`local-end-of${old}`, wallOf(after.toPlainDateTime()), point.zone, unit);
       add(`end-of-zoned${old}`, wallOf(after.toPlainDateTime()), point.zone, unit);
     }
     const ms = point.instant.epochMilliseconds;
@@ -214,6 +232,15 @@ export function generate() {
     add(`same-day${old}`, first, point.zone, wallOf(same.add({ hours: 12 }).toPlainDateTime()), other);
   }
 
+  // Every change of clock of every zone: a generator that samples them says nothing of the ones it did not draw. The
+  // polyfill is the side it is for: it misses the short ones.
+  for (const zone of zones) {
+    for (const point of transitionsFrom(zone, '1850-01-01T00:00:00Z', 2000)) {
+      const old = tagged(point);
+      add(`all-transitions-wall${old}`, wallsInside(point)[1], zone);
+      add(`all-transitions-instant${old}`, point.instant.epochMilliseconds, zone);
+    }
+  }
   for (const zone of zones) {
     add('old-date-to-zone', Date.UTC(1850, 0, 1), zone);
     add('old-date-to-zone', Date.UTC(1900, 5, 15), zone);

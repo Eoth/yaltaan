@@ -13,11 +13,26 @@ const DATES = [
 ];
 const WALLS = ['2024-03-09T02:30:00', '2024-11-02T01:30:00', '2024-03-30T02:30:00', '2024-10-26T02:30:00'];
 const MS = [1710054000000, 1730613600000, 1711846800000, 1729994400000];
+const FRENCH = DATES.map((date) => date.split('-').reverse().join('/'));
 const at = (list, i) => list[i % list.length];
 
 const unitStart = (date) => date.with({ day: 1 });
+const WORKDAYS = { weekend: [6, 7], holidays: [] };
 
 export const OPS = {
+  'one business day after a date': {
+    yaltaan: (Y, T) => (i) => {
+      const read = Y.addBusinessDays(T.PlainDate.from(at(DATES, i)), { ...WORKDAYS, days: 1 });
+      return read.ok ? read.value.day : 0;
+    },
+    temporal: (T) => (i) => {
+      let date = T.PlainDate.from(at(DATES, i)).add({ days: 1 });
+      while (date.dayOfWeek > 5) {
+        date = date.add({ days: 1 });
+      }
+      return date.day;
+    },
+  },
   'add one month to a date': {
     dayjs: (d) => (i) =>
       d
@@ -40,6 +55,8 @@ export const OPS = {
       T.PlainDateTime.from(at(WALLS, i)).toZonedDateTime(at(ZONES, i)).add({ days: 1 }).epochMilliseconds,
   },
   'start of the month in a zone': {
+    yaltaan: (Y, T) => (i) =>
+      Y.startOf(T.PlainDateTime.from(at(WALLS, i)).toZonedDateTime(at(ZONES, i)), 'month').epochMilliseconds,
     dayjs: (d) => (i) => d.tz(at(WALLS, i), at(ZONES, i)).startOf('month').valueOf(),
     temporal: (T) => (i) => {
       const zone = at(ZONES, i);
@@ -48,10 +65,19 @@ export const OPS = {
     },
   },
   'an instant in a zone': {
+    yaltaan: (Y) => (i) => {
+      const read = Y.fromDate(new Date(at(MS, i)), { timeZone: at(ZONES, i) });
+      return read.ok ? read.value.hour : 0;
+    },
     dayjs: (d) => (i) => d(at(MS, i)).tz(at(ZONES, i)).hour(),
     temporal: (T) => (i) => T.Instant.fromEpochMilliseconds(at(MS, i)).toZonedDateTimeISO(at(ZONES, i)).hour,
   },
+  'read and check a date, dd/MM/yyyy': {
+    dayjs: (d) => (i) => d(at(FRENCH, i), 'DD/MM/YYYY', true).isValid(),
+    yaltaan: (Y) => (i) => Y.parsePlainDate(at(FRENCH, i), { format: 'dd/MM/yyyy' }).ok,
+  },
   'read and check an ISO date': {
+    yaltaan: (Y) => (i) => Y.parsePlainDate(at(DATES, i)).ok,
     dayjs: (d) => (i) => d(at(DATES, i), 'YYYY-MM-DD', true).isValid(),
     temporal: (T) => (i) => T.PlainDate.from(at(DATES, i)).day,
   },

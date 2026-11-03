@@ -59,6 +59,43 @@ const bounds = (order, low, high, kind) => {
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
+// `@yaltaan/temporal` names a year and a day as Unicode patterns do; the week of dayjs starts on Sunday, `isoWeek` on
+// Monday, and the library is told so.
+const yFormat = (format) => format.replace('YYYY', 'yyyy').replace('YY', 'yy').replace('DD', 'dd');
+const unitOf = (unit) => (unit === 'isoWeek' || unit === 'week' ? 'week' : unit);
+const weekOf = (unit) => (unit === 'isoWeek' ? { firstDayOfWeek: 1 } : { firstDayOfWeek: 7 });
+const ySome = (result, answer) => (result.ok ? answer(result.value) : REFUSED);
+const compatible = (zone) => ({ timeZone: zone, disambiguation: 'compatible' });
+const yWall = ([wall, zone], Y) => ySome(Y.parseZonedDateTime(wall, compatible(zone)), tzStamp);
+const yFrom = ([ms, zone], Y) => ySome(Y.fromDate(new Date(ms), { timeZone: zone }), tzStamp);
+const yTo = ([wall, zone], Y, T) =>
+  ySome(Y.toDate(T.PlainDateTime.from(wall), compatible(zone)), (d) => String(d.getTime()));
+const yDate = ([text], Y) => ySome(Y.parsePlainDate(text), tDate);
+const CLOSED = { weekend: [6, 7], holidays: [] };
+
+/** Business days the slow way, day by day: what an application without this library writes on Temporal. */
+function slowAdd(T, text, days, holidays) {
+  const off = new Set(holidays);
+  let at = T.PlainDate.from(text);
+  for (let left = Math.abs(days); left > 0;) {
+    at = at.add({ days: Math.sign(days) });
+    if (at.dayOfWeek < 6 && !off.has(String(at))) {
+      left -= 1;
+    }
+  }
+  return at;
+}
+function slowBetween(T, a, b, holidays) {
+  const off = new Set(holidays);
+  const [low, high] = T.PlainDate.compare(a, b) <= 0 ? [a, b] : [b, a];
+  let count = 0;
+  for (let at = T.PlainDate.from(low); T.PlainDate.compare(at, high) < 0; at = at.add({ days: 1 })) {
+    count += at.dayOfWeek < 6 && !off.has(String(at)) ? 1 : 0;
+  }
+  return T.PlainDate.compare(a, b) <= 0 ? count : -count;
+}
+const holidaysOf = (list) => (list === '' ? [] : list.split(','));
+
 /**
  * Each family: `dayjs(args, dayjs)` and `temporal(args, T)`; `host`, the time zone the process runs in for dayjs's
  * answer, a function of the case for the families that depend on it, UTC otherwise; `clock`, the date the machine says
@@ -90,33 +127,40 @@ export const FAMILIES = {
   'start-of-plain': {
     dayjs: ([date, unit], d) => djDate(djUtc(d, date).startOf(unit)),
     temporal: ([date, unit], T) => tDate(unitStart(T.PlainDate.from(date), unit)),
+    yaltaan: ([date, unit], Y, T) => tDate(Y.startOf(T.PlainDate.from(date), unitOf(unit), weekOf(unit))),
   },
   'end-of-plain': {
     dayjs: ([date, unit], d) => djDate(djUtc(d, date).endOf(unit)),
     temporal: ([date, unit], T) => tDate(unitStart(T.PlainDate.from(date), unit).add(STEP[unit]).subtract({ days: 1 })),
+    yaltaan: ([date, unit], Y, T) => tDate(Y.endOf(T.PlainDate.from(date), unitOf(unit), weekOf(unit))),
   },
   'gap-in-zone': {
     dayjs: ([wall, zone], d) => djStamp(d.tz(wall, zone)),
     temporal: ([wall, zone], T) => tzStamp(zoned(T, wall, zone)),
+    yaltaan: yWall,
   },
   'overlap-in-zone': {
     dayjs: ([wall, zone], d) => djStamp(d.tz(wall, zone)),
     temporal: ([wall, zone], T) => tzStamp(zoned(T, wall, zone)),
+    yaltaan: yWall,
   },
   'overlap-in-zone@july': {
     clock: Date.UTC(2026, 6, 15, 12),
     dayjs: ([wall, zone], d) => djStamp(d.tz(wall, zone)),
     temporal: ([wall, zone], T) => tzStamp(zoned(T, wall, zone)),
+    yaltaan: yWall,
   },
   'gap-local': {
     host: ([, zone]) => zone,
     dayjs: ([wall], d) => djStamp(d(wall)),
     temporal: ([wall, zone], T) => tzStamp(zoned(T, wall, zone)),
+    yaltaan: yWall,
   },
   'overlap-local': {
     host: ([, zone]) => zone,
     dayjs: ([wall], d) => djStamp(d(wall)),
     temporal: ([wall, zone], T) => tzStamp(zoned(T, wall, zone)),
+    yaltaan: yWall,
   },
   'zoned-add-days': {
     dayjs: ([wall, zone, n], d) => djStamp(d.tz(wall, zone).add(n, 'day')),
@@ -139,10 +183,43 @@ export const FAMILIES = {
     dayjs: ([a, b, zone], d) => djNumber(d.tz(a, zone).diff(d.tz(b, zone), 'day')),
     temporal: ([a, b, zone], T) => String(zoned(T, a, zone).since(zoned(T, b, zone), { largestUnit: 'days' }).days + 0),
   },
+  'local-add-days': {
+    host: ([, zone]) => zone,
+    dayjs: ([wall, , n], d) => djStamp(d(wall).add(n, 'day')),
+    temporal: ([wall, zone, n], T) => tzStamp(zoned(T, wall, zone).add({ days: n })),
+  },
+  'local-add-months': {
+    host: ([, zone]) => zone,
+    dayjs: ([wall, , n], d) => djStamp(d(wall).add(n, 'month')),
+    temporal: ([wall, zone, n], T) => tzStamp(zoned(T, wall, zone).add({ months: n })),
+  },
+  'local-add-hours': {
+    host: ([, zone]) => zone,
+    dayjs: ([wall, , n], d) => djStamp(d(wall).add(n, 'hour')),
+    temporal: ([wall, zone, n], T) => tzStamp(zoned(T, wall, zone).add({ hours: n })),
+  },
+  'local-start-of': {
+    host: ([, zone]) => zone,
+    dayjs: ([wall, , unit], d) => djStamp(d(wall).startOf(unit)),
+    temporal: ([wall, zone, unit], T) =>
+      tzStamp(unitStart(zoned(T, wall, zone).toPlainDate(), unit).toZonedDateTime(zone)),
+  },
+  'local-end-of': {
+    host: ([, zone]) => zone,
+    dayjs: ([wall, , unit], d) => djStamp(d(wall).endOf(unit)),
+    temporal: ([wall, zone, unit], T) =>
+      tzStamp(
+        unitStart(zoned(T, wall, zone).toPlainDate(), unit)
+          .add(STEP[unit])
+          .toZonedDateTime(zone)
+          .subtract({ milliseconds: 1 }),
+      ),
+  },
   'start-of-zoned': {
     dayjs: ([wall, zone, unit], d) => djStamp(d.tz(wall, zone).startOf(unit)),
     temporal: ([wall, zone, unit], T) =>
       tzStamp(unitStart(zoned(T, wall, zone).toPlainDate(), unit).toZonedDateTime(zone)),
+    yaltaan: ([wall, zone, unit], Y, T) => tzStamp(Y.startOf(zoned(T, wall, zone), unitOf(unit), weekOf(unit))),
   },
   'end-of-zoned': {
     dayjs: ([wall, zone, unit], d) => djStamp(d.tz(wall, zone).endOf(unit)),
@@ -153,42 +230,51 @@ export const FAMILIES = {
           .toZonedDateTime(zone)
           .subtract({ milliseconds: 1 }),
       ),
+    yaltaan: ([wall, zone, unit], Y, T) => tzStamp(Y.endOf(zoned(T, wall, zone), unitOf(unit), weekOf(unit))),
   },
   'date-to-zone': {
     dayjs: ([ms, zone], d) => djStamp(d(ms).tz(zone)),
     temporal: ([ms, zone], T) => tzStamp(T.Instant.fromEpochMilliseconds(ms).toZonedDateTimeISO(zone)),
+    yaltaan: yFrom,
   },
   'date-to-zone@paris': {
     host: () => 'Europe/Paris',
     dayjs: ([ms, zone], d) => djStamp(d(ms).tz(zone)),
     temporal: ([ms, zone], T) => tzStamp(T.Instant.fromEpochMilliseconds(ms).toZonedDateTimeISO(zone)),
+    yaltaan: yFrom,
   },
   'date-to-zone@new-york': {
     host: () => 'America/New_York',
     dayjs: ([ms, zone], d) => djStamp(d(ms).tz(zone)),
     temporal: ([ms, zone], T) => tzStamp(T.Instant.fromEpochMilliseconds(ms).toZonedDateTimeISO(zone)),
+    yaltaan: yFrom,
   },
   'old-date-to-zone': {
     dayjs: ([ms, zone], d) => djStamp(d(ms).tz(zone)),
     temporal: ([ms, zone], T) => tzStamp(T.Instant.fromEpochMilliseconds(ms).toZonedDateTimeISO(zone)),
+    yaltaan: yFrom,
   },
   'far-date-to-zone': {
     dayjs: ([ms, zone], d) => djStamp(d(ms).tz(zone)),
     temporal: ([ms, zone], T) => tzStamp(T.Instant.fromEpochMilliseconds(ms).toZonedDateTimeISO(zone)),
+    yaltaan: yFrom,
   },
   'zone-to-date': {
     dayjs: ([wall, zone], d) => String(d.tz(wall, zone).toDate().getTime()),
     temporal: ([wall, zone], T) => String(zoned(T, wall, zone).epochMilliseconds),
+    yaltaan: yTo,
   },
   'zone-to-date@paris': {
     host: () => 'Europe/Paris',
     dayjs: ([wall, zone], d) => String(d.tz(wall, zone).toDate().getTime()),
     temporal: ([wall, zone], T) => String(zoned(T, wall, zone).epochMilliseconds),
+    yaltaan: yTo,
   },
   'zone-to-date@new-york': {
     host: () => 'America/New_York',
     dayjs: ([wall, zone], d) => String(d.tz(wall, zone).toDate().getTime()),
     temporal: ([wall, zone], T) => String(zoned(T, wall, zone).epochMilliseconds),
+    yaltaan: yTo,
   },
   'zone-to-utc': {
     dayjs: ([wall, zone], d) => djStamp(d.tz(wall, zone).utc()),
@@ -228,6 +314,49 @@ export const FAMILIES = {
       );
     },
   },
+  'all-transitions-wall': {
+    dayjs: () => NOT_APPLICABLE,
+    temporal: ([wall, zone], T) =>
+      tzStamp(T.PlainDateTime.from(wall).toZonedDateTime(zone, { disambiguation: 'reject' })),
+    yaltaan: ([wall, zone], Y) => ySome(Y.parseZonedDateTime(wall, { timeZone: zone }), tzStamp),
+  },
+  'all-transitions-instant': {
+    dayjs: () => NOT_APPLICABLE,
+    temporal: ([ms, zone], T) => tzStamp(T.Instant.fromEpochMilliseconds(ms).toZonedDateTimeISO(zone)),
+    yaltaan: yFrom,
+  },
+  'wall-clock-strict': {
+    dayjs: ([wall, zone], d) => djStamp(d.tz(wall, zone)),
+    temporal: ([wall, zone], T) =>
+      tzStamp(T.PlainDateTime.from(wall).toZonedDateTime(zone, { disambiguation: 'reject' })),
+    yaltaan: ([wall, zone], Y) => ySome(Y.parseZonedDateTime(wall, { timeZone: zone }), tzStamp),
+  },
+  'business-days-add': {
+    dayjs: () => NOT_APPLICABLE,
+    temporal: ([date, days, list], T) => tDate(slowAdd(T, date, days, holidaysOf(list))),
+    yaltaan: ([date, days, list], Y, T) =>
+      ySome(
+        Y.addBusinessDays(T.PlainDate.from(date), {
+          ...CLOSED,
+          days,
+          holidays: holidaysOf(list).map((h) => T.PlainDate.from(h)),
+        }),
+        tDate,
+      ),
+  },
+  'business-days-between': {
+    dayjs: () => NOT_APPLICABLE,
+    temporal: ([a, b, list], T) =>
+      String(slowBetween(T, T.PlainDate.from(a), T.PlainDate.from(b), holidaysOf(list)) + 0),
+    yaltaan: ([a, b, list], Y, T) =>
+      ySome(
+        Y.businessDaysBetween(T.PlainDate.from(a), T.PlainDate.from(b), {
+          ...CLOSED,
+          holidays: holidaysOf(list).map((h) => T.PlainDate.from(h)),
+        }),
+        (count) => String(count + 0),
+      ),
+  },
   'interval-contains': {
     dayjs: ([x, low, high, zone], d) =>
       d.tz(x, zone).isBetween(d.tz(low, zone), d.tz(high, zone), null, '[)') ? 'in' : 'out',
@@ -261,10 +390,12 @@ export const FAMILIES = {
   'validate-permissive': {
     dayjs: ([text], d) => djDate(d(text)),
     temporal: ([text], T) => tDate(T.PlainDate.from(text)),
+    yaltaan: yDate,
   },
   'validate-strict': {
     dayjs: ([text], d) => djDate(d(text, 'YYYY-MM-DD', true)),
     temporal: ([text], T) => tDate(T.PlainDate.from(text)),
+    yaltaan: yDate,
   },
   'parse-strict': {
     dayjs: ([text, format], d) => djDate(d(text, format, true)),
@@ -272,18 +403,25 @@ export const FAMILIES = {
     temporal: ([text, format], T) => {
       return format === 'YYYY-MM-DD' && ISO_DATE.test(text) ? tDate(T.PlainDate.from(text)) : NOT_APPLICABLE;
     },
+    yaltaan: ([text, format], Y) =>
+      format.includes('HH')
+        ? ySome(Y.parsePlainDateTime(text, { format: yFormat(format) }), tDate)
+        : ySome(Y.parsePlainDate(text, { format: yFormat(format) }), tDate),
   },
   'parse-permissive': {
     dayjs: ([text], d) => djDate(d(text)),
     temporal: ([text], T) => tDate(T.PlainDate.from(text)),
+    yaltaan: yDate,
   },
   'two-digit-year': {
     dayjs: ([text], d) => djDate(d(text, 'DD/MM/YY', true)),
     temporal: () => NOT_APPLICABLE,
+    yaltaan: ([text], Y) => ySome(Y.parsePlainDate(text, { format: 'dd/MM/yy', pivotYear: 1969 }), tDate),
   },
   'extreme-read': {
     dayjs: ([text], d) => djDate(d.utc(text)),
     temporal: ([text], T) => tDate(T.PlainDate.from(text)),
+    yaltaan: yDate,
   },
   'extreme-add-month': {
     dayjs: ([text], d) => djDate(d.utc(text).add(1, 'month')),
@@ -294,3 +432,126 @@ export const FAMILIES = {
     temporal: ([text], T) => tDate(T.PlainDate.from(text).add({ years: 1 })),
   },
 };
+
+/** What a project leaving dayjs writes instead, with the family of the comparison that says what dayjs does there. */
+export const MIGRATION = [
+  {
+    family: 'add-months',
+    en: 'Add months to a date',
+    fr: 'Ajouter des mois à une date',
+    dayjs: "dayjs.utc(text).add(1, 'month')",
+    instead: 'Temporal.PlainDate.from(text).add({ months: 1 })',
+  },
+  {
+    family: 'diff-days',
+    en: 'Days between two dates',
+    fr: 'Jours entre deux dates',
+    dayjs: "a.diff(b, 'day')",
+    instead: "a.since(b, { largestUnit: 'days' }).days",
+  },
+  {
+    family: 'diff-months',
+    en: 'Months between two dates',
+    fr: 'Mois entre deux dates',
+    dayjs: "a.diff(b, 'month')",
+    instead: "a.since(b, { largestUnit: 'months' }).months",
+  },
+  {
+    family: 'overlap-in-zone',
+    en: 'Read a wall clock in a zone',
+    fr: 'Lire une heure dans un fuseau',
+    dayjs: 'dayjs.tz(text, zone)',
+    instead: 'parseZonedDateTime(text, { timeZone: zone })',
+  },
+  {
+    family: 'zoned-add-hours',
+    en: 'Add hours in a zone',
+    fr: 'Ajouter des heures dans un fuseau',
+    dayjs: "dayjs.tz(text, zone).add(3, 'hour')",
+    instead: 'zoned.add({ hours: 3 })',
+  },
+  {
+    family: 'zoned-add-days',
+    en: 'Add days in a zone',
+    fr: 'Ajouter des jours dans un fuseau',
+    dayjs: "dayjs.tz(text, zone).add(1, 'day')",
+    instead: 'zoned.add({ days: 1 })',
+  },
+  {
+    family: 'start-of-plain',
+    en: 'Start of a unit, no zone',
+    fr: "Début d'une unité, sans fuseau",
+    dayjs: "dayjs.utc(text).startOf('month')",
+    instead: "startOf(date, 'month')",
+  },
+  {
+    family: 'start-of-zoned',
+    en: 'Start of a unit in a zone',
+    fr: "Début d'une unité dans un fuseau",
+    dayjs: "dayjs.tz(text, zone).startOf('day')",
+    instead: "startOf(zoned, 'day')",
+  },
+  {
+    family: 'end-of-zoned',
+    en: 'End of a unit in a zone',
+    fr: "Fin d'une unité dans un fuseau",
+    dayjs: "dayjs.tz(text, zone).endOf('month')",
+    instead: "endOf(zoned, 'month')",
+  },
+  {
+    family: 'date-to-zone@paris',
+    en: 'A Date in a zone, on a machine set to Paris',
+    fr: 'Une Date dans un fuseau, sur une machine réglée sur Paris',
+    dayjs: 'dayjs(date).tz(zone)',
+    instead: 'fromDate(date, { timeZone: zone })',
+  },
+  {
+    family: 'zone-to-date',
+    en: 'A wall clock in a zone, as a Date',
+    fr: 'Une heure dans un fuseau, en Date',
+    dayjs: 'dayjs.tz(text, zone).toDate()',
+    instead: 'toDate(wall, { timeZone: zone })',
+  },
+  {
+    family: 'compare',
+    en: 'Which instant comes first',
+    fr: 'Quel instant vient en premier',
+    dayjs: 'a.isBefore(b)',
+    instead: 'Temporal.ZonedDateTime.compare(a, b) < 0',
+  },
+  {
+    family: 'same-day',
+    en: 'Same day in the zone of the first',
+    fr: 'Même jour dans le fuseau du premier',
+    dayjs: "a.isSame(b, 'day')",
+    instead: 'a.toPlainDate().equals(b.withTimeZone(a.timeZoneId).toPlainDate())',
+  },
+  {
+    family: 'interval-contains',
+    en: 'Inside two bounds, end left out',
+    fr: 'Entre deux bornes, fin exclue',
+    dayjs: "x.isBetween(a, b, null, '[)')",
+    instead: 'contains(span, x)',
+  },
+  {
+    family: 'parse-strict',
+    en: 'Read a declared format',
+    fr: 'Lire un format déclaré',
+    dayjs: "dayjs(text, 'DD/MM/YYYY', true)",
+    instead: "parsePlainDate(text, { format: 'dd/MM/yyyy' })",
+  },
+  {
+    family: 'validate-permissive',
+    en: 'Check that a date exists',
+    fr: "Vérifier qu'une date existe",
+    dayjs: 'dayjs(text).isValid()',
+    instead: 'parsePlainDate(text).ok',
+  },
+  {
+    family: 'two-digit-year',
+    en: 'A two-digit year',
+    fr: 'Une année sur deux chiffres',
+    dayjs: "dayjs(text, 'DD/MM/YY')",
+    instead: "parsePlainDate(text, { format: 'dd/MM/yy', pivotYear: 1969 })",
+  },
+];

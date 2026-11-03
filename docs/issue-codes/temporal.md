@@ -9,7 +9,7 @@ A row is never deleted: a removed code keeps its row, with the version that remo
 | `temporal.inverted_interval` | `start`, `end` | The start of an interval comes after its end. | 0.3 | |
 | `temporal.too_large` | `maximum` | More intervals, holidays or days than `maximum`, or a number of days that is not an integer. | 0.3 | |
 | `temporal.ambiguous_format` | | No format says how to read this text, or `yy` has no `pivotYear`. | 0.3 | |
-| `temporal.invalid_format` | | The format cannot be read: an unknown letter, a token used twice, a missing field. | 0.3 | |
+| `temporal.invalid_format` | | The format cannot be read: an unknown letter, a token used twice, a missing field, `SSS` without `ss`, or a `pivotYear` that is not an integer from 0 to 9900. | 0.3 | |
 | `temporal.format_mismatch` | `at` | The text does not follow the format from this code unit. | 0.3 | |
 | `temporal.too_long` | `maximum` | The text has more than `maximum` code units. | 0.3 | |
 | `temporal.invalid_date` | | No such date or time, or an invalid `Date`. | 0.3 | |

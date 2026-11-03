@@ -10,7 +10,7 @@ import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
 // The main entry of the polyfill hands back the native Temporal where there is one: this entry is always the polyfill.
 import { Temporal as Polyfill } from 'temporal-polyfill/implementation';
-import { FAMILIES, JANUARY, NOT_APPLICABLE, REFUSED } from './families.mjs';
+import { FAMILIES, JANUARY, MIGRATION, NOT_APPLICABLE, REFUSED } from './families.mjs';
 import { generate } from './generate.mjs';
 import * as yaltaan from '../../packages/temporal/dist/index.js';
 import { formatReport, reportDifferences, stampDifference, summarize } from './report.ts';
@@ -109,6 +109,7 @@ function askJava(name, cases) {
 
 const zoneSet = new Set(zones);
 const polyfillApart = new Set();
+const polyfillApartOld = new Set();
 const temporalApart = new Set();
 const summaries = [];
 const started = Date.now();
@@ -162,7 +163,7 @@ for (const name of names) {
       continue;
     }
     if (answers.native !== undefined && answers.polyfill !== undefined && answers.native !== answers.polyfill) {
-      polyfillApart.add(zone);
+      (name.endsWith(':old') ? polyfillApartOld : polyfillApart).add(zone);
     }
     const java = answers['java.time'];
     if (java !== undefined && answers.native !== java && answers.dayjs === java) {
@@ -194,16 +195,55 @@ const text = fs
   .replaceAll('{java}', javaVersion)
   .replaceAll('{zones}', String(zones.length))
   .replaceAll('{polyfillApart}', listed(polyfillApart))
+  .replaceAll('{polyfillApartOld}', listed(polyfillApartOld))
   .replaceAll('{temporalApart}', listed(temporalApart));
 const [preamble = '', notes = ''] = text.split('\n<!-- notes -->\n');
 const report = formatReport([preamble.trimEnd()], summaries, [notes.trim()]);
 const file = values.report ?? REPORT;
+const bySummary = new Map(summaries.map((summary) => [summary.family, summary]));
+const code = (text) => `\`${text.replaceAll('|', '\\|')}\``;
+const migrationTable = (lang, header) => {
+  const rows = MIGRATION.map((step) => {
+    const summary = bySummary.get(step.family);
+    if (summary === undefined) {
+      throw new Error(`no results for the family ${step.family}`);
+    }
+    const count = `${summary.dayjsWrong + summary.undecided} / ${summary.cases}`;
+    return `| ${step[lang]} | ${code(step.dayjs)} | ${code(step.instead)} | ${count} |`;
+  });
+  return [header, '|---|---|---|---:|', ...rows];
+};
+const migration = [
+  '# Moving from dayjs to Temporal',
+  '',
+  'Written by `bash tests/compare-dayjs/run.sh --write`, from the same results as [the comparison](dayjs.md), whose ' +
+    'notes say which of these lines are conventions. The last column counts generated cases on transitions since ' +
+    '2000, chosen where dates go wrong, not an average of what an application meets.',
+  '',
+  ...migrationTable('en', '| Need | dayjs | Temporal or `@yaltaan/temporal` | dayjs differs / cases |'),
+  '',
+  '## Le même tableau, en français',
+  '',
+  'Écrit par `bash tests/compare-dayjs/run.sh --write`, à partir des mêmes résultats que la comparaison, dont les ' +
+    'notes disent quelles lignes sont des conventions. La dernière colonne compte des cas générés sur les ' +
+    'changements ' +
+    "d'heure depuis 2000, choisis là où les dates se trompent : ce n'est pas une moyenne de ce que rencontre une " +
+    'application.',
+  '',
+  ...migrationTable('fr', '| Besoin | dayjs | Temporal ou `@yaltaan/temporal` | dayjs diffère / cas |'),
+  '',
+].join('\n');
+const migrationFile = path.join(path.dirname(file), 'dayjs-migration.md');
 if (values.write) {
   fs.mkdirSync(path.dirname(file), { recursive: true });
   fs.writeFileSync(file, report);
+  fs.writeFileSync(migrationFile, migration);
   console.log(`ok: ${file} written`);
 } else if (values.family === undefined) {
   const differences = fs.existsSync(file) ? reportDifferences(fs.readFileSync(file, 'utf8'), report) : [`+ ${file}`];
+  if (!fs.existsSync(migrationFile) || fs.readFileSync(migrationFile, 'utf8') !== migration) {
+    differences.push(`+ ${migrationFile} differs`);
+  }
   if (differences.length > 0) {
     console.error(`error: the comparison differs from ${file}:`);
     console.error(differences.slice(0, 30).join('\n').slice(0, 6000));

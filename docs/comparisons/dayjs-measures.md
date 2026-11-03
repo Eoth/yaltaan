@@ -12,6 +12,7 @@ Minified and brotli-compressed, through `scripts/lib/bundle.ts`, esbuild then Ro
 | dayjs and the six plugins of the comparison, ESM build | 6131 | 6112 |
 | temporal-polyfill, imported | 17851 | 17876 |
 | temporal-polyfill, installed as a global | 18499 | 18573 |
+| @yaltaan/temporal, every function | 2971 | 2983 |
 | dayjs alone, main UMD file | 2772 | not bundled |
 | dayjs and the six plugins, main UMD files | 6018 | not bundled |
 
@@ -40,15 +41,17 @@ No number here, and no referee: what an application writes.
 
 Callgrind, valgrind-3.26.0, Node 26.12.1 with --predictable --random-seed=1 --hash-seed=1 --single-threaded --v8-pool-size=0: two processes, 2000 and 4000 calls after 2,000 calls of warm-up, the difference divided by 2000. Same operation and same inputs for each side (`tests/compare-dayjs/ops.mjs`), three digits.
 
-| Operation | dayjs | native | polyfill | Fewest | Fewer of dayjs and polyfill |
-|---|---:|---:|---:|---|---|
-| add one month to a date | 73,100 | 14,500 | 58,600 | native | polyfill |
-| months between two dates | 165,000 | 14,700 | 405,000 | native | dayjs |
-| read a wall clock in a zone | 159,000 | 13,700 | 200,000 | native | dayjs |
-| add one day in a zone | 197,000 | 31,600 | 327,000 | native | dayjs |
-| start of the month in a zone | 607,000 | 32,900 | 353,000 | native | polyfill |
-| an instant in a zone | 431,000 | 13,000 | 139,000 | native | polyfill |
-| read and check an ISO date | 55,600 | 3,940 | 32,100 | native | polyfill |
-| compare two instants | 25,800 | 16,600 | 60,800 | native | dayjs |
+| Operation | dayjs | native | polyfill | yaltaan | Fewest | Fewer of dayjs and polyfill |
+|---|---:|---:|---:|---:|---|---|
+| one business day after a date | none | 24,400 | 72,300 | 26,000 | native | no equivalent |
+| add one month to a date | 73,200 | 19,100 | 58,700 | none | native | polyfill |
+| months between two dates | 165,000 | 19,400 | 404,000 | none | native | dayjs |
+| read a wall clock in a zone | 159,000 | 13,600 | 197,000 | none | native | dayjs |
+| add one day in a zone | 197,000 | 31,600 | 326,000 | none | native | dayjs |
+| start of the month in a zone | 608,000 | 32,500 | 353,000 | 34,600 | native | polyfill |
+| an instant in a zone | 432,000 | 13,000 | 140,000 | 17,300 | native | polyfill |
+| read and check a date, dd/MM/yyyy | 55,600 | none | none | 33,400 | yaltaan | no equivalent |
+| read and check an ISO date | 55,600 | 3,940 | 31,900 | 34,000 | native | polyfill |
+| compare two instants | 25,800 | 16,700 | 60,800 | none | native | dayjs |
 
 dayjs does fewer instructions than the polyfill on 4 operations out of 8.

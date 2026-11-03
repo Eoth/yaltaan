@@ -16,6 +16,7 @@ january.ok && contains(january.value, Temporal.PlainDate.from('2024-01-31')); //
 january.ok && contains(january.value, end); // → false
 ```
 
+- [Guide](../../docs/guide/en/temporal.md), with reading a format, a wall clock in a zone, the boundary with `Date`, units and business days.
 - [Reference](../../docs/reference/temporal.md) and [issue codes](../../docs/issue-codes/temporal.md).
 - [Why it is built this way](../../docs/adr/0037-temporal-package.md), and how it compares with dayjs: [the report](../../docs/comparisons/dayjs.md).
 
