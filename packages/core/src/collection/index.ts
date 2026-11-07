@@ -273,6 +273,10 @@ export type SortKey = number | bigint | boolean | string | null | undefined;
  * @experimental
  */
 export interface KeyCriterion<T> {
+  /**
+   * The key of an element, called once per element with its index, in input order; returns a `SortKey`.
+   * @supplied
+   */
   readonly key: (item: T, index: number) => SortKey;
   readonly order?: 'asc' | 'desc';
   readonly compare?: undefined;
@@ -285,9 +289,18 @@ export interface KeyCriterion<T> {
  * @experimental
  */
 export interface ComparedCriterion<T> {
+  /**
+   * The key of an element, called once per element with its index, in input order.
+   * @supplied
+   */
   readonly key: (item: T, index: number) => unknown;
   readonly order?: 'asc' | 'desc';
   // A method, so that a comparator of narrower keys, `(a: string, b: string) => number`, is accepted.
+  /**
+   * Negative when `a` comes first, as for `Array.prototype.sort`; called with two present keys only, and must order
+   * them consistently.
+   * @supplied
+   */
   compare(a: unknown, b: unknown): number;
 }
 

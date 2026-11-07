@@ -76,11 +76,15 @@ export interface ExternalIssue extends Issue {
  * @experimental
  */
 export interface ToStandardIssueOptions {
-  /** Builds the message; must return a string. */
+  /**
+   * Builds the message; called once per issue, and must return a string.
+   * @supplied
+   */
   readonly format: IssueFormatter;
   /**
    * The current index of the element that `segment` designates in the array at `parent`, or -1 or `undefined` when it
    * is no longer there: `findIndex` answers as it is. Without it, the path stops before every `{ key }` segment.
+   * @supplied
    */
   readonly resolveKey?: (segment: KeySegment, parent: Path) => number | undefined;
 }

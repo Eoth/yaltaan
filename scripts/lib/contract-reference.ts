@@ -5,8 +5,10 @@ import {
   describeValue,
   kindName,
   kindNamePlural,
+  memberKind,
   TAG_DEFINITIONS,
   type PublicExport,
+  type Tag,
   type TagDefinition,
 } from './contract-tags.ts';
 
@@ -56,8 +58,11 @@ function renderTagTable(): string[] {
     '## Contract tags',
     '',
     'An export that runs (a function, a constant that can be called, a class) carries the whole contract; an export ' +
-      'that never runs (a constant, an interface, a type alias) carries `@since` and its stability only. Any tag ' +
-      'missing from this table fails the gate.',
+      'that never runs (a constant, an interface, a type alias) carries `@since` and its stability only. A callable ' +
+      'member of an export (a method, a property whose value is a function) carries the contract of a function, ' +
+      "unless it is supplied by the caller (`@supplied`); `@since` and the stability of a member are its owner's " +
+      'when it does not state its own ([ADR 0040](../adr/0040-contract-tags-of-members.md)). Any tag missing from ' +
+      'this table fails the gate.',
     '',
     '| Tag | Value | Carried by | Presence | Meaning |',
     '|---|---|---|---|---|',
@@ -77,14 +82,15 @@ function describeKinds(definition: TagDefinition): string {
 
 function describePresence(definition: TagDefinition): string {
   const presence = definition.presence;
+  const onMember = definition.inherited === true ? '; on a member, optional' : '';
   if (typeof presence === 'object') {
     const members = TAG_DEFINITIONS.filter(
       (other) => typeof other.presence === 'object' && other.presence.group === presence.group,
     );
-    return `either ${members.map((member) => `\`@${member.name}\``).join(' or ')}, never both`;
+    return `either ${members.map((member) => `\`@${member.name}\``).join(' or ')}, never both${onMember}`;
   }
   if (presence === 'required') {
-    return definition.repeat ? 'required, repeatable' : 'required, once';
+    return `${definition.repeat ? 'required, repeatable' : 'required, once'}${onMember}`;
   }
   return definition.repeat ? 'optional, repeatable' : 'optional, once';
 }
@@ -101,7 +107,23 @@ function renderPackage(referenced: ReferencedPackage): string {
 }
 
 function renderExport(entry: PublicExport): string[] {
-  const out = [`### \`${entry.name}\``, '', `A ${kindName(entry.kind)}.`];
+  const out = renderCarrier(`### \`${entry.name}\``, kindName(entry.kind), entry);
+  for (const member of entry.members) {
+    out.push('', ...renderCarrier(`#### \`${entry.name}${member.name}\``, kindName(memberKind(member)), member));
+  }
+  return out;
+}
+
+function renderCarrier(
+  heading: string,
+  kind: string,
+  entry: {
+    readonly tags: readonly Tag[];
+    readonly documentation: string;
+    readonly declarations: readonly string[];
+  },
+): string[] {
+  const out = [heading, '', `A ${kind}.`];
   if (entry.documentation !== '') {
     out.push('', ...paragraphs(entry.documentation));
   }

@@ -67,9 +67,22 @@ export interface Rule {
   readonly reads: readonly Path[];
   /** Where the rule can place an issue, `rules.too_many_issues` aside; `anyElement` as in `reads`. */
   readonly targets: readonly Path[];
-  /** The issues of these values, every one on a target; none when the rule holds. */
+  /**
+   * The issues of these values, every one on a target; none when the rule holds. A rule of this package reads the
+   * values and never writes them, and so must an application's.
+   * @pure
+   * @sharing structural
+   * @complexity O(k) for a rule of this package (k = what its function states), plus the cost of its callbacks
+   * @throws what a callback of the rule or a getter of the values throws, unchanged
+   */
   readonly check: (values: unknown) => readonly Issue[];
-  /** The fields these values require: a blank one among them gets an issue. A rule without it requires none. */
+  /**
+   * The fields these values require: a blank one among them gets an issue. A rule without it requires none.
+   * @pure
+   * @sharing structural
+   * @complexity O(k) for a rule of this package (k = what its function states), plus the cost of its callbacks
+   * @throws what a callback of the rule or a getter of the values throws, unchanged
+   */
   readonly required?: (values: unknown) => readonly Path[];
 }
 
@@ -218,7 +231,10 @@ function overFields(
 export interface Condition {
   /** The paths whose values `when` is given. */
   readonly reads: readonly Path[];
-  /** Given the value of each path of `reads`, in order, and `undefined` for an absent one. */
+  /**
+   * Given the value of each path of `reads`, in order, and `undefined` for an absent one; called once per check.
+   * @supplied
+   */
   readonly when: (...values: readonly unknown[]) => boolean;
 }
 
@@ -298,7 +314,11 @@ export function mutuallyExclusive(paths: readonly Path[]): Rule {
 export interface ListSource {
   readonly list: Path;
   readonly at?: Path;
-  /** Whether this value counts; every value that is not blank without it. */
+  /**
+   * Whether this value counts; every value that is not blank without it. Called once per element whose value is not
+   * blank.
+   * @supplied
+   */
   readonly where?: (value: unknown) => boolean;
 }
 
@@ -408,7 +428,8 @@ export interface EachOptions {
 export interface UniqueOptions extends EachOptions {
   /**
    * What is compared, from the value at `at`, which is not blank: `(email) => (typeof email === 'string' ?
-   * email.toLowerCase() : email)`. A blank answer is not compared either.
+   * email.toLowerCase() : email)`. A blank answer is not compared either. Called once per element.
+   * @supplied
    */
   readonly by?: (value: unknown) => unknown;
 }
@@ -485,7 +506,11 @@ export function unique(list: Path, at: Path, options: UniqueOptions = {}): Rule 
 export interface OrderedOptions {
   /** Refuses equal values too. */
   readonly strict?: boolean;
-  /** Negative when `start` comes first, as for `Array.prototype.sort`; for what `<` cannot order, such as Temporal. */
+  /**
+   * Negative when `start` comes first, as for `Array.prototype.sort`; for what `<` cannot order, such as Temporal.
+   * Called once per check, with two values that are not blank.
+   * @supplied
+   */
   readonly compare?: (start: unknown, end: unknown) => number;
 }
 
@@ -665,11 +690,15 @@ export function requiredPaths(rules: readonly Rule[], values: unknown): readonly
  * @experimental
  */
 export interface RefineOptions<O = unknown> {
-  /** Builds the message of an issue; its code by default, as a schema of this library does. */
+  /**
+   * Builds the message of an issue; its code by default, as a schema of this library does. Called once per issue.
+   * @supplied
+   */
   readonly format?: IssueFormatter;
   /**
    * The current index of the element a `{ key }` names, from the value this read gave; without it, an issue stops at
    * the list that holds the element.
+   * @supplied
    */
   readonly resolveKey?: (segment: KeySegment, parent: Path, value: O) => number | undefined;
 }

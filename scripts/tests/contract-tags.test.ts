@@ -1,7 +1,14 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import { judgeExport, TAG_DEFINITIONS, type PublicExport, type Tag } from '../lib/contract-tags.ts';
+import {
+  judgeExport,
+  judgeMembers,
+  TAG_DEFINITIONS,
+  type PublicExport,
+  type PublicMember,
+  type Tag,
+} from '../lib/contract-tags.ts';
 
 const FULL_CONTRACT: readonly Tag[] = [
   { name: 'pure', text: '' },
@@ -22,6 +29,7 @@ function callable(tags: readonly Tag[], parameters: readonly string[] = ['source
     parameters,
     documentation: '',
     declarations: [],
+    members: [],
   };
 }
 
@@ -81,7 +89,9 @@ test('an export without tags fails on every required tag and group', () => {
 });
 
 test('each required tag of the list is required', () => {
-  const required = TAG_DEFINITIONS.filter((definition) => definition.presence === 'required');
+  const required = TAG_DEFINITIONS.filter(
+    (definition) => definition.presence === 'required' && definition.appliesTo.includes('callable'),
+  );
   assert.ok(required.length >= 4);
   for (const definition of required) {
     assertOneProblem(callable(contractWith([], [definition.name])), `lacks @${definition.name}`);
@@ -178,4 +188,50 @@ test('a class carries the whole contract, naming its constructor parameters', ()
   const box = { ...callable(contractWith([{ name: 'mutates', text: 'value' }], ['pure']), ['value']), kind: 'class' };
   assert.deepEqual(judgeExport(box as PublicExport), []);
   assertOneProblem({ ...box, tags: contractWith([], ['complexity']) } as PublicExport, 'lacks @complexity');
+});
+
+function withMember(tags: readonly Tag[], documentation = 'Called once.'): PublicExport {
+  const member: PublicMember = { name: '.run', tags, parameters: ['input'], documentation, declarations: [] };
+  return { ...typeExport([]), members: [member] };
+}
+
+const MEMBER_CONTRACT = FULL_CONTRACT.filter((tag) => tag.name !== 'since' && tag.name !== 'experimental');
+
+test('a member owes each tag of the contract of a function, and inherits @since and its stability', () => {
+  assert.deepEqual(judgeMembers(withMember(MEMBER_CONTRACT)), []);
+  for (const definition of TAG_DEFINITIONS.filter((candidate) => candidate.inherited === true)) {
+    const tag = { name: definition.name, text: definition.name === 'since' ? '0.3' : '' };
+    assert.deepEqual(judgeMembers(withMember([...MEMBER_CONTRACT, tag])), [], definition.name);
+  }
+  for (const definition of TAG_DEFINITIONS.filter(
+    (candidate) =>
+      candidate.presence === 'required' && candidate.appliesTo.includes('member') && candidate.inherited !== true,
+  )) {
+    const problems = judgeMembers(withMember(MEMBER_CONTRACT.filter((tag) => tag.name !== definition.name)));
+    assert.deepEqual(problems, [`.run lacks @${definition.name}`]);
+  }
+  const mutating = MEMBER_CONTRACT.map((tag) => (tag.name === 'pure' ? { name: 'mutates', text: 'this' } : tag));
+  assert.deepEqual(judgeMembers(withMember(mutating)), []);
+  assert.deepEqual(judgeExport(callable(contractWith([{ name: 'mutates', text: 'this' }], ['pure']))), [
+    '@mutates: names "this", which is not a parameter (its parameters are source, keys; only a member names this)',
+  ]);
+});
+
+test('a supplied member refuses each promise of the library, and says when it is called', () => {
+  const supplied = [{ name: 'supplied', text: '' }];
+  assert.deepEqual(judgeMembers(withMember(supplied)), []);
+  for (const definition of TAG_DEFINITIONS.filter(
+    (candidate) => candidate.appliesTo.includes('member') && !candidate.appliesTo.includes('supplied'),
+  )) {
+    const tag = MEMBER_CONTRACT.find((candidate) => candidate.name === definition.name) ?? {
+      name: 'mutates',
+      text: 'this',
+    };
+    assert.deepEqual(judgeMembers(withMember([...supplied, tag])), [
+      `.run carries @${definition.name}, which does not apply to a supplied member`,
+    ]);
+  }
+  assert.deepEqual(judgeMembers(withMember(supplied, '')), [
+    '.run has no description: a supplied member says when it is called and what it must do',
+  ]);
 });

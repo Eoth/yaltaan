@@ -128,6 +128,14 @@ export type StandardResult<Output> =
 export interface StandardProps<Input = unknown, Output = Input> {
   readonly version: 1;
   readonly vendor: string;
+  /**
+   * Reads `value`: the value, or the issues. A schema of this library answers synchronously, as `parse` does, the
+   * messages built by its formatter; any other engine's answers as its own documentation says.
+   * @pure
+   * @sharing structural
+   * @complexity O(n) for a schema of this library (n = size of the part of `value` it reads)
+   * @throws what a getter or a Proxy trap of the value throws, unchanged
+   */
   readonly validate: (
     value: unknown,
     options?: StandardOptions | undefined,
@@ -150,6 +158,13 @@ interface Reading {
 }
 
 interface SynchronousProps<Input, Output> extends StandardProps<Input, Output> {
+  /**
+   * Reads `value`, synchronously, as `parse` does: the value, or the issues, their messages built by the formatter.
+   * @pure
+   * @sharing structural
+   * @complexity O(n) (n = size of the part of `value` the schema reads)
+   * @throws what a getter or a Proxy trap of the value throws, unchanged
+   */
   readonly validate: (value: unknown, options?: StandardOptions | undefined) => StandardResult<Output>;
 }
 
@@ -161,7 +176,14 @@ interface SynchronousProps<Input, Output> extends StandardProps<Input, Output> {
  */
 export interface Schema<Input = unknown, Output = Input> extends StandardSchema<Input, Output> {
   readonly '~standard': SynchronousProps<Input, Output>;
-  /** The read itself, for the schemas that hold this one. Not part of the contract: call `parse`. */
+  /**
+   * The read itself, for the schemas that hold this one: adds its issues to `reading`. Not part of the contract: call
+   * `parse`.
+   * @mutates reading
+   * @sharing structural
+   * @complexity O(n) (n = size of the part of `input` the schema reads)
+   * @throws what a getter or a Proxy trap of the input throws, unchanged
+   */
   readonly '~run': (input: unknown, reading: Reading) => Output;
 }
 

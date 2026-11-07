@@ -56,7 +56,11 @@ export type WriteIssue = AccessIssue | Extract<PathIssue, { readonly code: 'path
  * @experimental
  */
 export interface AccessOptions {
-  /** The stable key of an array element, which a `{ key }` segment is matched against; required by such a segment. */
+  /**
+   * The stable key of an array element, which a `{ key }` segment is matched against; required by such a segment, and
+   * called on the elements of the array it searches.
+   * @supplied
+   */
   readonly keyOf?: (element: unknown) => unknown;
 }
 

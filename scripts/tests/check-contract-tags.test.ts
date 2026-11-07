@@ -93,6 +93,19 @@ function validSources(): Map<string, string> {
         'export interface Pair {',
         '  readonly a: number;',
         '  readonly b: number;',
+        '  /**',
+        '   * The same numbers, swapped.',
+        '   * @pure',
+        '   * @sharing none',
+        '   * @complexity O(1)',
+        '   * @throws never',
+        '   */',
+        '  swap(): Pair;',
+        '  /**',
+        '   * Orders `a` and `b`; called once per sort.',
+        '   * @supplied',
+        '   */',
+        '  readonly order?: (a: number, b: number) => number;',
         '}',
         '',
         '/**',
@@ -139,9 +152,40 @@ function validSources(): Map<string, string> {
         ' * @experimental',
         ' */',
         'export class Box {',
-        '  readonly value: number;',
+        '  value: number;',
         '  constructor(value: number, scale: number) {',
         '    this.value = value * scale;',
+        '  }',
+        '  /**',
+        '   * Multiplies the value held.',
+        '   * @mutates this',
+        '   * @sharing none',
+        '   * @complexity O(1)',
+        '   * @throws never',
+        '   * @since 0.2',
+        '   */',
+        '  grow(by: number): void {',
+        '    this.value *= by;',
+        '  }',
+        '  /**',
+        '   * The value held, once.',
+        '   * @pure',
+        '   * @sharing none',
+        '   * @complexity O(1)',
+        '   * @throws never',
+        '   */',
+        '  *[Symbol.iterator](): Iterator<number> {',
+        '    yield this.value;',
+        '  }',
+        '  /**',
+        '   * A box of one.',
+        '   * @pure',
+        '   * @sharing none',
+        '   * @complexity O(1)',
+        '   * @throws never',
+        '   */',
+        '  static unit(): Box {',
+        '    return new Box(1, 1);',
         '  }',
         '}',
         '',
@@ -172,6 +216,22 @@ function validSources(): Map<string, string> {
         'export function half(value: number): number {',
         '  return value / 2;',
         '}',
+        '',
+        '/**',
+        ' * Arithmetic on two numbers.',
+        ' * @since 0.2',
+        ' * @stable',
+        ' */',
+        'export const ops: {',
+        '  /**',
+        '   * Their sum.',
+        '   * @pure',
+        '   * @sharing none',
+        '   * @complexity O(1)',
+        '   * @throws never',
+        '   */',
+        '  readonly add: (a: number, b: number) => number;',
+        '} = { add: (a, b) => a + b };',
       ),
     ],
   ]);
@@ -246,11 +306,11 @@ test('a package whose exports carry their contract passes, and its reference is 
   const verdict = await checkContractTags(root);
   assert.deepEqual(verdict.problems, []);
   assert.equal(verdict.subpaths, 2);
-  // index: double, LIMIT, Pair, omit (renamed re-export), Box and twice (export *); extra: half.
-  assert.equal(verdict.exports, 7);
+  // index: double, LIMIT, Pair, omit (renamed re-export), Box and twice (export *); extra: half and ops.
+  assert.equal(verdict.exports, 8);
   const reference = readReference(root);
   assert.deepEqual([...reference.keys()].sort(), ['README.md', 'demo.md']);
-  assert.ok(reference.get('README.md')?.includes('- [`@yaltaan/demo`](demo.md): 7 public export(s).'));
+  assert.ok(reference.get('README.md')?.includes('- [`@yaltaan/demo`](demo.md): 8 public export(s).'));
   const page = reference.get('demo.md') ?? '';
   for (const fragment of [
     '## `@yaltaan/demo`\n',
@@ -265,13 +325,29 @@ test('a package whose exports carry their contract passes, and its reference is 
     '### `LIMIT`\n\nA constant.\n',
     '### `Pair`\n\nA type.\n',
     '### `Box`\n\nA class.\n',
+    '#### `Box.prototype.grow`\n\nA member.\n\nMultiplies the value held.\n\n```ts\ngrow(by: number): void;\n```',
+    '| `@mutates` | this |\n',
+    '#### `Box.unit`\n\nA member.\n',
+    '#### `Pair.order`\n\nA supplied member.\n\nOrders `a` and `b`; called once per sort.\n',
+    '| `@supplied` | yes |\n',
+    '#### `ops.add`\n\nA member.\n',
   ]) {
     assert.ok(page.includes(fragment), `the page lacks ${JSON.stringify(fragment)}`);
   }
   // Both overloads are shown; exports follow code-unit order (upper case first).
   assert.match(page, /omit\(target[^\n]*keys: readonly string\[\]\): void;\nexport declare function omit\(/);
   const order = [...page.matchAll(/^### `([^`]+)`$/gm)].map((match) => match[1]);
-  assert.deepEqual(order, ['Box', 'LIMIT', 'Pair', 'double', 'omit', 'twice', 'half']);
+  assert.deepEqual(order, ['Box', 'LIMIT', 'Pair', 'double', 'omit', 'twice', 'half', 'ops']);
+  // Members follow their export, in code-unit order of what reaches them: a class's own before its instance's.
+  const members = [...page.matchAll(/^#### `([^`]+)`$/gm)].map((match) => match[1]);
+  assert.deepEqual(members, [
+    'Box.prototype.grow',
+    'Box.prototype[Symbol.iterator]',
+    'Box.unit',
+    'Pair.order',
+    'Pair.swap',
+    'ops.add',
+  ]);
 });
 
 test('an internal package, which publishes nothing, is skipped', async () => {
@@ -449,4 +525,225 @@ test('a class names the parameters of its constructor in @mutates', async () => 
     await mutating('size')(),
     'index.d.ts: Box @mutates: names "size", which is not a parameter (its parameters are value, scale)',
   );
+});
+
+/** The problems of the valid workspace once `edit` rewrote the text of one declaration file of its `dist/`. */
+async function problemsAfter(file: string, edit: (text: string) => string): Promise<readonly string[]> {
+  const root = await editedCopy((copy) => {
+    const declarations = path.join(copy, `${PACKAGE}/dist/${file}`);
+    fs.writeFileSync(declarations, edit(fs.readFileSync(declarations, 'utf8')));
+  });
+  return (await checkContractTags(root)).problems.filter((problem) => !problem.startsWith('docs/'));
+}
+
+test('a method of an exported interface without its tags fails the check', async () => {
+  const problems = await problemsAfter('index.d.ts', (text) =>
+    text.replace(/\/\*\*\n\s*\* The same numbers, swapped\.[\s\S]*?\*\/\n/, ''),
+  );
+  assert.deepEqual(problems, [
+    'packages/demo/dist/index.d.ts: Pair.swap lacks @sharing',
+    'packages/demo/dist/index.d.ts: Pair.swap lacks @complexity',
+    'packages/demo/dist/index.d.ts: Pair.swap lacks @throws',
+    'packages/demo/dist/index.d.ts: Pair.swap lacks @pure or @mutates',
+  ]);
+});
+
+test('a function of an exported object, and the methods of a class, are judged too', async () => {
+  const constant = await problemsAfter('extra.d.ts', (text) => text.replace('     * @sharing none\n', ''));
+  assertOneProblem(constant, 'extra.d.ts: ops.add lacks @sharing');
+  const instance = await problemsAfter('box.d.ts', (text) => text.replace(' * @mutates this\n', ''));
+  assertOneProblem(instance, 'index.d.ts: Box.prototype.grow lacks @pure or @mutates');
+  const computed = await problemsAfter('box.d.ts', (text) =>
+    text.replace(/(The value held, once\.\n[\s\S]*?)@throws never/, '$1@throws sometimes\n     * @throws never'),
+  );
+  assertOneProblem(computed, 'index.d.ts: Box.prototype[Symbol.iterator] @throws never excludes every other @throws');
+  const statics = await problemsAfter('box.d.ts', (text) =>
+    text.replace(/(A box of one\.\n\s*\* )@pure/, '$1@mutates by'),
+  );
+  assertOneProblem(
+    statics,
+    'index.d.ts: Box.unit @mutates: names "by", which is not a parameter (it has none, or this)',
+  );
+});
+
+test('@mutates of a member names one of its parameters, or this', async () => {
+  const absent = await problemsAfter('box.d.ts', (text) => text.replace('@mutates this', '@mutates scale'));
+  assertOneProblem(
+    absent,
+    'index.d.ts: Box.prototype.grow @mutates: names "scale", which is not a parameter (its parameters are by, or this)',
+  );
+  assert.deepEqual(await problemsAfter('box.d.ts', (text) => text.replace('@mutates this', '@mutates by')), []);
+  // An export has no object it is called on.
+  const exported = await problemsAfter('omit.d.ts', (text) => text.replace('@mutates target', '@mutates this'));
+  assertOneProblem(exported, 'omit @mutates: names "this", which is not a parameter (its parameters are target');
+  assert.ok(exported[0]?.endsWith('; only a member names this)'), exported[0]);
+});
+
+test('a supplied member carries @supplied and a description, and no promise of the library', async () => {
+  const promised = await problemsAfter('index.d.ts', (text) =>
+    text.replace('     * @supplied\n', '     * @supplied\n     * @pure\n'),
+  );
+  assertOneProblem(promised, 'index.d.ts: Pair.order carries @pure, which does not apply to a supplied member');
+  const undescribed = await problemsAfter('index.d.ts', (text) =>
+    text.replace('Orders `a` and `b`; called once per sort.\n     * ', ''),
+  );
+  assertOneProblem(undescribed, 'index.d.ts: Pair.order has no description: a supplied member says when it is called');
+  // Without @supplied, the member is the library's, and owes the contract of a function.
+  const unmarked = await problemsAfter('index.d.ts', (text) => text.replace('     * @supplied\n', ''));
+  assert.equal(unmarked.length, 4, JSON.stringify(unmarked));
+  assert.ok(
+    unmarked.every((problem) => problem.includes('Pair.order lacks @')),
+    JSON.stringify(unmarked),
+  );
+  const onExport = await problemsAfter('extra.d.ts', (text) =>
+    text.replace(' * @stable\n */\nexport declare function', ' * @stable\n * @supplied\n */\nexport declare function'),
+  );
+  assertOneProblem(onExport, 'extra.d.ts: half carries @supplied, which does not apply to a function');
+});
+
+test("a member states its own stability or inherits its owner's, never both levels", async () => {
+  const own = await problemsAfter('box.d.ts', (text) =>
+    text.replace('     * @since 0.2\n', '     * @since 0.2\n     * @stable\n'),
+  );
+  assert.deepEqual(own, []);
+  const both = await problemsAfter('box.d.ts', (text) =>
+    text.replace('     * @since 0.2\n', '     * @since 0.2\n     * @stable\n     * @experimental\n'),
+  );
+  assertOneProblem(both, 'Box.prototype.grow carries @experimental and @stable, which exclude each other');
+  const badSince = await problemsAfter('box.d.ts', (text) => text.replace('     * @since 0.2\n', '     * @since 2\n'));
+  assertOneProblem(badSince, 'Box.prototype.grow @since: is "2", which is not MAJOR.MINOR');
+});
+
+test('a member declared by a hidden type is judged with the export that reaches it, once', async () => {
+  const tags = ['     * @pure', '     * @sharing none', '     * @complexity O(1)', '     * @throws never'];
+  const declared = (exported: boolean, tagged: boolean): string =>
+    [
+      'interface Root {',
+      '    /**',
+      '     * Says hi.',
+      ...tags,
+      '     */',
+      '    hi(): string;',
+      '    readonly root: Root;',
+      '}',
+      `${exported ? 'export ' : ''}interface Base extends Root {`,
+      '    /**',
+      '     * Says hello.',
+      ...(tagged ? tags : []),
+      '     */',
+      '    greet(): string;',
+      '}',
+      'interface Inner {',
+      '    /**',
+      '     * Pokes.',
+      ...tags,
+      '     */',
+      '    poke(): void;',
+      '    readonly back: Inner;',
+      '}',
+      '/**',
+      ' * Greets, and holds what pokes.',
+      ' * @since 0.2',
+      ' * @stable',
+      ' */',
+      'export interface Greeter extends Base {',
+      '    readonly inner: Inner;',
+      '    readonly self: Greeter;',
+      '}',
+      // Without it, every declaration of a declaration file is exported.
+      'export {};',
+      '',
+    ].join('\n');
+  type Verdict = Awaited<ReturnType<typeof checkContractTags>>;
+  const verdictOf = async (exported: boolean, tagged: boolean): Promise<Verdict> => {
+    const root = await editedCopy((copy) => {
+      fs.appendFileSync(path.join(copy, `${PACKAGE}/dist/extra.d.ts`), declared(exported, tagged));
+    });
+    return checkContractTags(root);
+  };
+  const membersOf = (verdict: Verdict, name: string): string[] | undefined =>
+    verdict.surface
+      .flatMap((subpath) => subpath.exports)
+      .find((entry) => entry.name === name)
+      ?.members.map((member) => member.name);
+  const problemsOf = (verdict: Verdict): string[] => verdict.problems.filter((problem) => !problem.startsWith('docs/'));
+  // Hidden, Base and Root are read with Greeter, and Inner through its property; each member once, types that hold
+  // themselves entered once.
+  const hidden = await verdictOf(false, true);
+  assert.deepEqual(problemsOf(hidden), []);
+  assert.deepEqual(membersOf(hidden, 'Greeter'), ['.greet', '.hi', '.inner.poke']);
+  assert.deepEqual(problemsOf(await verdictOf(false, false)), [
+    'packages/demo/dist/extra.d.ts: Greeter.greet lacks @sharing',
+    'packages/demo/dist/extra.d.ts: Greeter.greet lacks @complexity',
+    'packages/demo/dist/extra.d.ts: Greeter.greet lacks @throws',
+    'packages/demo/dist/extra.d.ts: Greeter.greet lacks @pure or @mutates',
+  ]);
+  // Exported, Base is judged as an export of its own, and Greeter leaves its greet to it; Root stays hidden, so both
+  // judge its hi.
+  const shown = await verdictOf(true, true);
+  assert.deepEqual(membersOf(shown, 'Greeter'), ['.hi', '.inner.poke']);
+  assert.deepEqual(membersOf(shown, 'Base'), ['.greet', '.hi']);
+  assert.deepEqual(problemsOf(shown), [
+    'packages/demo/dist/extra.d.ts: Base lacks @since',
+    'packages/demo/dist/extra.d.ts: Base lacks @experimental or @stable',
+  ]);
+});
+
+test('a member of a type alias is judged with the alias, not with a constant of that type', async () => {
+  const declared = [
+    '/**',
+    ' * Runs.',
+    ' * @since 0.2',
+    ' * @stable',
+    ' */',
+    'export type Runner = {',
+    '    /**',
+    '     * Runs once.',
+    '     * @pure',
+    '     * @sharing none',
+    '     * @complexity O(1)',
+    '     * @throws never',
+    '     */',
+    '    run(): void;',
+    '};',
+    '/**',
+    ' * The runner.',
+    ' * @since 0.2',
+    ' * @stable',
+    ' */',
+    'export declare const runner: Runner;',
+    '',
+  ].join('\n');
+  const root = await editedCopy((copy) => {
+    fs.appendFileSync(path.join(copy, `${PACKAGE}/dist/extra.d.ts`), declared);
+    fs.appendFileSync(path.join(copy, `${PACKAGE}/dist/extra.js`), 'export const runner = { run() {} };\n');
+  });
+  const verdict = await checkContractTags(root, { update: true });
+  assert.deepEqual(verdict.problems, []);
+  const exports = verdict.surface.flatMap((subpath) => subpath.exports);
+  assert.deepEqual(
+    exports.find((entry) => entry.name === 'Runner')?.members.map((member) => member.name),
+    ['.run'],
+  );
+  assert.deepEqual(exports.find((entry) => entry.name === 'runner')?.members, []);
+});
+
+test('members of the standard library are left out', async () => {
+  const declared = [
+    '/**',
+    ' * Names.',
+    ' * @since 0.2',
+    ' * @stable',
+    ' */',
+    'export interface Names extends ReadonlyArray<string> {',
+    '}',
+    '',
+  ].join('\n');
+  const root = await editedCopy((copy) => {
+    fs.appendFileSync(path.join(copy, `${PACKAGE}/dist/extra.d.ts`), declared);
+  });
+  const verdict = await checkContractTags(root, { update: true });
+  assert.deepEqual(verdict.problems, []);
+  const names = verdict.surface.flatMap((subpath) => subpath.exports).find((entry) => entry.name === 'Names');
+  assert.deepEqual(names?.members, []);
 });

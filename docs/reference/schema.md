@@ -222,7 +222,14 @@ A schema: it reads an unknown value into an `Output`, and is the type of a value
 ```ts
 export interface Schema<Input = unknown, Output = Input> extends StandardSchema<Input, Output> {
     readonly '~standard': SynchronousProps<Input, Output>;
-    /** The read itself, for the schemas that hold this one. Not part of the contract: call `parse`. */
+    /**
+     * The read itself, for the schemas that hold this one: adds its issues to `reading`. Not part of the contract: call
+     * `parse`.
+     * @mutates reading
+     * @sharing structural
+     * @complexity O(n) (n = size of the part of `input` the schema reads)
+     * @throws what a getter or a Proxy trap of the input throws, unchanged
+     */
     readonly '~run': (input: unknown, reading: Reading) => Output;
 }
 ```
@@ -231,6 +238,40 @@ export interface Schema<Input = unknown, Output = Input> extends StandardSchema<
 |---|---|
 | `@since` | 0.2 |
 | `@experimental` | yes |
+
+#### `Schema.~run`
+
+A member.
+
+The read itself, for the schemas that hold this one: adds its issues to `reading`. Not part of the contract: call `parse`.
+
+```ts
+readonly '~run': (input: unknown, reading: Reading) => Output;
+```
+
+| Contract | Value |
+|---|---|
+| `@mutates` | reading |
+| `@sharing` | structural |
+| `@complexity` | O(n) (n = size of the part of `input` the schema reads) |
+| `@throws` | what a getter or a Proxy trap of the input throws, unchanged |
+
+#### `Schema.~standard.validate`
+
+A member.
+
+Reads `value`, synchronously, as `parse` does: the value, or the issues, their messages built by the formatter.
+
+```ts
+readonly validate: (value: unknown, options?: StandardOptions | undefined) => StandardResult<Output>;
+```
+
+| Contract | Value |
+|---|---|
+| `@pure` | yes |
+| `@sharing` | structural |
+| `@complexity` | O(n) (n = size of the part of `value` the schema reads) |
+| `@throws` | what a getter or a Proxy trap of the value throws, unchanged |
 
 ### `SchemaIssue`
 
@@ -363,6 +404,14 @@ The properties of the Standard Schema interface, version 1.
 export interface StandardProps<Input = unknown, Output = Input> {
     readonly version: 1;
     readonly vendor: string;
+    /**
+     * Reads `value`: the value, or the issues. A schema of this library answers synchronously, as `parse` does, the
+     * messages built by its formatter; any other engine's answers as its own documentation says.
+     * @pure
+     * @sharing structural
+     * @complexity O(n) for a schema of this library (n = size of the part of `value` it reads)
+     * @throws what a getter or a Proxy trap of the value throws, unchanged
+     */
     readonly validate: (value: unknown, options?: StandardOptions | undefined) => StandardResult<Output> | Promise<StandardResult<Output>>;
     readonly types?: StandardTypes<Input, Output> | undefined;
 }
@@ -372,6 +421,23 @@ export interface StandardProps<Input = unknown, Output = Input> {
 |---|---|
 | `@since` | 0.2 |
 | `@experimental` | yes |
+
+#### `StandardProps.validate`
+
+A member.
+
+Reads `value`: the value, or the issues. A schema of this library answers synchronously, as `parse` does, the messages built by its formatter; any other engine's answers as its own documentation says.
+
+```ts
+readonly validate: (value: unknown, options?: StandardOptions | undefined) => StandardResult<Output> | Promise<StandardResult<Output>>;
+```
+
+| Contract | Value |
+|---|---|
+| `@pure` | yes |
+| `@sharing` | structural |
+| `@complexity` | O(n) for a schema of this library (n = size of the part of `value` it reads) |
+| `@throws` | what a getter or a Proxy trap of the value throws, unchanged |
 
 ### `StandardResult`
 

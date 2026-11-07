@@ -6,10 +6,11 @@ import os from 'node:os';
 import path from 'node:path';
 
 import { SyntaxKind } from 'typescript/unstable/ast';
+import type { Node } from 'typescript/unstable/ast';
 import { API, SignatureKind, SymbolFlags } from 'typescript/unstable/sync';
-import type { Checker, Project, Symbol as CompilerSymbol } from 'typescript/unstable/sync';
+import type { Checker, NodeHandle, Project, Symbol as CompilerSymbol, Type } from 'typescript/unstable/sync';
 
-import type { ExportKind, PublicExport } from './contract-tags.ts';
+import type { ExportKind, PublicExport, PublicMember } from './contract-tags.ts';
 import { describeError } from './workspace.ts';
 
 /** The exports of each file read, in code-unit order of their names, or the problem that kept the file unread. */
@@ -32,7 +33,9 @@ export function readDeclarations(files: readonly string[]): DeclarationsRead {
   fs.writeFileSync(
     config,
     JSON.stringify({
-      compilerOptions: { noEmit: true, module: 'nodenext', target: 'es2023', lib: ['es2023'], types: [] },
+      // Strict, as the packages are built and read by users: an optional member's type is its function or
+      // `undefined`, never widened to `any`.
+      compilerOptions: { noEmit: true, strict: true, module: 'nodenext', target: 'es2023', lib: ['es2023'], types: [] },
       files,
     }),
   );
@@ -44,13 +47,30 @@ export function readDeclarations(files: readonly string[]): DeclarationsRead {
     if (project === undefined) {
       return { ok: false, problem: 'the compiler opened no project for the declaration files' };
     }
-    const modules = new Map<string, readonly PublicExport[]>();
+    // Every export of every file is listed first: a member declared by an exported type is judged there, never again
+    // where another export inherits or reaches it. A type alias counts by the type it names, which declares members.
+    const listed = new Map<string, readonly CompilerSymbol[]>();
     for (const file of files) {
-      const read = readModule(project, file);
-      if (typeof read === 'string') {
-        return { ok: false, problem: `${file}: ${read}` };
+      const symbols = listExports(project, file);
+      if (typeof symbols === 'string') {
+        return { ok: false, problem: `${file}: ${symbols}` };
       }
-      modules.set(file, read);
+      listed.set(file, symbols);
+    }
+    const exported = new Set<number>();
+    for (const symbol of [...listed.values()].flat()) {
+      const target = targetOf(project.checker, symbol);
+      exported.add(target.id);
+      if ((target.flags & SymbolFlags.TypeAlias) !== 0) {
+        const named = project.checker.getDeclaredTypeOfSymbol(target).getSymbol();
+        if (named !== undefined) {
+          exported.add(named.id);
+        }
+      }
+    }
+    const modules = new Map<string, readonly PublicExport[]>();
+    for (const [file, symbols] of listed) {
+      modules.set(file, symbols.map((symbol) => readExport(project, symbol, exported)).sort(byName));
     }
     return { ok: true, modules };
   } catch (error) {
@@ -61,7 +81,7 @@ export function readDeclarations(files: readonly string[]): DeclarationsRead {
   }
 }
 
-function readModule(project: Project, file: string): PublicExport[] | string {
+function listExports(project: Project, file: string): readonly CompilerSymbol[] | string {
   const { checker, program } = project;
   const sourceFile = program.getSourceFile(file);
   if (sourceFile === undefined) {
@@ -71,31 +91,32 @@ function readModule(project: Project, file: string): PublicExport[] | string {
   if (moduleSymbol === undefined) {
     return 'is not a module: it has no import or export statement';
   }
-  return checker
-    .getExportsOfModule(moduleSymbol)
-    .map((symbol) => readExport(project, checker, symbol))
-    .sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
+  return checker.getExportsOfModule(moduleSymbol);
 }
 
-function readExport(project: Project, checker: Checker, symbol: CompilerSymbol): PublicExport {
-  const target = (symbol.flags & SymbolFlags.Alias) !== 0 ? checker.getAliasedSymbol(symbol) : symbol;
+function byName<T extends { readonly name: string }>(a: T, b: T): number {
+  return a.name < b.name ? -1 : a.name > b.name ? 1 : 0;
+}
+
+function targetOf(checker: Checker, symbol: CompilerSymbol): CompilerSymbol {
+  return (symbol.flags & SymbolFlags.Alias) !== 0 ? checker.getAliasedSymbol(symbol) : symbol;
+}
+
+function readExport(project: Project, symbol: CompilerSymbol, exported: ReadonlySet<number>): PublicExport {
+  const { checker } = project;
+  const target = targetOf(checker, symbol);
   const type = checker.getTypeOfSymbol(target);
   const calls = type === undefined ? [] : checker.getSignaturesOfType(type, SignatureKind.Call);
   const constructs = type === undefined ? [] : checker.getSignaturesOfType(type, SignatureKind.Construct);
-  const parameters = new Set<string>();
-  for (const signature of [...calls, ...constructs]) {
-    for (const parameter of signature.getParameters()) {
-      parameters.add(parameter.name);
-    }
-  }
   const { kind, detail } = kindOf(checker, target, calls.length > 0, constructs.length > 0);
+  const members = kind === 'other' ? [] : readMembers(project, target, exported);
   return {
     name: symbol.name,
     kind,
     kindDetail: detail,
     value: (target.flags & SymbolFlags.Value) !== 0,
-    tags: checker.getJsDocTagsOfSymbol(target).map((tag) => ({ name: tag.name, text: (tag.text ?? '').trim() })),
-    parameters: [...parameters],
+    tags: tagsOf(checker, target),
+    parameters: parameterNames([...calls, ...constructs]),
     documentation: normalize(checker.getDocumentationCommentOfSymbol(target)).trim(),
     declarations: target.declarations.flatMap((handle) => {
       const node = handle.resolve(project);
@@ -107,7 +128,97 @@ function readExport(project: Project, checker: Checker, symbol: CompilerSymbol):
       const shown = node.kind === SyntaxKind.VariableDeclaration && statement !== undefined ? statement : node;
       return [normalize(shown.getText())];
     }),
+    members,
   };
+}
+
+function tagsOf(checker: Checker, symbol: CompilerSymbol): PublicExport['tags'] {
+  return checker.getJsDocTagsOfSymbol(symbol).map((tag) => ({ name: tag.name, text: (tag.text ?? '').trim() }));
+}
+
+function parameterNames(signatures: readonly { getParameters(): readonly CompilerSymbol[] }[]): string[] {
+  const parameters = new Set<string>();
+  for (const signature of signatures) {
+    for (const parameter of signature.getParameters()) {
+      parameters.add(parameter.name);
+    }
+  }
+  return [...parameters];
+}
+
+// The members of an export that a caller can call: methods, and properties whose type is a function (`undefined`
+// aside, for an optional one). A class has two sets, its instance's (shown under `prototype`) and its own; any other
+// export has those of its type, or of its value for a constant or a function. Members of the standard library and of
+// dependencies are left out. A member is judged where the type that declares it is exported: one declared by the
+// export itself, or by a type no file exports, is read here, inherited or reached through a property whose type holds
+// it (`.~standard.validate`); one declared by another exported type is left to that export.
+function readMembers(project: Project, owner: CompilerSymbol, exported: ReadonlySet<number>): PublicMember[] {
+  const { checker } = project;
+  const sets: { readonly prefix: string; readonly type: Type | undefined }[] = [];
+  if ((owner.flags & SymbolFlags.Class) !== 0) {
+    sets.push({ prefix: '.prototype', type: checker.getDeclaredTypeOfSymbol(owner) });
+  } else if ((owner.flags & (SymbolFlags.Interface | SymbolFlags.TypeAlias)) !== 0) {
+    sets.push({ prefix: '', type: checker.getDeclaredTypeOfSymbol(owner) });
+  }
+  if ((owner.flags & (SymbolFlags.Class | SymbolFlags.Variable | SymbolFlags.Function)) !== 0) {
+    sets.push({ prefix: '', type: checker.getTypeOfSymbol(owner) });
+  }
+  // The export itself, and for a type alias the type it names, which declares the members.
+  const own = new Set([owner.id]);
+  const named =
+    (owner.flags & SymbolFlags.TypeAlias) !== 0 ? checker.getDeclaredTypeOfSymbol(owner).getSymbol() : undefined;
+  if (named !== undefined) {
+    own.add(named.id);
+  }
+  // Breadth first, so that a member reached twice is read once, under its shortest name; each property being read
+  // once, a type that holds itself ends the walk.
+  const queue = [...sets];
+  const read = new Set<number>();
+  const members: PublicMember[] = [];
+  // An array iterator reads the length at each step: what the loop pushes is visited after what was there.
+  for (const { prefix, type } of queue) {
+    for (const property of type === undefined ? [] : checker.getPropertiesOfType(type)) {
+      const parent = property.getParent();
+      if (
+        read.has(property.id) ||
+        !property.declarations.some((handle) => !isLibrary(handle)) ||
+        (parent !== undefined && !own.has(parent.id) && exported.has(parent.id))
+      ) {
+        continue;
+      }
+      read.add(property.id);
+      const nodes = property.declarations.flatMap((handle) => handle.resolve(project) ?? []);
+      const name = `${prefix}${memberName(property, nodes[0])}`;
+      const propertyType = checker.getTypeOfSymbol(property);
+      const value = propertyType === undefined ? undefined : checker.getNonNullableType(propertyType);
+      const calls = value === undefined ? [] : checker.getSignaturesOfType(value, SignatureKind.Call);
+      if (calls.length > 0 || (property.flags & SymbolFlags.Method) !== 0) {
+        members.push({
+          name,
+          tags: tagsOf(checker, property),
+          parameters: parameterNames(calls),
+          documentation: normalize(checker.getDocumentationCommentOfSymbol(property)).trim(),
+          declarations: nodes.map((node) => normalize(node.getText())),
+        });
+        continue;
+      }
+      const held = value?.isObjectType() === true ? value.getSymbol() : undefined;
+      if (held !== undefined && held.declarations.some((handle) => !isLibrary(handle))) {
+        queue.push({ prefix: name, type: value });
+      }
+    }
+  }
+  return members.sort(byName);
+}
+
+function isLibrary(handle: NodeHandle): boolean {
+  return handle.path.includes('/node_modules/');
+}
+
+// `.name`, or the written key of a computed one: `[Symbol.iterator]`, whose symbol name the compiler numbers.
+function memberName(property: CompilerSymbol, node: Node | undefined): string {
+  const key = (node as { readonly name?: { readonly kind: SyntaxKind; getText(): string } } | undefined)?.name;
+  return key?.kind === SyntaxKind.ComputedPropertyName ? key.getText() : `.${property.name}`;
 }
 
 function kindOf(

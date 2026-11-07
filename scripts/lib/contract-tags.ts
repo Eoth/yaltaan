@@ -1,4 +1,4 @@
-// The contract tags of ARCHITECTURE.md §5.6: the one list of the JSDoc tags a public export may carry, the exports
+// The contract tags of ARCHITECTURE.md §5.6: the one list of the JSDoc tags a public export or member may carry, what
 // each applies to, the values each accepts, and the rules of presence. The checker judges every export against it and
 // the tag table of the generated reference is written from it; nothing else lists the tags.
 
@@ -7,6 +7,16 @@
  * (`constant`, `type`). `other` is a kind no tag covers yet (a namespace re-export, an enum, a namespace).
  */
 export type ExportKind = 'callable' | 'class' | 'constant' | 'type' | 'other';
+
+/**
+ * What a callable member of an export is (ADR 0040): code of the library (`member`, the methods of an instance, the
+ * functions of an exported object), or a function the caller supplies and the library calls (`supplied`, the `key` of
+ * a sort criterion), which carries `@supplied`.
+ */
+export type MemberKind = 'member' | 'supplied';
+
+/** Whatever carries tags: an export or a callable member of one. */
+export type Carrier = ExportKind | MemberKind;
 
 /** One JSDoc block tag as the compiler reports it: its name without `@`, its text trimmed (`''` when it has none). */
 export interface Tag {
@@ -30,11 +40,27 @@ export interface PublicExport {
   readonly documentation: string;
   /** The source text of each declaration, JSDoc left out, line endings normalized to `\n`. */
   readonly declarations: readonly string[];
+  /**
+   * The callable members judged with the export, in code-unit order of their names: those it declares, and those of
+   * a type no subpath exports that it inherits or reaches through a property (ADR 0040).
+   */
+  readonly members: readonly PublicMember[];
+}
+
+/** A callable member of an export, as the rules see it. */
+export interface PublicMember {
+  /** What follows the export's name to reach it: `.subscribe`, `.prototype.add`, `[Symbol.iterator]`. */
+  readonly name: string;
+  readonly tags: readonly Tag[];
+  /** Parameter names of every call signature, in order of first appearance; `this` is never among them. */
+  readonly parameters: readonly string[];
+  readonly documentation: string;
+  readonly declarations: readonly string[];
 }
 
 type TagValue =
   | { readonly type: 'none' }
-  | { readonly type: 'parameter'; readonly rest: boolean }
+  | { readonly type: 'parameter'; readonly rest: boolean; readonly self?: true }
   | { readonly type: 'choice'; readonly values: readonly string[] }
   | { readonly type: 'pattern'; readonly pattern: RegExp; readonly shape: string }
   | { readonly type: 'text'; readonly alone?: string };
@@ -43,17 +69,20 @@ export interface TagDefinition {
   readonly name: string;
   /** `contract`: part of the promise of §5.6, shown in the contract table; `documentary`: free documentation. */
   readonly role: 'contract' | 'documentary';
-  readonly appliesTo: readonly ExportKind[];
+  readonly appliesTo: readonly Carrier[];
   /** `required`: exactly once (at least once when `repeat`); a group: exactly one tag name of the group. */
   readonly presence: 'required' | 'optional' | { readonly group: 'mutation' | 'stability' };
+  /** On a member, optional: absent, the member has its owner's value; present, it states its own (ADR 0040). */
+  readonly inherited?: true;
   readonly repeat: boolean;
   readonly value: TagValue;
   /** What the tag states, for the reference. */
   readonly meaning: string;
 }
 
-const RUNS: readonly ExportKind[] = ['callable', 'class'];
-const EVERY: readonly ExportKind[] = ['callable', 'class', 'constant', 'type'];
+const RUNS: readonly Carrier[] = ['callable', 'class', 'member'];
+const CALLED: readonly Carrier[] = [...RUNS, 'supplied'];
+const EVERY: readonly Carrier[] = ['callable', 'class', 'constant', 'type', 'member', 'supplied'];
 
 const NO_VALUE: TagValue = { type: 'none' };
 const TEXT: TagValue = { type: 'text' };
@@ -74,8 +103,10 @@ export const TAG_DEFINITIONS: readonly TagDefinition[] = [
     appliesTo: RUNS,
     presence: { group: 'mutation' },
     repeat: true,
-    value: { type: 'parameter', rest: false },
-    meaning: 'Mutates the parameter it names; one tag per mutated parameter.',
+    value: { type: 'parameter', rest: false, self: true },
+    meaning:
+      'Mutates the parameter it names; one tag per mutated parameter. On a member, `this` names the object it is ' +
+      'called on (the instance, or the exported object).',
   },
   {
     name: 'sharing',
@@ -112,8 +143,9 @@ export const TAG_DEFINITIONS: readonly TagDefinition[] = [
     appliesTo: EVERY,
     presence: 'required',
     repeat: false,
+    inherited: true,
     value: { type: 'pattern', pattern: /^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$/, shape: 'MAJOR.MINOR' },
-    meaning: 'The minor version that added the export.',
+    meaning: 'The minor version that added the export, or the member.',
   },
   {
     name: 'experimental',
@@ -121,6 +153,7 @@ export const TAG_DEFINITIONS: readonly TagDefinition[] = [
     appliesTo: EVERY,
     presence: { group: 'stability' },
     repeat: false,
+    inherited: true,
     value: NO_VALUE,
     meaning: 'May change in a minor version.',
   },
@@ -130,13 +163,25 @@ export const TAG_DEFINITIONS: readonly TagDefinition[] = [
     appliesTo: EVERY,
     presence: { group: 'stability' },
     repeat: false,
+    inherited: true,
     value: NO_VALUE,
     meaning: 'Follows SemVer strictly: changes incompatibly only in a major version.',
   },
   {
+    name: 'supplied',
+    role: 'contract',
+    appliesTo: ['supplied'],
+    presence: 'required',
+    repeat: false,
+    value: NO_VALUE,
+    meaning:
+      'Supplied by the caller and called by the library: no promise on its effects or its cost, and its description ' +
+      'says when it is called and what it must do.',
+  },
+  {
     name: 'param',
     role: 'documentary',
-    appliesTo: RUNS,
+    appliesTo: CALLED,
     presence: 'optional',
     repeat: true,
     value: { type: 'parameter', rest: true },
@@ -145,7 +190,7 @@ export const TAG_DEFINITIONS: readonly TagDefinition[] = [
   {
     name: 'returns',
     role: 'documentary',
-    appliesTo: ['callable'],
+    appliesTo: ['callable', 'member', 'supplied'],
     presence: 'optional',
     repeat: false,
     value: TEXT,
@@ -191,78 +236,110 @@ export const TAG_DEFINITIONS: readonly TagDefinition[] = [
 
 const DEFINITIONS = new Map(TAG_DEFINITIONS.map((definition) => [definition.name, definition]));
 
-const KIND_NAMES: Readonly<Record<ExportKind, readonly [string, string]>> = {
+const KIND_NAMES: Readonly<Record<Carrier, readonly [string, string]>> = {
   callable: ['function', 'functions'],
   class: ['class', 'classes'],
   constant: ['constant', 'constants'],
   type: ['type', 'types'],
   other: ['declaration', 'declarations'],
+  member: ['member', 'members'],
+  supplied: ['supplied member', 'supplied members'],
 };
 
-/** The word the messages and the reference use for one export of a kind. */
-export function kindName(kind: ExportKind): string {
+/** The word the messages and the reference use for one carrier of a kind. */
+export function kindName(kind: Carrier): string {
   return KIND_NAMES[kind][0];
 }
 
-/** The word for several exports of a kind. */
-export function kindNamePlural(kind: ExportKind): string {
+/** The word for several carriers of a kind. */
+export function kindNamePlural(kind: Carrier): string {
   return KIND_NAMES[kind][1];
 }
 
-/** Judges the tags of one export; each problem reads after the export's name (`lacks @since`). */
+/** Whether a member is code of the library or a function the caller supplies: the latter says so by `@supplied`. */
+export function memberKind(member: PublicMember): MemberKind {
+  return member.tags.some((tag) => tag.name === 'supplied') ? 'supplied' : 'member';
+}
+
+/** Judges the tags of one export, not its members; each problem reads after the export's name (`lacks @since`). */
 export function judgeExport(entry: PublicExport): string[] {
   if (entry.kind === 'other') {
     return [`is a ${entry.kindDetail}, which no contract tag covers: export functions, classes, constants and types`];
   }
+  return judgeTags(entry.kind, entry.tags, entry.parameters);
+}
+
+/** Judges the callable members of one export; each problem reads after the export's name (`.subscribe lacks …`). */
+export function judgeMembers(entry: PublicExport): string[] {
+  const problems: string[] = [];
+  for (const member of entry.members) {
+    const kind = memberKind(member);
+    const found = judgeTags(kind, member.tags, member.parameters);
+    if (kind === 'supplied' && member.documentation === '') {
+      found.push('has no description: a supplied member says when it is called and what it must do');
+    }
+    problems.push(...found.map((problem) => `${member.name} ${problem}`));
+  }
+  return problems;
+}
+
+function judgeTags(kind: Carrier, tags: readonly Tag[], parameters: readonly string[]): string[] {
+  const member = kind === 'member' || kind === 'supplied';
   const problems: string[] = [];
   const counts = new Map<string, number>();
-  for (const tag of entry.tags) {
+  for (const tag of tags) {
     const definition = DEFINITIONS.get(tag.name);
     if (definition === undefined) {
       problems.push(`carries @${tag.name}, which is not a known tag (${describeKnownTags()})`);
       continue;
     }
-    if (!definition.appliesTo.includes(entry.kind)) {
-      problems.push(`carries @${tag.name}, which does not apply to a ${kindName(entry.kind)}`);
+    if (!definition.appliesTo.includes(kind)) {
+      problems.push(`carries @${tag.name}, which does not apply to a ${kindName(kind)}`);
       continue;
     }
     counts.set(tag.name, (counts.get(tag.name) ?? 0) + 1);
-    const problem = judgeValue(definition, tag.text, entry.parameters);
+    const problem = judgeValue(definition, tag.text, parameters, member);
     if (problem !== undefined) {
       problems.push(`@${tag.name}: ${problem}`);
     }
   }
-  const groups = new Map<string, string[]>();
+  const groups = new Map<string, { readonly names: string[]; readonly inherited: boolean }>();
   for (const definition of TAG_DEFINITIONS) {
-    if (!definition.appliesTo.includes(entry.kind)) {
+    if (!definition.appliesTo.includes(kind)) {
       continue;
     }
     const count = counts.get(definition.name) ?? 0;
+    const optional = member && definition.inherited === true;
     if (!definition.repeat && count > 1) {
       problems.push(`carries @${definition.name} ${count} times: it is written once`);
     }
-    if (definition.presence === 'required' && count === 0) {
+    if (definition.presence === 'required' && count === 0 && !optional) {
       problems.push(`lacks @${definition.name}`);
     } else if (typeof definition.presence === 'object') {
-      const members = groups.get(definition.presence.group) ?? [];
-      members.push(definition.name);
-      groups.set(definition.presence.group, members);
+      const group = groups.get(definition.presence.group) ?? { names: [], inherited: optional };
+      group.names.push(definition.name);
+      groups.set(definition.presence.group, group);
     }
   }
-  for (const members of groups.values()) {
-    const present = members.filter((name) => counts.has(name));
-    const listed = members.map((name) => `@${name}`).join(' or ');
-    if (present.length === 0) {
+  for (const { names, inherited } of groups.values()) {
+    const present = names.filter((name) => counts.has(name));
+    const listed = names.map((name) => `@${name}`).join(' or ');
+    if (present.length === 0 && !inherited) {
       problems.push(`lacks ${listed}`);
     } else if (present.length > 1) {
       problems.push(`carries ${present.map((name) => `@${name}`).join(' and ')}, which exclude each other`);
     }
   }
-  problems.push(...judgeRepeats(entry.tags));
+  problems.push(...judgeRepeats(tags));
   return problems;
 }
 
-function judgeValue(definition: TagDefinition, text: string, parameters: readonly string[]): string | undefined {
+function judgeValue(
+  definition: TagDefinition,
+  text: string,
+  parameters: readonly string[],
+  member: boolean,
+): string | undefined {
   const value = definition.value;
   switch (value.type) {
     case 'none':
@@ -272,9 +349,14 @@ function judgeValue(definition: TagDefinition, text: string, parameters: readonl
       if (name === '') {
         return 'names no parameter';
       }
+      const self = value.self === true && member;
+      if (name === 'this' && self) {
+        return undefined;
+      }
       if (!parameters.includes(name)) {
         const known = parameters.length === 0 ? 'it has none' : `its parameters are ${parameters.join(', ')}`;
-        return `names ${JSON.stringify(name)}, which is not a parameter (${known})`;
+        const also = self ? ', or this' : value.self === true && name === 'this' ? '; only a member names this' : '';
+        return `names ${JSON.stringify(name)}, which is not a parameter (${known}${also})`;
       }
       return undefined;
     }
@@ -321,7 +403,11 @@ export function describeValue(definition: TagDefinition): string {
     case 'none':
       return 'none';
     case 'parameter':
-      return value.rest ? 'a parameter name, then text' : 'a parameter name';
+      return value.rest
+        ? 'a parameter name, then text'
+        : value.self === true
+          ? 'a parameter name, or `this` on a member'
+          : 'a parameter name';
     case 'choice':
       return value.values.map((choice) => `\`${choice}\``).join(', ');
     case 'pattern':

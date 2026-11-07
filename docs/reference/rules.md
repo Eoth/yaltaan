@@ -14,7 +14,10 @@ What a rule's condition reads, and what it says of those values.
 export interface Condition {
     /** The paths whose values `when` is given. */
     readonly reads: readonly Path[];
-    /** Given the value of each path of `reads`, in order, and `undefined` for an absent one. */
+    /**
+     * Given the value of each path of `reads`, in order, and `undefined` for an absent one; called once per check.
+     * @supplied
+     */
     readonly when: (...values: readonly unknown[]) => boolean;
 }
 ```
@@ -23,6 +26,20 @@ export interface Condition {
 |---|---|
 | `@since` | 0.2 |
 | `@experimental` | yes |
+
+#### `Condition.when`
+
+A supplied member.
+
+Given the value of each path of `reads`, in order, and `undefined` for an absent one; called once per check.
+
+```ts
+readonly when: (...values: readonly unknown[]) => boolean;
+```
+
+| Contract | Value |
+|---|---|
+| `@supplied` | yes |
 
 ### `EachOptions`
 
@@ -51,7 +68,11 @@ The elements of a list that count: those whose value at `at`, the element itself
 export interface ListSource {
     readonly list: Path;
     readonly at?: Path;
-    /** Whether this value counts; every value that is not blank without it. */
+    /**
+     * Whether this value counts; every value that is not blank without it. Called once per element whose value is not
+     * blank.
+     * @supplied
+     */
     readonly where?: (value: unknown) => boolean;
 }
 ```
@@ -60,6 +81,20 @@ export interface ListSource {
 |---|---|
 | `@since` | 0.2 |
 | `@experimental` | yes |
+
+#### `ListSource.where`
+
+A supplied member.
+
+Whether this value counts; every value that is not blank without it. Called once per element whose value is not blank.
+
+```ts
+readonly where?: (value: unknown) => boolean;
+```
+
+| Contract | Value |
+|---|---|
+| `@supplied` | yes |
 
 ### `OrderedOptions`
 
@@ -71,7 +106,11 @@ The options of `ordered`.
 export interface OrderedOptions {
     /** Refuses equal values too. */
     readonly strict?: boolean;
-    /** Negative when `start` comes first, as for `Array.prototype.sort`; for what `<` cannot order, such as Temporal. */
+    /**
+     * Negative when `start` comes first, as for `Array.prototype.sort`; for what `<` cannot order, such as Temporal.
+     * Called once per check, with two values that are not blank.
+     * @supplied
+     */
     readonly compare?: (start: unknown, end: unknown) => number;
 }
 ```
@@ -81,6 +120,20 @@ export interface OrderedOptions {
 | `@since` | 0.2 |
 | `@experimental` | yes |
 
+#### `OrderedOptions.compare`
+
+A supplied member.
+
+Negative when `start` comes first, as for `Array.prototype.sort`; for what `<` cannot order, such as Temporal. Called once per check, with two values that are not blank.
+
+```ts
+readonly compare?: (start: unknown, end: unknown) => number;
+```
+
+| Contract | Value |
+|---|---|
+| `@supplied` | yes |
+
 ### `RefineOptions`
 
 A type.
@@ -89,11 +142,15 @@ The options of `refine`.
 
 ```ts
 export interface RefineOptions<O = unknown> {
-    /** Builds the message of an issue; its code by default, as a schema of this library does. */
+    /**
+     * Builds the message of an issue; its code by default, as a schema of this library does. Called once per issue.
+     * @supplied
+     */
     readonly format?: IssueFormatter;
     /**
      * The current index of the element a `{ key }` names, from the value this read gave; without it, an issue stops at
      * the list that holds the element.
+     * @supplied
      */
     readonly resolveKey?: (segment: KeySegment, parent: Path, value: O) => number | undefined;
 }
@@ -103,6 +160,34 @@ export interface RefineOptions<O = unknown> {
 |---|---|
 | `@since` | 0.2 |
 | `@experimental` | yes |
+
+#### `RefineOptions.format`
+
+A supplied member.
+
+Builds the message of an issue; its code by default, as a schema of this library does. Called once per issue.
+
+```ts
+readonly format?: IssueFormatter;
+```
+
+| Contract | Value |
+|---|---|
+| `@supplied` | yes |
+
+#### `RefineOptions.resolveKey`
+
+A supplied member.
+
+The current index of the element a `{ key }` names, from the value this read gave; without it, an issue stops at the list that holds the element.
+
+```ts
+readonly resolveKey?: (segment: KeySegment, parent: Path, value: O) => number | undefined;
+```
+
+| Contract | Value |
+|---|---|
+| `@supplied` | yes |
 
 ### `Rule`
 
@@ -116,9 +201,22 @@ export interface Rule {
     readonly reads: readonly Path[];
     /** Where the rule can place an issue, `rules.too_many_issues` aside; `anyElement` as in `reads`. */
     readonly targets: readonly Path[];
-    /** The issues of these values, every one on a target; none when the rule holds. */
+    /**
+     * The issues of these values, every one on a target; none when the rule holds. A rule of this package reads the
+     * values and never writes them, and so must an application's.
+     * @pure
+     * @sharing structural
+     * @complexity O(k) for a rule of this package (k = what its function states), plus the cost of its callbacks
+     * @throws what a callback of the rule or a getter of the values throws, unchanged
+     */
     readonly check: (values: unknown) => readonly Issue[];
-    /** The fields these values require: a blank one among them gets an issue. A rule without it requires none. */
+    /**
+     * The fields these values require: a blank one among them gets an issue. A rule without it requires none.
+     * @pure
+     * @sharing structural
+     * @complexity O(k) for a rule of this package (k = what its function states), plus the cost of its callbacks
+     * @throws what a callback of the rule or a getter of the values throws, unchanged
+     */
     readonly required?: (values: unknown) => readonly Path[];
 }
 ```
@@ -127,6 +225,40 @@ export interface Rule {
 |---|---|
 | `@since` | 0.2 |
 | `@experimental` | yes |
+
+#### `Rule.check`
+
+A member.
+
+The issues of these values, every one on a target; none when the rule holds. A rule of this package reads the values and never writes them, and so must an application's.
+
+```ts
+readonly check: (values: unknown) => readonly Issue[];
+```
+
+| Contract | Value |
+|---|---|
+| `@pure` | yes |
+| `@sharing` | structural |
+| `@complexity` | O(k) for a rule of this package (k = what its function states), plus the cost of its callbacks |
+| `@throws` | what a callback of the rule or a getter of the values throws, unchanged |
+
+#### `Rule.required`
+
+A member.
+
+The fields these values require: a blank one among them gets an issue. A rule without it requires none.
+
+```ts
+readonly required?: (values: unknown) => readonly Path[];
+```
+
+| Contract | Value |
+|---|---|
+| `@pure` | yes |
+| `@sharing` | structural |
+| `@complexity` | O(k) for a rule of this package (k = what its function states), plus the cost of its callbacks |
+| `@throws` | what a callback of the rule or a getter of the values throws, unchanged |
 
 ### `RuleIssue`
 
@@ -194,7 +326,8 @@ The options of `unique`.
 export interface UniqueOptions extends EachOptions {
     /**
      * What is compared, from the value at `at`, which is not blank: `(email) => (typeof email === 'string' ?
-     * email.toLowerCase() : email)`. A blank answer is not compared either.
+     * email.toLowerCase() : email)`. A blank answer is not compared either. Called once per element.
+     * @supplied
      */
     readonly by?: (value: unknown) => unknown;
 }
@@ -204,6 +337,20 @@ export interface UniqueOptions extends EachOptions {
 |---|---|
 | `@since` | 0.2 |
 | `@experimental` | yes |
+
+#### `UniqueOptions.by`
+
+A supplied member.
+
+What is compared, from the value at `at`, which is not blank: `(email) => (typeof email === 'string' ? email.toLowerCase() : email)`. A blank answer is not compared either. Called once per element.
+
+```ts
+readonly by?: (value: unknown) => unknown;
+```
+
+| Contract | Value |
+|---|---|
+| `@supplied` | yes |
 
 ### `allOrNone`
 

@@ -30,6 +30,7 @@ function exported(name: string, kind: ExportKind = 'callable', stability = 'expe
     parameters: [],
     documentation: '',
     declarations: [],
+    members: [],
   };
 }
 

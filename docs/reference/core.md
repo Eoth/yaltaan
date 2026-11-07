@@ -33,8 +33,17 @@ A criterion of `sortBy` whose present keys `compare` orders, `Intl.Collator`'s f
 
 ```ts
 export interface ComparedCriterion<T> {
+    /**
+     * The key of an element, called once per element with its index, in input order.
+     * @supplied
+     */
     readonly key: (item: T, index: number) => unknown;
     readonly order?: 'asc' | 'desc';
+    /**
+     * Negative when `a` comes first, as for `Array.prototype.sort`; called with two present keys only, and must order
+     * them consistently.
+     * @supplied
+     */
     compare(a: unknown, b: unknown): number;
 }
 ```
@@ -44,6 +53,34 @@ export interface ComparedCriterion<T> {
 | `@since` | 0.1 |
 | `@experimental` | yes |
 
+#### `ComparedCriterion.compare`
+
+A supplied member.
+
+Negative when `a` comes first, as for `Array.prototype.sort`; called with two present keys only, and must order them consistently.
+
+```ts
+compare(a: unknown, b: unknown): number;
+```
+
+| Contract | Value |
+|---|---|
+| `@supplied` | yes |
+
+#### `ComparedCriterion.key`
+
+A supplied member.
+
+The key of an element, called once per element with its index, in input order.
+
+```ts
+readonly key: (item: T, index: number) => unknown;
+```
+
+| Contract | Value |
+|---|---|
+| `@supplied` | yes |
+
 ### `KeyCriterion`
 
 A type.
@@ -52,6 +89,10 @@ A criterion of `sortBy` in the order of `SortKey`, ascending unless `order` is '
 
 ```ts
 export interface KeyCriterion<T> {
+    /**
+     * The key of an element, called once per element with its index, in input order; returns a `SortKey`.
+     * @supplied
+     */
     readonly key: (item: T, index: number) => SortKey;
     readonly order?: 'asc' | 'desc';
     readonly compare?: undefined;
@@ -62,6 +103,20 @@ export interface KeyCriterion<T> {
 |---|---|
 | `@since` | 0.1 |
 | `@experimental` | yes |
+
+#### `KeyCriterion.key`
+
+A supplied member.
+
+The key of an element, called once per element with its index, in input order; returns a `SortKey`.
+
+```ts
+readonly key: (item: T, index: number) => SortKey;
+```
+
+| Contract | Value |
+|---|---|
+| `@supplied` | yes |
 
 ### `KeyOptions`
 
@@ -639,11 +694,15 @@ How `toStandardIssue` builds the message and turns `{ key }` segments into index
 
 ```ts
 export interface ToStandardIssueOptions {
-    /** Builds the message; must return a string. */
+    /**
+     * Builds the message; called once per issue, and must return a string.
+     * @supplied
+     */
     readonly format: IssueFormatter;
     /**
      * The current index of the element that `segment` designates in the array at `parent`, or -1 or `undefined` when it
      * is no longer there: `findIndex` answers as it is. Without it, the path stops before every `{ key }` segment.
+     * @supplied
      */
     readonly resolveKey?: (segment: KeySegment, parent: Path) => number | undefined;
 }
@@ -653,6 +712,34 @@ export interface ToStandardIssueOptions {
 |---|---|
 | `@since` | 0.1 |
 | `@experimental` | yes |
+
+#### `ToStandardIssueOptions.format`
+
+A supplied member.
+
+Builds the message; called once per issue, and must return a string.
+
+```ts
+readonly format: IssueFormatter;
+```
+
+| Contract | Value |
+|---|---|
+| `@supplied` | yes |
+
+#### `ToStandardIssueOptions.resolveKey`
+
+A supplied member.
+
+The current index of the element that `segment` designates in the array at `parent`, or -1 or `undefined` when it is no longer there: `findIndex` answers as it is. Without it, the path stops before every `{ key }` segment.
+
+```ts
+readonly resolveKey?: (segment: KeySegment, parent: Path) => number | undefined;
+```
+
+| Contract | Value |
+|---|---|
+| `@supplied` | yes |
 
 ### `fromStandardIssue`
 
@@ -1073,7 +1160,11 @@ Options of every function that reads a value by a path.
 
 ```ts
 export interface AccessOptions {
-    /** The stable key of an array element, which a `{ key }` segment is matched against; required by such a segment. */
+    /**
+     * The stable key of an array element, which a `{ key }` segment is matched against; required by such a segment, and
+     * called on the elements of the array it searches.
+     * @supplied
+     */
     readonly keyOf?: (element: unknown) => unknown;
 }
 ```
@@ -1082,6 +1173,20 @@ export interface AccessOptions {
 |---|---|
 | `@since` | 0.1 |
 | `@experimental` | yes |
+
+#### `AccessOptions.keyOf`
+
+A supplied member.
+
+The stable key of an array element, which a `{ key }` segment is matched against; required by such a segment, and called on the elements of the array it searches.
+
+```ts
+readonly keyOf?: (element: unknown) => unknown;
+```
+
+| Contract | Value |
+|---|---|
+| `@supplied` | yes |
 
 ### `ArrayStrategy`
 

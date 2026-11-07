@@ -1,5 +1,5 @@
-// Checks the contract tags of every public export (ARCHITECTURE.md §5.6) and keeps the reference documentation that
-// is written from them up to date.
+// Checks the contract tags of every public export and of its callable members (ARCHITECTURE.md §5.6, ADR 0040) and
+// keeps the reference documentation that is written from them up to date.
 //
 // The public surface is what each "exports" subpath of a workspace package publishes: its declaration file, read by
 // the compiler (scripts/lib/declarations.ts), which follows re-exports and merges overloads. Each export is judged
@@ -19,7 +19,7 @@ import { pathToFileURL } from 'node:url';
 
 import { NPM_SCOPE } from './check-manifests.ts';
 import { REFERENCE_DIR, renderReference, type ReferencedPackage } from './lib/contract-reference.ts';
-import { judgeExport, type PublicExport } from './lib/contract-tags.ts';
+import { judgeExport, judgeMembers, type PublicExport } from './lib/contract-tags.ts';
 import { readDeclarations } from './lib/declarations.ts';
 import { readInternalPackages } from './lib/internal-packages.ts';
 import { relativePosix } from './lib/packages.ts';
@@ -136,6 +136,7 @@ export async function checkContractTags(
     }
     for (const exported of exports) {
       problems.push(...judgeExport(exported).map((problem) => `${shown}: ${exported.name} ${problem}`));
+      problems.push(...judgeMembers(exported).map((problem) => `${shown}: ${exported.name}${problem}`));
     }
     problems.push(...(await compareWithRuntime(root, entry, exports)));
     exportCount += exports.length;
