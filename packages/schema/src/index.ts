@@ -42,8 +42,8 @@ export type SchemaLiteral = string | number | boolean | null;
 
 /**
  * An expected failure of a read:
- * - `schema.invalid_type`: the value is not a `string`, a finite `number`, an `array` or a plain `object`;
- * - `schema.invalid_value`: the value is none of the literals of `expected`;
+ * - `schema.invalid_type`: the value is not a `string`, a finite `number`, a `boolean`, an `array` or a plain `object`;
+ * - `schema.invalid_value`: the value is none of the literals or options of `expected`;
  * - `schema.missing`: the object has no own key here, and its schema is not `optional`;
  * - `schema.unknown_key`: the object has a key its schema does not declare, under `unknownKeys: 'reject'`;
  * - `schema.too_short`, `schema.too_long`: the text has `length` code units, outside `minimum` or `maximum`;
@@ -58,7 +58,7 @@ export type SchemaIssue =
   | {
       readonly code: 'schema.invalid_type';
       readonly path: SchemaPath;
-      readonly params: { readonly expected: 'string' | 'number' | 'array' | 'object' };
+      readonly params: { readonly expected: 'string' | 'number' | 'boolean' | 'array' | 'object' };
     }
   | {
       readonly code: 'schema.invalid_value';
@@ -329,6 +329,25 @@ export function number(options: NumberOptions = {}): Schema<number> {
 }
 
 /**
+ * A schema of `true` and `false`: a checkbox. Nothing else is read as one, neither `0`, `'false'` nor a `Boolean`.
+ * @pure
+ * @sharing identity-preserving
+ * @complexity O(1)
+ * @throws never
+ * @since 0.2
+ * @experimental
+ * @example parse(boolean(), 'true') // an error, code 'schema.invalid_type'
+ */
+export function boolean(): Schema<boolean> {
+  return make((input, reading) => {
+    if (typeof input !== 'boolean') {
+      fail(reading, 'schema.invalid_type', { expected: 'boolean' });
+    }
+    return input;
+  });
+}
+
+/**
  * A schema that holds its literal, which an option of a `discriminatedUnion` reads.
  * @since 0.2
  * @experimental
@@ -361,6 +380,36 @@ export function literal<const T extends SchemaLiteral>(value: T): LiteralSchema<
     },
     { literal: value },
   );
+}
+
+/**
+ * A schema of one of a few texts or numbers, compared by `===`: the options of a select or of radio buttons.
+ * `picklist([0])` also takes `-0`, and a read gives back what it read.
+ * @pure
+ * @sharing identity-preserving
+ * @complexity O(n) to build (n = number of options); a read is O(1)
+ * @throws TypeError when there is no option, an option is not a string or a finite number, or two options are the same
+ * @since 0.2
+ * @experimental
+ * @example parse(picklist(['EUR', 'USD']), 'GBP') // an error, code 'schema.invalid_value'
+ */
+export function picklist<const T extends readonly (string | number)[]>(options: T): Schema<T[number]> {
+  // A Set compares as `===` does once NaN is refused: `0` and `-0` are one option.
+  const allowed = new Set<unknown>(Array.isArray(options) ? options : []);
+  if (
+    allowed.size === 0 ||
+    allowed.size !== options.length ||
+    options.some((option) => typeof option !== 'string' && !Number.isFinite(option))
+  ) {
+    throw new TypeError(`not a list of distinct texts or finite numbers: ${String(options)}`);
+  }
+  const expected = Object.freeze([...options]);
+  return make((input, reading) => {
+    if (!allowed.has(input)) {
+      fail(reading, 'schema.invalid_value', { expected });
+    }
+    return input;
+  });
 }
 
 /**

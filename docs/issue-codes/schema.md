@@ -6,8 +6,8 @@ A row is never deleted: a removed code keeps its row, with the version that remo
 
 | Code | Parameters | Meaning | Since | Removed |
 |---|---|---|---|---|
-| `schema.invalid_type` | `expected` | The value is not what `expected` names: a `string`, a finite `number`, an `array` or a plain `object`. | 0.2 | |
-| `schema.invalid_value` | `expected` | The value is none of the literals `expected` lists. | 0.2 | |
+| `schema.invalid_type` | `expected` | The value is not what `expected` names: a `string`, a finite `number`, a `boolean`, an `array` or a plain `object`. | 0.2 | |
+| `schema.invalid_value` | `expected` | The value is none of the literals or options `expected` lists. | 0.2 | |
 | `schema.missing` | | The object has no own key here, and the schema of the key is not optional. | 0.2 | |
 | `schema.unknown_key` | | The object has this key, which its schema does not declare, under `unknownKeys: 'reject'`. | 0.2 | |
 | `schema.too_short` | `length`, `minimum` | The text has `length` UTF-16 code units, under `minimum`. | 0.2 | |

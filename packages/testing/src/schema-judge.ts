@@ -28,7 +28,9 @@ export interface UnionOption {
 export type Shape =
   | { readonly kind: 'string'; readonly options: StringOptions }
   | { readonly kind: 'number'; readonly options: NumberOptions }
+  | { readonly kind: 'boolean' }
   | { readonly kind: 'literal'; readonly value: LiteralValue }
+  | { readonly kind: 'picklist'; readonly options: readonly (string | number)[] }
   | { readonly kind: 'optional'; readonly inner: Shape; readonly exact: boolean }
   | { readonly kind: 'nullable'; readonly inner: Shape }
   | { readonly kind: 'array'; readonly element: Shape; readonly options: LengthOptions }
@@ -54,7 +56,9 @@ export interface NumberOptions {
 export const SHAPE_KINDS: readonly Shape['kind'][] = Object.keys({
   string: true,
   number: true,
+  boolean: true,
   literal: true,
+  picklist: true,
   optional: true,
   nullable: true,
   array: true,
@@ -66,7 +70,9 @@ export const SHAPE_KINDS: readonly Shape['kind'][] = Object.keys({
 export interface ShapeLibrary<S extends StandardSchemaV1 = StandardSchemaV1> {
   string(options?: StringOptions): S;
   number(options?: NumberOptions): S;
+  boolean(): S;
   literal(value: LiteralValue): S;
+  picklist(options: readonly (string | number)[]): S;
   optional(inner: S, options?: { readonly exactOptional?: boolean }): S;
   nullable(inner: S): S;
   array(element: S, options?: LengthOptions): S;
@@ -84,8 +90,12 @@ export function fromShape<S extends StandardSchemaV1>(shape: Shape, library: Sha
       return library.string(shape.options);
     case 'number':
       return library.number(shape.options);
+    case 'boolean':
+      return library.boolean();
     case 'literal':
       return library.literal(shape.value);
+    case 'picklist':
+      return library.picklist(shape.options);
     case 'optional':
       return library.optional(child(shape.inner), { exactOptional: shape.exact });
     case 'nullable':
@@ -131,7 +141,9 @@ export const valibotLibrary: ShapeLibrary<AnyValibot> = {
       max === undefined ? undefined : (v.maxValue(max) as never),
       integer === true ? (v.integer() as never) : undefined,
     ]),
+  boolean: () => v.boolean() as AnyValibot,
   literal: (value) => (value === null ? v.null_() : v.literal(value)) as AnyValibot,
+  picklist: (options) => v.picklist(options) as unknown as AnyValibot,
   optional: (inner, { exactOptional } = {}) =>
     (exactOptional === true ? v.exactOptional(inner) : v.optional(inner)) as unknown as AnyValibot,
   nullable: (inner) => v.nullable(inner) as unknown as AnyValibot,
@@ -403,6 +415,12 @@ const literalShape: fc.Arbitrary<Shape> = fc
   .constantFrom(...LITERALS)
   .map((value): Shape => ({ kind: 'literal', value }));
 
+const CHOICES: readonly (string | number)[] = ['a', 'b', '', 0, 1, 5.5, -1];
+
+const picklistShape: fc.Arbitrary<Shape> = fc
+  .uniqueArray(fc.constantFrom(...CHOICES), { minLength: 1, maxLength: 4 })
+  .map((options): Shape => ({ kind: 'picklist', options }));
+
 const unknownKeysMode = fc.constantFrom<UnknownKeys>('strip', 'reject', 'passthrough');
 
 function entriesAt(child: fc.Arbitrary<Shape>): fc.Arbitrary<UnionOption['entries']> {
@@ -412,7 +430,7 @@ function entriesAt(child: fc.Arbitrary<Shape>): fc.Arbitrary<UnionOption['entrie
 }
 
 function shapeAt(depth: number): fc.Arbitrary<Shape> {
-  const leaf = fc.oneof(stringShape, numberShape, literalShape);
+  const leaf = fc.oneof(stringShape, numberShape, literalShape, fc.constant<Shape>({ kind: 'boolean' }), picklistShape);
   if (depth === 0) {
     return leaf;
   }
@@ -500,6 +518,13 @@ function valueNear(shape: Shape): fc.Arbitrary<unknown> {
       return textNear(shape.options);
     case 'number':
       return numberNear(shape.options);
+    case 'boolean':
+      return fc.oneof({ weight: 5, arbitrary: fc.boolean() }, fc.constantFrom<unknown>(0, 1, 'true', 'false'));
+    case 'picklist':
+      return fc.oneof(
+        { weight: 5, arbitrary: fc.constantFrom(...shape.options) },
+        fc.constantFrom(...CHOICES, '5.5', -0),
+      );
     case 'literal':
       return fc.oneof(
         { weight: 5, arbitrary: fc.constant(shape.value) },

@@ -380,6 +380,7 @@ Each domain is described by its scope, its decisions, what it does not do, and i
 - An interpreted implementation, without `new Function` (compatibility with a strict Content Security Policy).
 - Unknown keys: `'strip' | 'reject' | 'passthrough'`. Default `strip`: a field added on the server must not break deployed clients. `reject` is recommended for untrusted input. Decided in ADR 0008.
 - A missing key, `undefined` and `null` are three distinct states; `optional` accepts absence, and the `exactOptional` option refuses an explicit `undefined`. An object is a plain object, read by its own keys; a number is finite ([ADR 0032](docs/adr/0032-schema-package.md)).
+- A checkbox is `boolean()`, and a choice among a few texts or numbers `picklist(options)`, its issue `schema.invalid_value` with the options; a general `union` waits for T5.1 ([ADR 0039](docs/adr/0039-boolean-and-picklist.md)).
 - An issue carries no message; through `~standard`, its code stands for one until `withMessages(schema, format)` gives it the application's words ([ADR 0032](docs/adr/0032-schema-package.md)).
 - `codec(schema, encode)`: a transformation without `encode` is marked non-reversible at the type level (calling `encode` on it is a compile error).
 - `versioned({ 1: s1, 2: s2 }, migrations)`: chained migrations; an unknown version produces the issue `schema.unknown_version`.

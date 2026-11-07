@@ -119,7 +119,9 @@ test('every export that runs is judged, or is named as having no equivalent', ()
   const judged = {
     string: 'string',
     number: 'number',
+    boolean: 'boolean',
     literal: 'literal',
+    picklist: 'picklist',
     optional: 'optional',
     nullable: 'nullable',
     array: 'array',

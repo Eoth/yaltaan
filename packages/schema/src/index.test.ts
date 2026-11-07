@@ -21,6 +21,7 @@ import {
 import * as schema from './index.ts';
 import {
   array,
+  boolean,
   discriminatedUnion,
   literal,
   nullable,
@@ -28,6 +29,7 @@ import {
   object,
   optional,
   parse,
+  picklist,
   string,
   withMessages,
   type Schema,
@@ -362,6 +364,60 @@ test('literal: only what === its value is read, and it gives back what it read',
     }),
   );
   assert.ok(Object.is((parse(literal(0), -0) as { value: number }).value, -0));
+});
+
+test('boolean: true and false only, given back as read', () => {
+  fc.assert(
+    fc.property(fc.oneof(fc.boolean(), fc.anything()), (input) => {
+      assert.deepStrictEqual(
+        parse(boolean(), input),
+        typeof input === 'boolean'
+          ? { ok: true, value: input }
+          : { ok: false, error: [{ code: 'schema.invalid_type', path: [], params: { expected: 'boolean' } }] },
+      );
+    }),
+  );
+  for (const input of [0, 1, 'true', 'false', '', null, new Boolean(true), [true]]) {
+    assert.equal(parse(boolean(), input).ok, false, String(input));
+  }
+});
+
+const choices = fc.uniqueArray(
+  fc.oneof(fc.string(), fc.integer(), fc.double({ noNaN: true, noDefaultInfinity: true })),
+  {
+    minLength: 1,
+    maxLength: 5,
+    comparator: (one, other) => one === other,
+  },
+);
+
+test('picklist: only what === one of its options is read, and it gives back what it read', () => {
+  fc.assert(
+    fc.property(
+      choices,
+      fc.oneof(
+        choices.chain((options) => fc.constantFrom(...options)),
+        fc.anything(),
+      ),
+      (options, input) => {
+        assert.deepStrictEqual(
+          parse(picklist(options), input),
+          options.some((option) => option === input)
+            ? { ok: true, value: input }
+            : { ok: false, error: [{ code: 'schema.invalid_value', path: [], params: { expected: options } }] },
+        );
+      },
+    ),
+  );
+  fc.assert(
+    fc.property(choices, (options) => {
+      for (const option of options) {
+        assert.ok(parse(picklist(options), option).ok);
+      }
+    }),
+  );
+  assert.ok(Object.is((parse(picklist([0]), -0) as { value: number }).value, -0));
+  assert.equal(parse(picklist([5.5, 10, 20]), '10').ok, false);
 });
 
 // Absent, `undefined` and `null`: the whole table, every field schema against every state.
@@ -884,6 +940,15 @@ test('a schema is built from valid arguments only: a bug in the calling code thr
     () => literal(undefined as never),
     () => literal(1n as never),
     () => literal({} as never),
+    () => picklist([]),
+    () => picklist(['a', 'a']),
+    () => picklist([0, -0]),
+    () => picklist([Number.NaN]),
+    () => picklist([Number.POSITIVE_INFINITY]),
+    () => picklist([true] as never),
+    () => picklist([null] as never),
+    () => picklist('ab' as never),
+    () => picklist(undefined as never),
     () => optional(1 as never),
     () => nullable(null as never),
     () => withMessages({} as never, () => ''),
@@ -960,6 +1025,29 @@ declareAdversarial(SUBPATH, 'literal', {
   },
   callbacks: { na: 'literal takes no callback' },
   async: { na: 'literal is synchronous and takes no signal' },
+});
+
+declareAdversarial(SUBPATH, 'boolean', {
+  boundary: readsAs(boolean(), (value) => typeof value === 'boolean'),
+  structures: (value) => assert.ok(!parse(boolean(), value).ok),
+  hostile: (value) => ownErrorOnly(() => assert.ok(!parse(boolean(), value).ok)),
+  unicode: (text) => assert.ok(!parse(boolean(), text).ok),
+  callbacks: { na: 'boolean takes no callback' },
+  async: { na: 'boolean is synchronous and takes no signal' },
+});
+
+declareAdversarial(SUBPATH, 'picklist', {
+  boundary: (value) => {
+    assert.equal(parse(picklist([0, '']), value).ok, value === 0 || value === '');
+  },
+  structures: (value) => assert.ok(!parse(picklist(['a']), value).ok),
+  hostile: (value) => ownErrorOnly(() => assert.ok(!parse(picklist(['a']), value).ok)),
+  unicode: (text) => {
+    assert.ok(parse(picklist([text]), text).ok);
+    assert.equal(parse(picklist([text]), `${text}x`).ok, false);
+  },
+  callbacks: { na: 'picklist takes no callback' },
+  async: { na: 'picklist is synchronous and takes no signal' },
 });
 
 declareAdversarial(SUBPATH, 'optional', {

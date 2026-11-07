@@ -236,14 +236,14 @@ export interface Schema<Input = unknown, Output = Input> extends StandardSchema<
 
 A type.
 
-An expected failure of a read: - `schema.invalid_type`: the value is not a `string`, a finite `number`, an `array` or a plain `object`; - `schema.invalid_value`: the value is none of the literals of `expected`; - `schema.missing`: the object has no own key here, and its schema is not `optional`; - `schema.unknown_key`: the object has a key its schema does not declare, under `unknownKeys: 'reject'`; - `schema.too_short`, `schema.too_long`: the text has `length` code units, outside `minimum` or `maximum`; - `schema.too_small`, `schema.too_large`: the number or the number of elements is outside `minimum` or `maximum`; - `schema.not_integer`: the number has a fraction; - `schema.invalid_format`: the text does not match `pattern`, the source of the regular expression; - `schema.too_many_issues`: the read stopped at `maximum` issues, the last in the list, at the root.
+An expected failure of a read: - `schema.invalid_type`: the value is not a `string`, a finite `number`, a `boolean`, an `array` or a plain `object`; - `schema.invalid_value`: the value is none of the literals or options of `expected`; - `schema.missing`: the object has no own key here, and its schema is not `optional`; - `schema.unknown_key`: the object has a key its schema does not declare, under `unknownKeys: 'reject'`; - `schema.too_short`, `schema.too_long`: the text has `length` code units, outside `minimum` or `maximum`; - `schema.too_small`, `schema.too_large`: the number or the number of elements is outside `minimum` or `maximum`; - `schema.not_integer`: the number has a fraction; - `schema.invalid_format`: the text does not match `pattern`, the source of the regular expression; - `schema.too_many_issues`: the read stopped at `maximum` issues, the last in the list, at the root.
 
 ```ts
 export type SchemaIssue = {
     readonly code: 'schema.invalid_type';
     readonly path: SchemaPath;
     readonly params: {
-        readonly expected: 'string' | 'number' | 'array' | 'object';
+        readonly expected: 'string' | 'number' | 'boolean' | 'array' | 'object';
     };
 } | {
     readonly code: 'schema.invalid_value';
@@ -511,6 +511,31 @@ export declare function array<I, O>(element: Schema<I, O>, options?: ArrayOption
 parse(array(number()), [1, 'a']) // an error at path [1], code 'schema.invalid_type'
 ```
 
+### `boolean`
+
+A function.
+
+A schema of `true` and `false`: a checkbox. Nothing else is read as one, neither `0`, `'false'` nor a `Boolean`.
+
+```ts
+export declare function boolean(): Schema<boolean>;
+```
+
+| Contract | Value |
+|---|---|
+| `@pure` | yes |
+| `@sharing` | identity-preserving |
+| `@complexity` | O(1) |
+| `@throws` | never |
+| `@since` | 0.2 |
+| `@experimental` | yes |
+
+**Example**
+
+```ts
+parse(boolean(), 'true') // an error, code 'schema.invalid_type'
+```
+
 ### `discriminatedUnion`
 
 A function.
@@ -689,6 +714,31 @@ export declare function parse<I, O>(schema: Schema<I, O>, input: unknown): Resul
 
 ```ts
 parse(number(), '1') // an error at path [], code 'schema.invalid_type'
+```
+
+### `picklist`
+
+A function.
+
+A schema of one of a few texts or numbers, compared by `===`: the options of a select or of radio buttons. `picklist([0])` also takes `-0`, and a read gives back what it read.
+
+```ts
+export declare function picklist<const T extends readonly (string | number)[]>(options: T): Schema<T[number]>;
+```
+
+| Contract | Value |
+|---|---|
+| `@pure` | yes |
+| `@sharing` | identity-preserving |
+| `@complexity` | O(n) to build (n = number of options); a read is O(1) |
+| `@throws` | TypeError when there is no option, an option is not a string or a finite number, or two options are the same |
+| `@since` | 0.2 |
+| `@experimental` | yes |
+
+**Example**
+
+```ts
+parse(picklist(['EUR', 'USD']), 'GBP') // an error, code 'schema.invalid_value'
 ```
 
 ### `string`

@@ -118,6 +118,15 @@ const DEFECTS: readonly Defect[] = [
     library: { literal: (value) => v.custom((input) => input == value) as unknown as AnySchema },
   },
   {
+    name: 'boolean takes 0 and 1',
+    library: { boolean: () => v.union([v.boolean(), v.picklist([0, 1])]) as unknown as AnySchema },
+  },
+  {
+    name: 'picklist compares loosely',
+    // eslint-disable-next-line eqeqeq
+    library: { picklist: (options) => v.custom((input) => options.some((o) => o == input)) as unknown as AnySchema },
+  },
+  {
     name: 'optional requires the key',
     library: {
       optional: (inner) => v.union([inner as never, v.undefined_()]) as unknown as AnySchema,
