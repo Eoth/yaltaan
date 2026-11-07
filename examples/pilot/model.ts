@@ -237,6 +237,15 @@ export interface PilotRule {
 
 const postalCodes = ['company.headOffice', 'company.billingAddress', 'company.parent.address'];
 
+const dates = [
+  'company.foundedOn',
+  'terms.contractSignedOn',
+  'terms.validFrom',
+  'terms.validTo',
+  'documents[*].issuedOn',
+  'documents[*].expiresOn',
+];
+
 /**
  * The rules, by identifier. Codes of the library (`schema.*`, `rules.*`) are the names the issue registry is expected
  * to hold; codes of the application (`pilot.*`) belong to the pilot, as an application's own codes and rules would.
@@ -293,10 +302,17 @@ export const rules: Readonly<Record<string, PilotRule>> = {
   },
   'founded-in-past': {
     source: 'schema',
-    code: 'schema.too_large',
+    code: 'pilot.founded_in_future',
     says: 'The founding date is not after today.',
     reads: ['company.foundedOn'],
     marks: ['company.foundedOn'],
+  },
+  'date-exists': {
+    source: 'schema',
+    code: 'pilot.invalid_date',
+    says: 'A date is a day of the calendar, written YYYY-MM-DD.',
+    reads: dates,
+    marks: dates,
   },
   'address-fields': {
     source: 'schema',
@@ -553,6 +569,11 @@ export interface PilotDerivation {
 }
 
 export const derivations: Readonly<Record<string, PilotDerivation>> = {
+  'legal-name-trimmed': {
+    says: 'The legal name is checked and sent without the spaces around it.',
+    reads: ['company.legalName'],
+    writes: 'company.legalName',
+  },
   'billing-copies-head-office': {
     says: 'While "billing address same as head office" is checked, the billing address is a copy of the head office.',
     reads: ['company.billingSameAsHeadOffice', 'company.headOffice'],

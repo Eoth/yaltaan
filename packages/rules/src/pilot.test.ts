@@ -1,7 +1,7 @@
 // The rules of the pilot form, written with this package, judged by its scenarios: 42 cases fixed as data before this
 // package had a line (examples/pilot/). What three of its rules need that no built-in gives is written as an
-// application writes it, a `Rule`, and tested as one. The rules whose code is the pilot's own, and the schemas, wait
-// for the executable scenarios.
+// application writes it, a `Rule`, and tested as one. The whole form, with the rules whose code is the pilot's own and
+// the schema, is examples/pilot/form.ts, run against the built packages; this file judges the sources.
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 

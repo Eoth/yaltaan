@@ -12,8 +12,8 @@ The form Yaltaan's schema, rules and form layers are judged on: an application a
 | 6. Documents | supporting documents (kind, file, issue and expiry dates), two declarations | Kbis extract required in France and at most 90 days old; insurance expiry required; expiry after issue; declarations accepted |
 | Submission | — | server answers: SIREN already registered, account refused, server unreachable |
 
-- [model.ts](model.ts): the values; 72 fields with their step and kind (text, number, whole number, boolean, choice, multiple choice, date, object, list); 43 rules with the code of their issue and the fields they read and mark; 5 derived values with their inputs.
-- [scenarios.ts](scenarios.ts): 42 acceptance scenarios as data: entered values, day of submission, server answer, every expected issue (rule and path) and the derived values the form must hold. Every number in them is made up.
+- [model.ts](model.ts): the values; 72 fields with their step and kind (text, number, whole number, boolean, choice, multiple choice, date, object, list); 44 rules with the code of their issue and the fields they read and mark; 6 derived values with their inputs.
+- [scenarios.ts](scenarios.ts): 46 acceptance scenarios as data: entered values, day of submission, server answer, every expected issue (rule and path) and the derived values the form must hold. Every number in them is made up.
 - [scenarios.test.ts](scenarios.test.ts): checks that the form has a field of every kind, a list inside a list and derived fields; that every issue and derived value names a field, an existing list element and a rule or derivation of the catalogue; and that every rule and derivation appears in a scenario.
-
-The scenarios run against the library once `@yaltaan/schema` and `@yaltaan/rules` exist; until then they fix what the form must do.
+- [form.ts](form.ts): the form written with `@yaltaan/schema` and `@yaltaan/rules`, as an application writes it: the schema of the values, the rules on the day of submission, the derivations, and the server's answers as issues. A check of one field the schema cannot state yet (a checksum, a date compared with the day of submission) is a rule of the application, with a `pilot.*` code.
+- [form.test.ts](form.test.ts): runs every scenario against the form; checks that a form doing nothing fails each of them, that taking out any rule or derivation fails at least one, and that a form half filled in, or built to break it, never throws.

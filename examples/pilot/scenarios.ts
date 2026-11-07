@@ -299,6 +299,35 @@ export const scenarios: readonly Scenario[] = [
     derived: [],
   },
   {
+    name: 'legal name padded with spaces',
+    given: 'one letter between spaces: trimmed, it is too short',
+    today,
+    values: withCompany({ legalName: '  B  ' }),
+    server: 'accepted',
+    issues: [issue('legal-name', 'company', 'legalName')],
+    derived: [{ derivation: 'legal-name-trimmed', path: ['company', 'legalName'], value: 'B' }],
+  },
+  {
+    name: 'days that do not exist',
+    given:
+      'terms valid from the 30th of February, a Kbis issued on the 31st of September, insurance to 29 February 2027',
+    today,
+    values: {
+      ...withTerms({ validFrom: '2026-02-30' }),
+      documents: [
+        { ...kbis, issuedOn: '2026-09-31' },
+        { ...insurance, expiresOn: '2027-02-29' },
+      ],
+    },
+    server: 'accepted',
+    issues: [
+      issue('date-exists', 'terms', 'validFrom'),
+      issue('date-exists', 'documents', { key: 'd1' }, 'issuedOn'),
+      issue('date-exists', 'documents', { key: 'd2' }, 'expiresOn'),
+    ],
+    derived: [],
+  },
+  {
     name: 'company founded tomorrow',
     given: 'a founding date after the day of submission',
     today,
@@ -342,6 +371,21 @@ export const scenarios: readonly Scenario[] = [
     server: 'accepted',
     issues: [issue('postal-code', 'company', 'headOffice', 'postalCode')],
     derived: [],
+  },
+  {
+    name: 'head office postal code malformed, billing address following it',
+    given: 'a French head office with a postal code of four digits, copied to the billing address: marked once',
+    today,
+    values: withCompany({ headOffice: { ...parisOffice, postalCode: '7501' } }),
+    server: 'accepted',
+    issues: [issue('postal-code', 'company', 'headOffice', 'postalCode')],
+    derived: [
+      {
+        derivation: 'billing-copies-head-office',
+        path: ['company', 'billingAddress'],
+        value: { ...parisOffice, postalCode: '7501' },
+      },
+    ],
   },
   {
     name: 'parent company checked and left empty',
@@ -620,8 +664,10 @@ export const scenarios: readonly Scenario[] = [
     derived: [],
   },
   {
-    name: 'too many and too large discounts',
-    given: 'four discounts on the chairs, the last one of 60 %',
+    name: 'too many discounts',
+    given:
+      'four discounts on the chairs, the last one of 60 %: the list is refused whole, and its elements are read once ' +
+      'it is short enough again',
     today,
     values: withProducts([
       {
@@ -636,15 +682,33 @@ export const scenarios: readonly Scenario[] = [
       assembly,
     ]),
     server: 'accepted',
+    issues: [issue('tiers-count', 'catalogue', 'products', { key: 'p1' }, 'volumeDiscounts')],
+    derived: [],
+  },
+  {
+    name: 'discount too large',
+    given: 'three discounts on the chairs, the last one of 60 %',
+    today,
+    values: withProducts([
+      {
+        ...chairs,
+        volumeDiscounts: [
+          { key: 't1', fromQuantity: 50, discountPercent: 5 },
+          { key: 't2', fromQuantity: 100, discountPercent: 10 },
+          { key: 't3', fromQuantity: 200, discountPercent: 60 },
+        ],
+      },
+      assembly,
+    ]),
+    server: 'accepted',
     issues: [
-      issue('tiers-count', 'catalogue', 'products', { key: 'p1' }, 'volumeDiscounts'),
       issue(
         'discount-range',
         'catalogue',
         'products',
         { key: 'p1' },
         'volumeDiscounts',
-        { key: 't4' },
+        { key: 't3' },
         'discountPercent',
       ),
     ],
