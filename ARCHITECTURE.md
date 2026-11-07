@@ -188,7 +188,7 @@ interface ReadableNode<T> {
 
 ### 5.6 Mutation contract and checked metadata
 
-Every public export carries normalized JSDoc tags, checked by the verification gate on the published declarations: an export without its tags, an unknown tag or a `@mutates` that names no parameter fails CI ([ADR 0012](docs/adr/0012-contract-tag-checker.md)).
+Every public export carries normalized JSDoc tags, checked by the verification gate on the published declarations: an export without its tags, an unknown tag or a `@mutates` that names no parameter fails CI ([ADR 0012](docs/adr/0012-contract-tag-checker.md)). So does each callable member of an export, a method or a property whose value is a function ([ADR 0040](docs/adr/0040-contract-tags-of-members.md)).
 
 ```ts
 /**
@@ -202,7 +202,7 @@ Every public export carries normalized JSDoc tags, checked by the verification g
  */
 ```
 
-An export that runs (a function, a constant that can be called, a class) carries the whole contract: `@pure` or one `@mutates` per mutated parameter, then sharing, complexity, thrown errors, the version that added it, and its stability level, `@experimental` or `@stable` (§10.5). An export that never runs (a constant, an interface, a type alias) carries `@since` and its stability level only. The admitted tags and their values are defined once, in `scripts/lib/contract-tags.ts`, and the [reference documentation](docs/reference/README.md) is generated from the tags. The promise "every function documents its mutation" thus becomes checkable instead of a wish.
+An export that runs (a function, a constant that can be called, a class) carries the whole contract: `@pure` or one `@mutates` per mutated parameter, then sharing, complexity, thrown errors, the version that added it, and its stability level, `@experimental` or `@stable` (§10.5). An export that never runs (a constant, an interface, a type alias) carries `@since` and its stability level only. A member of the library carries the contract of a function, where `@mutates this` names the object it is called on; a function the caller supplies and the library calls (the `key` of a sort criterion) carries `@supplied` and a description of when it is called instead; a member inherits `@since` and the stability level of its export unless it states its own. The admitted tags and their values are defined once, in `scripts/lib/contract-tags.ts`, and the [reference documentation](docs/reference/README.md) is generated from the tags. The promise "every function documents its mutation" thus becomes checkable instead of a wish.
 
 By default, functions do not mutate. A mutating variant exists only if a benchmark shows a significant gain, and it is named explicitly (suffix `InPlace`).
 
