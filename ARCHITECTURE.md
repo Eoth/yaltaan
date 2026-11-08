@@ -182,7 +182,7 @@ interface ReadableNode<T> {
 
 - This is exactly the contract of React's `useSyncExternalStore`, and it converts trivially to an Angular signal or a Vue `customRef`.
 - Internal implementation: a push-pull graph, lazy and glitch-free, with explicit batching, topological evaluation order and cycle detection at construction. Budget: at most 1 kB minified + brotli, below the reactive libraries measured ([ADR 0010](docs/adr/0010-import-size-budgets.md)).
-- No global scheduler: batching is carried by an instance or by an explicit call.
+- No global scheduler: batching is carried by an instance or by an explicit call. A `createGraph()` instance holds the batches, and a derived node names its dependencies when it is built (`graph.derived([a, b], compute)`), so that a cycle of dependencies cannot be built and creation order is a topological order; a listener runs after the writes, once, when what `get` gives differs from what it last saw ([ADR 0041](docs/adr/0041-reactive-node.md)).
 - Why not reuse the framework's signals: the core's semantics (timing, glitches, effects) would then depend on the framework, which contradicts the framework-agnostic principle.
 - Why not wait for TC39 Signals: the proposal is still at Stage 1, where it has stood since April 2024. The interface is designed to switch to it the day it is standardized.
 
