@@ -47,7 +47,7 @@ seen; // → [250]
 
 ## Changing several values at once
 
-`batch` holds the notifications of the writes its function makes until it returns: each listener is then called once, on the final values. Reads inside the batch already see its writes.
+`batch` holds the notifications of the writes its function makes until it returns: each listener is then called once, on the final values, and again only for what a listener writes. Reads inside the batch already see its writes.
 
 ```ts
 import { createGraph } from '@yaltaan/core/reactive';
@@ -99,12 +99,78 @@ amount.set(1.6);
 amount.get(); // → 1.6
 ```
 
+## Naming every dependency
+
+A computation receives the values of the nodes it names, and nothing else: another node read inside it, or its own, would go unseen when it changes. The graph refuses it: `get`, `subscribe` or `set` on a node of the same graph while a computation runs throws a `TypeError`, which the node keeps as its error. Name that node as a dependency instead.
+
+```ts
+import { createGraph } from '@yaltaan/core/reactive';
+
+const graph = createGraph();
+const price = graph.source(10);
+const rate = graph.source(0.2);
+const unfollowed = graph.derived([price], (amount) => amount * rate.get());
+
+let refused: unknown;
+try {
+  unfollowed.get();
+} catch (error) {
+  refused = error;
+}
+refused instanceof TypeError; // → true
+const tax = graph.derived([price, rate], (amount, share) => amount * share);
+tax.get(); // → 2
+```
+
+## In Angular and Vue
+
+A node already has what a framework asks of an outside value: a way to read it, and a way to be told it changed. These two functions turn it into an Angular signal and into a Vue ref; copy them into your application. Both are checked against Angular 22.2.4 and Vue 3.5.44.
+
+In Angular, call `fromNode` in an injection context, a constructor or a field initializer: the subscription ends with the component. The signal follows the node, and throws what the node throws.
+
+```ts angular
+import { computed, DestroyRef, inject, signal, type Signal } from '@angular/core';
+import type { ReadableNode } from '@yaltaan/core/reactive';
+
+export function fromNode<T>(node: ReadableNode<T>): Signal<T> {
+  const version = signal(0);
+  inject(DestroyRef).onDestroy(node.subscribe(() => version.update((count) => count + 1)));
+  return computed(() => {
+    version();
+    return node.get();
+  });
+}
+```
+
+In Vue, call `nodeRef` in `setup()` or inside an `effectScope`: the subscription ends with the scope. The ref of a source writes through to it.
+
+```ts vue
+import { customRef, onScopeDispose, type Ref } from 'vue';
+import type { ReadableNode, SourceNode } from '@yaltaan/core/reactive';
+
+export function nodeRef<T>(node: SourceNode<T>): Ref<T>;
+export function nodeRef<T>(node: ReadableNode<T>): Readonly<Ref<T>>;
+export function nodeRef<T>(node: ReadableNode<T>): Ref<T> {
+  return customRef<T>((track, trigger) => {
+    onScopeDispose(node.subscribe(trigger));
+    return {
+      get: () => {
+        track();
+        return node.get();
+      },
+      set: (value) => (node as SourceNode<T>).set(value),
+    };
+  });
+}
+```
+
 ## Good to know
 
-- A computation names its dependencies, and receives their values in that order: a `get` of another node inside it is not followed. It must be pure.
+- A computation names its dependencies, and receives their values in that order; it must be pure. A node of another graph read inside it is neither followed nor refused.
 - Nothing watched, nothing computed: a write costs nothing to a value no listener watches, and such a value is reclaimed by the garbage collector with its last reference.
-- A listener is called only when the value differs from the one it last saw: a value changed and set back before the end of a batch notifies nobody. Listeners run after the writes, never in the middle of a batch, each at most once per write or batch, by creation order of their nodes, then by order of subscription.
+- A listener is called only when the value differs from the one it last saw: a value changed and set back before the end of a batch notifies nobody. Listeners run after the writes, never in the middle of a batch, each at most once per pass, by creation order of their nodes, then by order of subscription: a write or a batch makes one pass, and what listeners write in a pass makes the next.
 - A listener that throws stops no other; the write then throws that error, or an `AggregateError` of all.
+- Listeners that keep writing are stopped after 100 passes: the write throws a `RangeError`, after the errors of listeners, and the notifications left wait for the next write or batch.
 - `get` and `subscribe` are methods, the contract of React's `useSyncExternalStore`: pass it `(listener) => node.subscribe(listener)` and `() => node.get()`, built once per node.
 - Every dependency belongs to the same graph, and two graphs never wait for each other's batches: build on one graph what must change together.
 - The whole module weighs under 1,000 bytes minified and compressed with brotli.

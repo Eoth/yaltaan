@@ -1994,7 +1994,8 @@ export interface Graph {
     source<T>(initial: T, options?: NodeOptions<NoInfer<T>>): SourceNode<T>;
     /**
      * A node whose value is `compute` applied to the values of `deps`, in their order. Computes nothing until it is
-     * read or subscribed to; `compute` must be pure, and read other nodes through its arguments only.
+     * read or subscribed to; `compute` must be pure, and read other nodes through its arguments only: a node of this
+     * graph read, subscribed to or written while it runs throws a `TypeError`, which the node holds as its error.
      * @pure
      * @sharing structural
      * @complexity O(d) (d = number of dependencies)
@@ -2011,9 +2012,12 @@ export interface Graph {
      * writes. Reads inside see the writes already made.
      * @pure
      * @sharing none
-     * @complexity O(1), plus `run`, plus one notification pass over the watched nodes its writes reached
+     * @complexity O(1), plus `run`, plus the notification passes over the watched nodes its writes reached (at most 100)
      * @throws what `run` throws, once its writes are notified; with errors of listeners, all in an `AggregateError`
      * @throws what a listener throws, once every listener has run: the error itself, or an `AggregateError` of all
+     * @throws RangeError when listeners write in each of 100 passes of notifications, the hundredth reaching a watched
+     *   node, after the other errors (all in an `AggregateError`); the notifications left wait for the next write that
+     *   changes a value, or batch
      */
     batch<R>(run: () => R): R;
 }
@@ -2038,15 +2042,16 @@ batch<R>(run: () => R): R;
 |---|---|
 | `@pure` | yes |
 | `@sharing` | none |
-| `@complexity` | O(1), plus `run`, plus one notification pass over the watched nodes its writes reached |
+| `@complexity` | O(1), plus `run`, plus the notification passes over the watched nodes its writes reached (at most 100) |
 | `@throws` | what `run` throws, once its writes are notified; with errors of listeners, all in an `AggregateError` |
 | `@throws` | what a listener throws, once every listener has run: the error itself, or an `AggregateError` of all |
+| `@throws` | RangeError when listeners write in each of 100 passes of notifications, the hundredth reaching a watched node, after the other errors (all in an `AggregateError`); the notifications left wait for the next write that changes a value, or batch |
 
 #### `Graph.derived`
 
 A member.
 
-A node whose value is `compute` applied to the values of `deps`, in their order. Computes nothing until it is read or subscribed to; `compute` must be pure, and read other nodes through its arguments only.
+A node whose value is `compute` applied to the values of `deps`, in their order. Computes nothing until it is read or subscribed to; `compute` must be pure, and read other nodes through its arguments only: a node of this graph read, subscribed to or written while it runs throws a `TypeError`, which the node holds as its error.
 
 ```ts
 derived<const D extends readonly ReadableNode<unknown>[], T>(deps: D, compute: (...values: NodeValues<D>) => T, options?: NodeOptions<NoInfer<T>>): ReadableNode<T>;
@@ -2101,7 +2106,7 @@ export interface NodeOptions<T> {
     /**
      * Called with the current value and a new one, when a source is set or a derived node has computed a value after
      * another; true keeps the current value and notifies nobody. `Object.is` by default; must be pure. On a derived
-     * node, what it throws is held as the node's error.
+     * node, what it throws is held as the node's error, and a node of the graph read or written there throws.
      * @supplied
      */
     readonly equals?: (current: T, next: T) => boolean;
@@ -2117,7 +2122,7 @@ export interface NodeOptions<T> {
 
 A supplied member.
 
-Called with the current value and a new one, when a source is set or a derived node has computed a value after another; true keeps the current value and notifies nobody. `Object.is` by default; must be pure. On a derived node, what it throws is held as the node's error.
+Called with the current value and a new one, when a source is set or a derived node has computed a value after another; true keeps the current value and notifies nobody. `Object.is` by default; must be pure. On a derived node, what it throws is held as the node's error, and a node of the graph read or written there throws.
 
 ```ts
 readonly equals?: (current: T, next: T) => boolean;
@@ -2164,17 +2169,22 @@ export interface ReadableNode<T> {
      * @throws what the compute or the `equals` of this node, or of a node it depends on, threw (the same value)
      * @throws RangeError when the nodes it depends on are nested deeper than the call stack allows (about 4,800 levels
      *   on a first read with Node's default stack)
+     * @throws TypeError when called by a compute or an `equals` of a derived node of the same graph, this node's own
+     *   included: that node then holds the error, unless its compute catches it
      */
     get(): T;
     /**
      * Calls `listener`, without arguments, once a write, or the batch that holds it, has changed what `get` gives
      * (a value or a thrown error, by `Object.is`) from what this listener saw last; never during a batch, and never
-     * after the returned function has been called. Subscribing computes a derived node: the listener has seen that.
+     * after the returned function has been called, unless a computation calls it while a pass refreshes this node.
+     * Subscribing computes a derived node: the listener has seen that.
      * @mutates this
      * @sharing none
      * @complexity O(n) for the first listener (n = nodes and edges it depends on, which it watches from then on), O(1)
      *   for another
      * @throws RangeError when the nodes it depends on are nested deeper than the call stack allows; nothing is then
+     *   subscribed
+     * @throws TypeError when called by a compute or an `equals` of a derived node of the same graph; nothing is then
      *   subscribed
      */
     subscribe(listener: () => void): () => void;
@@ -2203,12 +2213,13 @@ get(): T;
 | `@complexity` | O(1) for a source, for a watched node when nothing it depends on was written since, and for any node when nothing in the graph was; otherwise O(n) (n = nodes and edges it depends on), plus one compute per node whose arguments changed |
 | `@throws` | what the compute or the `equals` of this node, or of a node it depends on, threw (the same value) |
 | `@throws` | RangeError when the nodes it depends on are nested deeper than the call stack allows (about 4,800 levels on a first read with Node's default stack) |
+| `@throws` | TypeError when called by a compute or an `equals` of a derived node of the same graph, this node's own included: that node then holds the error, unless its compute catches it |
 
 #### `ReadableNode.subscribe`
 
 A member.
 
-Calls `listener`, without arguments, once a write, or the batch that holds it, has changed what `get` gives (a value or a thrown error, by `Object.is`) from what this listener saw last; never during a batch, and never after the returned function has been called. Subscribing computes a derived node: the listener has seen that.
+Calls `listener`, without arguments, once a write, or the batch that holds it, has changed what `get` gives (a value or a thrown error, by `Object.is`) from what this listener saw last; never during a batch, and never after the returned function has been called, unless a computation calls it while a pass refreshes this node. Subscribing computes a derived node: the listener has seen that.
 
 ```ts
 subscribe(listener: () => void): () => void;
@@ -2220,6 +2231,7 @@ subscribe(listener: () => void): () => void;
 | `@sharing` | none |
 | `@complexity` | O(n) for the first listener (n = nodes and edges it depends on, which it watches from then on), O(1) for another |
 | `@throws` | RangeError when the nodes it depends on are nested deeper than the call stack allows; nothing is then subscribed |
+| `@throws` | TypeError when called by a compute or an `equals` of a derived node of the same graph; nothing is then subscribed |
 
 ### `SourceNode`
 
@@ -2234,9 +2246,14 @@ export interface SourceNode<T> extends ReadableNode<T> {
      * value changed before returning; inside one, at its end.
      * @mutates this
      * @sharing none
-     * @complexity O(w) (w = watched nodes the write reaches), plus their computes and listeners
+     * @complexity O(w) (w = watched nodes the write reaches), plus their computes and listeners, for each of at most
+     *   100 passes
      * @throws what `equals` throws, the value unchanged
      * @throws what a listener throws, once every listener has run: the error itself, or an `AggregateError` of all
+     * @throws TypeError when called by a compute or an `equals` of a derived node of the same graph, the value unchanged
+     * @throws RangeError when listeners write in each of 100 passes of notifications, the hundredth reaching a watched
+     *   node, after the errors of listeners (all in an `AggregateError`); the notifications left wait for the next write
+     *   that changes a value, or batch
      */
     set(value: T): void;
 }
@@ -2261,9 +2278,11 @@ set(value: T): void;
 |---|---|
 | `@mutates` | this |
 | `@sharing` | none |
-| `@complexity` | O(w) (w = watched nodes the write reaches), plus their computes and listeners |
+| `@complexity` | O(w) (w = watched nodes the write reaches), plus their computes and listeners, for each of at most 100 passes |
 | `@throws` | what `equals` throws, the value unchanged |
 | `@throws` | what a listener throws, once every listener has run: the error itself, or an `AggregateError` of all |
+| `@throws` | TypeError when called by a compute or an `equals` of a derived node of the same graph, the value unchanged |
+| `@throws` | RangeError when listeners write in each of 100 passes of notifications, the hundredth reaching a watched node, after the errors of listeners (all in an `AggregateError`); the notifications left wait for the next write that changes a value, or batch |
 
 ### `createGraph`
 

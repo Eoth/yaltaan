@@ -1,8 +1,8 @@
 // Random programs over a reactive graph, shared by the laws (properties.test.ts) and the judge (judge.test.ts); this
 // file holds no test. A program builds a few sources, then derived nodes over nodes built before them, so that its
 // graph is acyclic in creation order as every graph is, and runs steps that write, read, subscribe, unsubscribe and
-// batch, nested batches included. Values are small integers, so that sums meet, come back and divide by three; the
-// judge adds `NaN` and `-0`.
+// batch, nested batches included; for the laws only, its listeners may also write, throw or unsubscribe. Values are
+// small integers, so that sums meet, come back and divide by three; the judge adds `NaN` and `-0`.
 import { fc } from '@yaltaan/testing';
 
 /** What a derived node computes from the values of its dependencies. */
@@ -16,10 +16,21 @@ export interface DerivedSpec {
   readonly kind: Kind;
 }
 
+/** What a listener does once it has read its node. */
+export type Reaction =
+  /** Sets source `node` to `value`. */
+  | { readonly kind: 'write'; readonly node: number; readonly value: number }
+  /** Sets source `node` to the value read plus `offset`, unless the read threw: chains, some of which never end. */
+  | { readonly kind: 'follow'; readonly node: number; readonly offset: number }
+  | { readonly kind: 'throw' }
+  /** Calls the unsubscribe function of subscription `pick` modulo their number, perhaps its own. */
+  | { readonly kind: 'unsubscribe'; readonly pick: number };
+
 export type Step =
   | { readonly op: 'set'; readonly node: number; readonly value: number }
   | { readonly op: 'get'; readonly node: number }
-  | { readonly op: 'subscribe'; readonly node: number }
+  /** A listener that reads its node, then does `reaction`, if any. */
+  | { readonly op: 'subscribe'; readonly node: number; readonly reaction?: Reaction | undefined }
   /** Calls the unsubscribe function of subscription `pick` modulo their number, perhaps a second time. */
   | { readonly op: 'unsubscribe'; readonly pick: number }
   | { readonly op: 'batch'; readonly steps: readonly Step[] };
@@ -59,8 +70,8 @@ export function apply(kind: Kind, values: readonly number[], error: ComputeError
   }
 }
 
-/** Programs whose sources take `values`. */
-export function programs(values: fc.Arbitrary<number>): fc.Arbitrary<Program> {
+/** Programs whose sources take `values`; with `reactions`, a listener may write, throw or unsubscribe. */
+export function programs(values: fc.Arbitrary<number>, reactions = false): fc.Arbitrary<Program> {
   return fc.integer({ min: 1, max: 4 }).chain((sourceCount) =>
     fc.integer({ min: 1, max: 10 }).chain((derivedCount) => {
       const total = sourceCount + derivedCount;
@@ -74,7 +85,27 @@ export function programs(values: fc.Arbitrary<number>): fc.Arbitrary<Program> {
       );
       const set = fc.record({ op: fc.constant('set' as const), node: fc.nat({ max: sourceCount - 1 }), value: values });
       const get = fc.record({ op: fc.constant('get' as const), node: fc.nat({ max: total - 1 }) });
-      const subscribe = fc.record({ op: fc.constant('subscribe' as const), node: fc.nat({ max: total - 1 }) });
+      const source = fc.nat({ max: sourceCount - 1 });
+      const reaction: fc.Arbitrary<Reaction> = fc.oneof(
+        { arbitrary: fc.record({ kind: fc.constant('write' as const), node: source, value: values }), weight: 3 },
+        {
+          arbitrary: fc.record({
+            kind: fc.constant('follow' as const),
+            node: source,
+            offset: fc.integer({ min: 0, max: 1 }),
+          }),
+          weight: 1,
+        },
+        { arbitrary: fc.record({ kind: fc.constant('throw' as const) }), weight: 1 },
+        { arbitrary: fc.record({ kind: fc.constant('unsubscribe' as const), pick: fc.nat() }), weight: 1 },
+      );
+      const subscribe = reactions
+        ? fc.record({
+            op: fc.constant('subscribe' as const),
+            node: fc.nat({ max: total - 1 }),
+            reaction: fc.option(reaction, { nil: undefined, freq: 3 }),
+          })
+        : fc.record({ op: fc.constant('subscribe' as const), node: fc.nat({ max: total - 1 }) });
       const unsubscribe = fc.record({ op: fc.constant('unsubscribe' as const), pick: fc.nat() });
       const nested = fc.record({
         op: fc.constant('batch' as const),

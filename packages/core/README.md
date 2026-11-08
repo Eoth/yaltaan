@@ -160,7 +160,7 @@ How to use each sub-path, in English and in French: the [guide](../../docs/guide
 
 ## `reactive`
 
-A graph holds sources and values derived from the nodes they name. A derived value computes only when read or watched, never on values of two states of the sources, and each listener runs once per write or batch, after it, when the value it last saw has changed.
+A graph holds sources and values derived from the nodes they name. A derived value computes only when read or watched, never on values of two states of the sources, and each listener runs once per pass, after the write or the batch, when the value it last saw has changed.
 
 ```ts
 import { createGraph } from '@yaltaan/core/reactive';
@@ -179,7 +179,7 @@ graph.batch(() => {
 seen; // → [60]
 ```
 
-The graph instance holds its batches, so nothing lives in the module and nothing runs but a call of the caller: no timer, no microtask. An error thrown by a computation is kept and thrown again by `get` until a dependency changes; a listener that throws stops no other. The whole module weighs under 1,000 bytes minified and compressed with brotli.
+The graph instance holds its batches, so nothing lives in the module and nothing runs but a call of the caller: no timer, no microtask. An error thrown by a computation is kept and thrown again by `get` until a dependency changes; a listener that throws stops no other. A computation reads the graph through its arguments only: a read or a write of a node inside it throws, and listeners that keep writing are stopped after 100 passes. The whole module weighs under 1,000 bytes minified and compressed with brotli.
 
 ## License
 

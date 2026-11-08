@@ -19,7 +19,12 @@
 //   - After the writes (the write itself, or the end of the outermost batch), the watched nodes with listeners that a
 //     write reached are refreshed in the order of their ids, given at construction, which is a topological order since
 //     a node's dependencies exist before it; each listener whose last seen value differs is called, once, in the order
-//     of subscription. What a listener writes is notified in a next pass of the same loop.
+//     of subscription. What a listener writes is notified in a next pass of the same loop, up to 100 passes.
+//   - A computation receives the values of its dependencies as arguments: while a compute, or the `equals` of a derived
+//     node, runs, a read, a subscription or a write of a node of the same graph throws, and the node computing holds
+//     that error unless its compute catches it. A read there would go unfollowed, of the node itself would see a value
+//     it is replacing, and a write would change the sources under the computation. A batch opened there notifies
+//     nothing; creating nodes and unsubscribing are not refused.
 //
 // Differences from @preact/signals-core 1.14.4, each found on its inputs by the judge, our side judged by the laws:
 //   - createGraph: values compare by `Object.is`, so a source set to `NaN` again keeps it and notifies nobody, and `-0`
@@ -48,17 +53,22 @@ export interface ReadableNode<T> {
    * @throws what the compute or the `equals` of this node, or of a node it depends on, threw (the same value)
    * @throws RangeError when the nodes it depends on are nested deeper than the call stack allows (about 4,800 levels
    *   on a first read with Node's default stack)
+   * @throws TypeError when called by a compute or an `equals` of a derived node of the same graph, this node's own
+   *   included: that node then holds the error, unless its compute catches it
    */
   get(): T;
   /**
    * Calls `listener`, without arguments, once a write, or the batch that holds it, has changed what `get` gives
    * (a value or a thrown error, by `Object.is`) from what this listener saw last; never during a batch, and never
-   * after the returned function has been called. Subscribing computes a derived node: the listener has seen that.
+   * after the returned function has been called, unless a computation calls it while a pass refreshes this node.
+   * Subscribing computes a derived node: the listener has seen that.
    * @mutates this
    * @sharing none
    * @complexity O(n) for the first listener (n = nodes and edges it depends on, which it watches from then on), O(1)
    *   for another
    * @throws RangeError when the nodes it depends on are nested deeper than the call stack allows; nothing is then
+   *   subscribed
+   * @throws TypeError when called by a compute or an `equals` of a derived node of the same graph; nothing is then
    *   subscribed
    */
   subscribe(listener: () => void): () => void;
@@ -75,9 +85,14 @@ export interface SourceNode<T> extends ReadableNode<T> {
    * value changed before returning; inside one, at its end.
    * @mutates this
    * @sharing none
-   * @complexity O(w) (w = watched nodes the write reaches), plus their computes and listeners
+   * @complexity O(w) (w = watched nodes the write reaches), plus their computes and listeners, for each of at most
+   *   100 passes
    * @throws what `equals` throws, the value unchanged
    * @throws what a listener throws, once every listener has run: the error itself, or an `AggregateError` of all
+   * @throws TypeError when called by a compute or an `equals` of a derived node of the same graph, the value unchanged
+   * @throws RangeError when listeners write in each of 100 passes of notifications, the hundredth reaching a watched
+   *   node, after the errors of listeners (all in an `AggregateError`); the notifications left wait for the next write
+   *   that changes a value, or batch
    */
   set(value: T): void;
 }
@@ -91,7 +106,7 @@ export interface NodeOptions<T> {
   /**
    * Called with the current value and a new one, when a source is set or a derived node has computed a value after
    * another; true keeps the current value and notifies nobody. `Object.is` by default; must be pure. On a derived
-   * node, what it throws is held as the node's error.
+   * node, what it throws is held as the node's error, and a node of the graph read or written there throws.
    * @supplied
    */
   readonly equals?: (current: T, next: T) => boolean;
@@ -123,7 +138,8 @@ export interface Graph {
   source<T>(initial: T, options?: NodeOptions<NoInfer<T>>): SourceNode<T>;
   /**
    * A node whose value is `compute` applied to the values of `deps`, in their order. Computes nothing until it is
-   * read or subscribed to; `compute` must be pure, and read other nodes through its arguments only.
+   * read or subscribed to; `compute` must be pure, and read other nodes through its arguments only: a node of this
+   * graph read, subscribed to or written while it runs throws a `TypeError`, which the node holds as its error.
    * @pure
    * @sharing structural
    * @complexity O(d) (d = number of dependencies)
@@ -144,9 +160,12 @@ export interface Graph {
    * writes. Reads inside see the writes already made.
    * @pure
    * @sharing none
-   * @complexity O(1), plus `run`, plus one notification pass over the watched nodes its writes reached
+   * @complexity O(1), plus `run`, plus the notification passes over the watched nodes its writes reached (at most 100)
    * @throws what `run` throws, once its writes are notified; with errors of listeners, all in an `AggregateError`
    * @throws what a listener throws, once every listener has run: the error itself, or an `AggregateError` of all
+   * @throws RangeError when listeners write in each of 100 passes of notifications, the hundredth reaching a watched
+   *   node, after the other errors (all in an `AggregateError`); the notifications left wait for the next write that
+   *   changes a value, or batch
    */
   batch<R>(run: () => R): R;
 }
@@ -163,20 +182,23 @@ interface Subscription {
   failed: boolean | undefined;
 }
 
-// The epoch of a watched node that a write may have changed, and of a node never validated.
-const STALE = -1;
+// The epoch of a watched node that a write may have changed, and of a node never validated: falsy, so that an epoch
+// tests as "not stale", the epochs of a graph counting from 1.
+const STALE = 0;
 
 // What a node without dependencies or observers walks, allocated once.
 const NONE: readonly never[] = [];
 
 class ReactiveGraph implements Graph {
-  epoch = 0;
+  epoch = 1;
   depth = 0;
   ids = 0;
+  /** Computes and `equals` of derived nodes running: a read or a write then throws. */
+  computing = 0;
   queue = new Set<GraphNode<unknown>>();
 
   source<T>(initial: T, options?: NodeOptions<NoInfer<T>>): SourceNode<T> {
-    return new Source(this, initial, false, options);
+    return new Source(this, initial, options);
   }
 
   derived<const D extends readonly ReadableNode<unknown>[], T>(
@@ -189,26 +211,24 @@ class ReactiveGraph implements Graph {
         throw new TypeError('a dependency is not a node of this graph');
       }
     }
-    return new GraphNode<T>(this, undefined, undefined, options, [...deps] as GraphNode<unknown>[], compute as Compute);
+    return new GraphNode<T>(this, undefined, options, [...deps] as GraphNode<unknown>[], compute as Compute);
   }
 
   batch<R>(run: () => R): R {
     let errors: unknown[] | undefined;
-    let result: R | undefined;
     this.depth++;
     try {
-      result = run();
+      return run();
     } catch (error) {
       errors = [error];
-    }
-    if (--this.depth > 0) {
-      if (errors !== undefined) {
-        throw errors[0];
+      throw error;
+    } finally {
+      // The outermost batch notifies, and what flush throws replaces what run threw or returned: the error of run
+      // comes first among its errors.
+      if (!--this.depth) {
+        flush(this, errors);
       }
-    } else {
-      flush(this, errors);
     }
-    return result as R;
   }
 }
 
@@ -222,8 +242,8 @@ class GraphNode<T> implements ReadableNode<T> {
   declare readonly compute: Compute | undefined;
   /** The value, or the error held when `failed`. */
   declare value: unknown;
-  /** `undefined` until a derived node has computed. */
-  declare failed: boolean | undefined;
+  /** `undefined` on a source, and until a derived node has computed. */
+  failed: boolean | undefined;
   /** The arguments of the last computation; `undefined` when there is none to compare with. */
   args: unknown[] | undefined;
   epoch = STALE;
@@ -233,7 +253,6 @@ class GraphNode<T> implements ReadableNode<T> {
   constructor(
     graph: ReactiveGraph,
     value: unknown,
-    failed: boolean | undefined,
     options: NodeOptions<T> | undefined,
     deps?: readonly GraphNode<unknown>[],
     compute?: Compute,
@@ -244,7 +263,6 @@ class GraphNode<T> implements ReadableNode<T> {
     this.deps = deps;
     this.compute = compute;
     this.value = value;
-    this.failed = failed;
   }
 
   get(): T {
@@ -258,13 +276,11 @@ class GraphNode<T> implements ReadableNode<T> {
   subscribe(listener: Listener): () => void {
     // Computed before anything holds the node: a chain too deep for the stack throws here, and nothing is subscribed.
     refresh(this);
-    if (!watched(this)) {
-      observe(this);
-    }
+    observe(this);
     const subscription: Subscription = { listener, value: this.value, failed: this.failed };
     (this.listeners ??= new Set()).add(subscription);
     return () => {
-      if (this.listeners!.delete(subscription) && !watched(this)) {
+      if (this.listeners!.delete(subscription)) {
         unobserve(this);
       }
     };
@@ -274,6 +290,8 @@ class GraphNode<T> implements ReadableNode<T> {
 class Source<T> extends GraphNode<T> implements SourceNode<T> {
   set(value: T): void {
     const { graph, equals } = this;
+    // Refused while a computation runs: refresh checks it, and has nothing else to do on a source.
+    refresh(this);
     if (equals(this.value, value)) {
       return;
     }
@@ -283,40 +301,43 @@ class Source<T> extends GraphNode<T> implements SourceNode<T> {
       graph.queue.add(this);
     }
     mark(this);
-    if (graph.depth === 0) {
-      flush(graph, undefined);
+    if (!graph.depth) {
+      flush(graph);
     }
   }
 }
 
-function watched(node: GraphNode<unknown>): boolean {
-  return !!(node.listeners?.size || node.observers?.size);
+function watched(node: GraphNode<unknown>): number | undefined {
+  return node.listeners?.size || node.observers?.size;
 }
 
-// Called once the node has been refreshed: it and every node it starts watching are current, so marking finds them
-// unmarked at the next write.
+// Makes an unwatched node held by its dependencies, and them by theirs. Called once the node has been refreshed: it
+// and every node it starts watching are current, so marking finds them unmarked at the next write.
 function observe(node: GraphNode<unknown>): void {
-  for (const dep of node.deps ?? NONE) {
-    if (!watched(dep)) {
+  if (!watched(node)) {
+    for (const dep of node.deps ?? NONE) {
       observe(dep);
+      (dep.observers ??= new Set()).add(node);
     }
-    (dep.observers ??= new Set()).add(node);
   }
 }
 
+// Lets go of a node no longer watched, and of its dependencies that it alone watched.
 function unobserve(node: GraphNode<unknown>): void {
-  for (const dep of node.deps ?? NONE) {
-    // Only on the first delete: a dependency named twice would otherwise be left twice, and a chain of them in
-    // exponential time.
-    if (dep.observers!.delete(node) && !watched(dep)) {
-      unobserve(dep);
+  if (!watched(node)) {
+    for (const dep of node.deps ?? NONE) {
+      // Only on the first delete: a dependency named twice would otherwise be left twice, and a chain of them in
+      // exponential time.
+      if (dep.observers!.delete(node)) {
+        unobserve(dep);
+      }
     }
   }
 }
 
 function mark(node: GraphNode<unknown>): void {
   for (const observer of node.observers ?? NONE) {
-    if (observer.epoch !== STALE) {
+    if (observer.epoch) {
       observer.epoch = STALE;
       if (observer.listeners?.size) {
         observer.graph.queue.add(observer);
@@ -328,11 +349,14 @@ function mark(node: GraphNode<unknown>): void {
 
 function refresh(node: GraphNode<unknown>): void {
   const { graph, deps, compute } = node;
-  if (compute === undefined || node.epoch === graph.epoch || (node.epoch !== STALE && watched(node))) {
+  if (graph.computing) {
+    throw new TypeError('a computation reads or writes a node of this graph');
+  }
+  if (!compute || node.epoch === graph.epoch || (node.epoch && watched(node))) {
     return;
   }
   const previous = node.args;
-  let same = previous !== undefined;
+  let same = !!previous;
   let failure: GraphNode<unknown> | undefined;
   for (let index = 0; index < deps!.length; index++) {
     const dep = deps![index]!;
@@ -346,15 +370,17 @@ function refresh(node: GraphNode<unknown>): void {
   if (same) {
     return;
   }
-  if (failure === undefined) {
+  if (!failure) {
     // Built only to compute: a validation that finds the same arguments allocates nothing.
     const args = deps!.map((dep) => dep.value);
     node.args = args;
+    graph.computing++;
     try {
       settle(node, compute(...args), false);
     } catch (error) {
       settle(node, error, true);
     }
+    graph.computing--;
   } else {
     node.args = undefined;
     settle(node, failure.value, true);
@@ -369,10 +395,17 @@ function settle(node: GraphNode<unknown>, value: unknown, failed: boolean): void
   }
 }
 
-function flush(graph: ReactiveGraph, errors: unknown[] | undefined): void {
-  graph.depth++;
+// Called outside any batch, at depth 0: depth then counts the passes, so that what listeners write waits for the next
+// pass, and a listener that writes in every pass stops the loop after the hundredth, the queue left as it is. A batch
+// that a computation opens and closes leaves the queue too: refreshing a node there would throw, and a node taken out
+// of the queue stale would never be queued again.
+function flush(graph: ReactiveGraph, errors?: unknown[]): void {
   try {
-    while (graph.queue.size > 0) {
+    while (graph.queue.size && !graph.computing) {
+      if (++graph.depth > 100) {
+        (errors ??= []).push(new RangeError('listeners of this graph still write after 100 passes'));
+        break;
+      }
       const nodes = [...graph.queue].sort((a, b) => a.id - b.id);
       graph.queue.clear();
       for (const node of nodes) {
@@ -394,10 +427,10 @@ function flush(graph: ReactiveGraph, errors: unknown[] | undefined): void {
       }
     }
   } finally {
-    graph.depth--;
+    graph.depth = 0;
   }
-  if (errors !== undefined) {
-    throw errors.length === 1 ? errors[0] : new AggregateError(errors, 'listeners of the reactive graph threw');
+  if (errors) {
+    throw errors.length === 1 ? errors[0] : new AggregateError(errors, 'listeners of this graph threw');
   }
 }
 

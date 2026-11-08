@@ -330,6 +330,197 @@ test('what a listener writes is notified in a next pass, each listener seeing th
   assert.deepEqual(seen, ['100 °C = 212 °F']);
 });
 
+test('a computation that reads, subscribes to or writes a node of its graph, its own too, holds a TypeError', () => {
+  const graph = createGraph();
+  const a = graph.source(1);
+  const other = graph.source(10);
+  const untracked = graph.derived([a], (value) => value + other.get());
+  const refused = seenOrThrown(untracked);
+  assert.ok(refused instanceof TypeError);
+  assert.equal(refused.message, 'a computation reads or writes a node of this graph');
+  assert.equal(seenOrThrown(untracked), refused, 'held until a dependency changes');
+
+  const self: { node?: ReadableNode<number> } = {};
+  self.node = graph.derived([a], (value) => value + self.node!.get());
+  assert.ok(seenOrThrown(self.node) instanceof TypeError);
+
+  let called = 0;
+  const subscribing = graph.derived([a], (value) => {
+    other.subscribe(() => (called += 1));
+    return value;
+  });
+  assert.ok(seenOrThrown(subscribing) instanceof TypeError);
+  const writing = graph.derived([a], (value) => {
+    other.set(value);
+    return value;
+  });
+  assert.ok(seenOrThrown(writing) instanceof TypeError);
+  assert.equal(other.get(), 10, 'the write is refused before it is made');
+  other.set(11);
+  assert.equal(called, 0, 'nothing was subscribed');
+
+  const comparing = graph.derived([a], (value) => value, { equals: () => other.get() > 0 });
+  assert.equal(comparing.get(), 1);
+  a.set(2);
+  assert.ok(seenOrThrown(comparing) instanceof TypeError, 'equals of a derived node is a computation too');
+
+  const catching = graph.derived([a], (value) => {
+    try {
+      return other.get();
+    } catch {
+      return -value;
+    }
+  });
+  assert.equal(catching.get(), -2, 'a compute that catches the refusal keeps what it returns');
+
+  const watched = graph.derived([a], (value) => value + other.get());
+  const seen: unknown[] = [];
+  watched.subscribe(() => seen.push(seenOrThrown(watched)));
+  a.set(3);
+  assert.equal(seen.length, 1, 'each computation refused throws a new error, which its listeners are told of');
+  assert.ok(seen[0] instanceof TypeError);
+
+  assert.equal(graph.derived([a, other], (x, y) => x + y).get(), 14, 'the graph computes on after a refusal');
+  assert.equal(
+    graph.derived([a], (value) => value + createGraph().source(5).get()).get(),
+    8,
+    'a node of another graph read in a computation is neither followed nor refused',
+  );
+});
+
+test('a computation is refused on watched nodes, in a batch and in a pass, and a write of the same value too', () => {
+  const graph = createGraph();
+  const a = graph.source(1);
+  const watchedSource = graph.source(10);
+  const heard: number[] = [];
+  watchedSource.subscribe(() => heard.push(watchedSource.get()));
+  const reading = graph.derived([a], (value) => value + watchedSource.get());
+  assert.ok(seenOrThrown(reading) instanceof TypeError, 'a read of a watched node');
+  const writing = graph.derived([a], (value) => {
+    watchedSource.set(value);
+    return value;
+  });
+  assert.ok(seenOrThrown(writing) instanceof TypeError, 'a write of a watched source');
+  const same = graph.derived([a], (value) => {
+    watchedSource.set(10);
+    return value;
+  });
+  assert.ok(seenOrThrown(same) instanceof TypeError, 'a write of the value it holds');
+  assert.equal(watchedSource.get(), 10);
+  assert.deepEqual(heard, []);
+
+  let inBatch: unknown;
+  graph.batch(() => {
+    watchedSource.set(11);
+    inBatch = seenOrThrown(graph.derived([a], (value) => value + watchedSource.get()));
+  });
+  assert.ok(inBatch instanceof TypeError, 'in a batch whose notifications wait');
+  assert.deepEqual(heard, [11]);
+
+  const b = graph.source(0);
+  const viaListener = graph.derived([b], (value) => value + watchedSource.get());
+  const inPass: unknown[] = [];
+  b.subscribe(() => inPass.push(seenOrThrown(viaListener)));
+  b.set(1);
+  assert.equal(inPass.length, 1);
+  assert.ok(inPass[0] instanceof TypeError, 'in a pass of notifications');
+});
+
+test('a batch that a computation opens notifies nothing, and keeps the notifications a stop left', () => {
+  const graph = createGraph();
+  const source = graph.source(0);
+  const double = graph.derived([source], (value) => value * 2);
+  let writes = true;
+  const heard: number[] = [];
+  double.subscribe(() => {
+    heard.push(double.get());
+    if (writes) {
+      source.set(source.get() + 1);
+    }
+  });
+  assert.ok(caught(() => source.set(1)) instanceof RangeError);
+  writes = false;
+  heard.length = 0;
+  const other = graph.source(0);
+  const opening = graph.derived([other], (value) => graph.batch(() => value + 1));
+  assert.equal(opening.get(), 1, 'what run returns');
+  assert.deepEqual(heard, []);
+  source.set(1000);
+  assert.deepEqual(heard, [2000], 'the next write notifies what the stop left');
+});
+
+test('a listener that writes in every pass is stopped after 100 passes, the notifications left kept', () => {
+  const graph = createGraph();
+  const a = graph.source(0);
+  let calls = 0;
+  let writes = true;
+  a.subscribe(() => {
+    calls += 1;
+    // Stops by itself after 1,000 calls: without the bound, this test fails instead of running forever.
+    if (writes && calls < 1000) {
+      a.set(a.get() + 1);
+    }
+  });
+  const stopped = caught(() => a.set(1));
+  assert.ok(stopped instanceof RangeError);
+  assert.equal(stopped.message, 'listeners of this graph still write after 100 passes');
+  assert.equal(calls, 100);
+  assert.equal(a.get(), 101);
+  writes = false;
+  graph.batch(() => {});
+  assert.equal(calls, 101, 'the next batch notifies what the last pass wrote');
+
+  const b = graph.source(0);
+  let rounds = 0;
+  let limit = 100;
+  b.subscribe(() => {
+    rounds += 1;
+    if (rounds < limit) {
+      b.set(rounds + 1000);
+    }
+  });
+  b.set(1);
+  assert.equal(rounds, 100, '100 passes, the last writing nothing: no error');
+  rounds = 0;
+  limit = 101;
+  assert.ok(caught(() => b.set(2)) instanceof RangeError, 'a write in the hundredth pass');
+  assert.equal(rounds, 100);
+});
+
+test('listeners that write each other without end are stopped, after the other errors; the graph goes on', () => {
+  const graph = createGraph();
+  const a = graph.source(0);
+  const b = graph.source(0);
+  const failure = new Error('listener');
+  const run = new Error('run');
+  let thrown = 0;
+  const stopA = a.subscribe(() => b.set(a.get() + 1));
+  const stopB = b.subscribe(() => a.set(b.get() + 1));
+  const stopThrowing = a.subscribe(() => {
+    if (thrown++ === 0) {
+      throw failure;
+    }
+  });
+  const stopped = caught(() =>
+    graph.batch(() => {
+      a.set(1);
+      throw run;
+    }),
+  );
+  assert.ok(stopped instanceof AggregateError);
+  assert.equal(stopped.errors.length, 3);
+  assert.equal(stopped.errors[0], run);
+  assert.equal(stopped.errors[1], failure);
+  assert.ok(stopped.errors[2] instanceof RangeError);
+  stopA();
+  stopB();
+  stopThrowing();
+  const seen: number[] = [];
+  a.subscribe(() => seen.push(a.get()));
+  a.set(-1);
+  assert.deepEqual(seen, [-1]);
+});
+
 test('listeners run by creation order of their nodes, then by order of subscription', () => {
   const graph = createGraph();
   const a = graph.source(0);

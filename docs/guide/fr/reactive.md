@@ -47,7 +47,7 @@ seen; // → [250]
 
 ## Changer plusieurs valeurs d'un coup
 
-`batch` retient les notifications des écritures que fait sa fonction jusqu'à ce qu'elle rende la main : chaque écoute est alors appelée une fois, sur les valeurs finales. Les lectures faites pendant le batch voient déjà ses écritures.
+`batch` retient les notifications des écritures que fait sa fonction jusqu'à ce qu'elle rende la main : chaque écoute est alors appelée une fois, sur les valeurs finales, puis seulement pour ce qu'une écoute écrit. Les lectures faites pendant le batch voient déjà ses écritures.
 
 ```ts
 import { createGraph } from '@yaltaan/core/reactive';
@@ -99,12 +99,78 @@ amount.set(1.6);
 amount.get(); // → 1.6
 ```
 
+## Nommer chaque dépendance
+
+Un calcul reçoit les valeurs des nœuds qu'il nomme, et rien d'autre : un autre nœud lu à l'intérieur, ou le sien, passerait inaperçu quand il change. Le graphe le refuse : `get`, `subscribe` ou `set` sur un nœud du même graphe pendant un calcul lève une `TypeError`, que le nœud garde comme son erreur. Nommez plutôt ce nœud parmi les dépendances.
+
+```ts
+import { createGraph } from '@yaltaan/core/reactive';
+
+const graph = createGraph();
+const price = graph.source(10);
+const rate = graph.source(0.2);
+const unfollowed = graph.derived([price], (amount) => amount * rate.get());
+
+let refused: unknown;
+try {
+  unfollowed.get();
+} catch (error) {
+  refused = error;
+}
+refused instanceof TypeError; // → true
+const tax = graph.derived([price, rate], (amount, share) => amount * share);
+tax.get(); // → 2
+```
+
+## Dans Angular et Vue
+
+Un nœud a déjà ce qu'un framework demande à une valeur extérieure : un moyen de la lire, et un moyen d'être prévenu qu'elle a changé. Ces deux fonctions en font un signal Angular et une ref Vue ; copiez-les dans votre application. Les deux sont vérifiées avec Angular 22.2.4 et Vue 3.5.44.
+
+Dans Angular, appelez `fromNode` dans un contexte d'injection, un constructeur ou l'initialisation d'un champ : l'abonnement finit avec le composant. Le signal suit le nœud, et lève ce que le nœud lève.
+
+```ts angular
+import { computed, DestroyRef, inject, signal, type Signal } from '@angular/core';
+import type { ReadableNode } from '@yaltaan/core/reactive';
+
+export function fromNode<T>(node: ReadableNode<T>): Signal<T> {
+  const version = signal(0);
+  inject(DestroyRef).onDestroy(node.subscribe(() => version.update((count) => count + 1)));
+  return computed(() => {
+    version();
+    return node.get();
+  });
+}
+```
+
+Dans Vue, appelez `nodeRef` dans `setup()` ou dans un `effectScope` : l'abonnement finit avec la portée. La ref d'une source écrit dans cette source.
+
+```ts vue
+import { customRef, onScopeDispose, type Ref } from 'vue';
+import type { ReadableNode, SourceNode } from '@yaltaan/core/reactive';
+
+export function nodeRef<T>(node: SourceNode<T>): Ref<T>;
+export function nodeRef<T>(node: ReadableNode<T>): Readonly<Ref<T>>;
+export function nodeRef<T>(node: ReadableNode<T>): Ref<T> {
+  return customRef<T>((track, trigger) => {
+    onScopeDispose(node.subscribe(trigger));
+    return {
+      get: () => {
+        track();
+        return node.get();
+      },
+      set: (value) => (node as SourceNode<T>).set(value),
+    };
+  });
+}
+```
+
 ## Bon à savoir
 
-- Un calcul nomme ses dépendances et reçoit leurs valeurs dans cet ordre : un `get` d'un autre nœud fait à l'intérieur n'est pas suivi. Il doit être pur.
+- Un calcul nomme ses dépendances et reçoit leurs valeurs dans cet ordre ; il doit être pur. Un nœud d'un autre graphe lu à l'intérieur n'est ni suivi ni refusé.
 - Rien de suivi, rien de calculé : une écriture ne coûte rien à une valeur qu'aucune écoute ne suit, et le ramasse-miettes la récupère avec sa dernière référence.
-- Une écoute n'est appelée que si la valeur diffère de celle qu'elle a vue en dernier : une valeur changée puis remise avant la fin d'un batch ne prévient personne. Les écoutes passent après les écritures, jamais au milieu d'un batch, chacune au plus une fois par écriture ou par batch, dans l'ordre de création de leurs nœuds, puis dans l'ordre d'abonnement.
+- Une écoute n'est appelée que si la valeur diffère de celle qu'elle a vue en dernier : une valeur changée puis remise avant la fin d'un batch ne prévient personne. Les écoutes passent après les écritures, jamais au milieu d'un batch, chacune au plus une fois par passe, dans l'ordre de création de leurs nœuds, puis dans l'ordre d'abonnement : une écriture ou un batch fait une passe, et ce que les écoutes écrivent pendant une passe fait la suivante.
 - Une écoute qui lève une exception n'arrête pas les autres ; l'écriture relève ensuite cette erreur, ou une `AggregateError` de toutes.
+- Des écoutes qui écrivent sans cesse sont arrêtées après 100 passes : l'écriture lève une `RangeError`, après les erreurs des écoutes, et les notifications restantes attendent l'écriture ou le batch suivant.
 - `get` et `subscribe` sont des méthodes, le contrat de `useSyncExternalStore` de React : passez-lui `(listener) => node.subscribe(listener)` et `() => node.get()`, construites une fois par nœud.
 - Toutes les dépendances appartiennent au même graphe, et deux graphes n'attendent jamais les batchs l'un de l'autre : construisez sur un seul graphe ce qui doit changer ensemble.
 - Le module entier pèse moins de 1 000 octets minifié et compressé par brotli.
