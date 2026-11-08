@@ -1973,6 +1973,327 @@ export declare function parsePath(text: string, options?: ParsePathOptions): Res
 parsePath('items[3].name') // { ok: true, value: ['items', 3, 'name'] }
 ```
 
+## `@yaltaan/core/reactive`
+
+### `Graph`
+
+A type.
+
+Builds and batches the nodes of one graph. Nodes of different graphs never depend on each other.
+
+```ts
+export interface Graph {
+    /**
+     * A node holding `initial` until it is set.
+     * @pure
+     * @sharing structural
+     * @complexity O(1)
+     * @throws never
+     * @example createGraph().source(1).get() // 1
+     */
+    source<T>(initial: T, options?: NodeOptions<NoInfer<T>>): SourceNode<T>;
+    /**
+     * A node whose value is `compute` applied to the values of `deps`, in their order. Computes nothing until it is
+     * read or subscribed to; `compute` must be pure, and read other nodes through its arguments only.
+     * @pure
+     * @sharing structural
+     * @complexity O(d) (d = number of dependencies)
+     * @throws TypeError when a dependency is not a node of this graph
+     * @example
+     * const graph = createGraph();
+     * const price = graph.source(10);
+     * graph.derived([price], (value) => value * 2).get() // 20
+     */
+    derived<const D extends readonly ReadableNode<unknown>[], T>(deps: D, compute: (...values: NodeValues<D>) => T, options?: NodeOptions<NoInfer<T>>): ReadableNode<T>;
+    /**
+     * Calls `run` and returns what it returns, holding the notifications of what it writes until it ends, nested
+     * batches included: each listener then runs once, on the values `run` left, and again only for what a listener
+     * writes. Reads inside see the writes already made.
+     * @pure
+     * @sharing none
+     * @complexity O(1), plus `run`, plus one notification pass over the watched nodes its writes reached
+     * @throws what `run` throws, once its writes are notified; with errors of listeners, all in an `AggregateError`
+     * @throws what a listener throws, once every listener has run: the error itself, or an `AggregateError` of all
+     */
+    batch<R>(run: () => R): R;
+}
+```
+
+| Contract | Value |
+|---|---|
+| `@since` | 0.3 |
+| `@experimental` | yes |
+
+#### `Graph.batch`
+
+A member.
+
+Calls `run` and returns what it returns, holding the notifications of what it writes until it ends, nested batches included: each listener then runs once, on the values `run` left, and again only for what a listener writes. Reads inside see the writes already made.
+
+```ts
+batch<R>(run: () => R): R;
+```
+
+| Contract | Value |
+|---|---|
+| `@pure` | yes |
+| `@sharing` | none |
+| `@complexity` | O(1), plus `run`, plus one notification pass over the watched nodes its writes reached |
+| `@throws` | what `run` throws, once its writes are notified; with errors of listeners, all in an `AggregateError` |
+| `@throws` | what a listener throws, once every listener has run: the error itself, or an `AggregateError` of all |
+
+#### `Graph.derived`
+
+A member.
+
+A node whose value is `compute` applied to the values of `deps`, in their order. Computes nothing until it is read or subscribed to; `compute` must be pure, and read other nodes through its arguments only.
+
+```ts
+derived<const D extends readonly ReadableNode<unknown>[], T>(deps: D, compute: (...values: NodeValues<D>) => T, options?: NodeOptions<NoInfer<T>>): ReadableNode<T>;
+```
+
+| Contract | Value |
+|---|---|
+| `@pure` | yes |
+| `@sharing` | structural |
+| `@complexity` | O(d) (d = number of dependencies) |
+| `@throws` | TypeError when a dependency is not a node of this graph |
+
+**Example**
+
+```ts
+const graph = createGraph();
+const price = graph.source(10);
+graph.derived([price], (value) => value * 2).get() // 20
+```
+
+#### `Graph.source`
+
+A member.
+
+A node holding `initial` until it is set.
+
+```ts
+source<T>(initial: T, options?: NodeOptions<NoInfer<T>>): SourceNode<T>;
+```
+
+| Contract | Value |
+|---|---|
+| `@pure` | yes |
+| `@sharing` | structural |
+| `@complexity` | O(1) |
+| `@throws` | never |
+
+**Example**
+
+```ts
+createGraph().source(1).get() // 1
+```
+
+### `NodeOptions`
+
+A type.
+
+Options of a source or a derived node.
+
+```ts
+export interface NodeOptions<T> {
+    /**
+     * Called with the current value and a new one, when a source is set or a derived node has computed a value after
+     * another; true keeps the current value and notifies nobody. `Object.is` by default; must be pure. On a derived
+     * node, what it throws is held as the node's error.
+     * @supplied
+     */
+    readonly equals?: (current: T, next: T) => boolean;
+}
+```
+
+| Contract | Value |
+|---|---|
+| `@since` | 0.3 |
+| `@experimental` | yes |
+
+#### `NodeOptions.equals`
+
+A supplied member.
+
+Called with the current value and a new one, when a source is set or a derived node has computed a value after another; true keeps the current value and notifies nobody. `Object.is` by default; must be pure. On a derived node, what it throws is held as the node's error.
+
+```ts
+readonly equals?: (current: T, next: T) => boolean;
+```
+
+| Contract | Value |
+|---|---|
+| `@supplied` | yes |
+
+### `NodeValues`
+
+A type.
+
+The values of a list of nodes, in its order: what the compute of a derived node receives.
+
+```ts
+export type NodeValues<D extends readonly ReadableNode<unknown>[]> = {
+    -readonly [K in keyof D]: D[K] extends ReadableNode<infer V> ? V : never;
+};
+```
+
+| Contract | Value |
+|---|---|
+| `@since` | 0.3 |
+| `@experimental` | yes |
+
+### `ReadableNode`
+
+A type.
+
+A value that can be read and watched: exactly the contract of React's `useSyncExternalStore` (`subscribe`, then `get` as the snapshot), which converts as directly to an Angular signal or a Vue `customRef`. `get` and `subscribe` are methods: pass `(listener) => node.subscribe(listener)` and `() => node.get()` where a function is expected.
+
+```ts
+export interface ReadableNode<T> {
+    /**
+     * The current value. A derived node computes it on its first read, then again only once a dependency's value has
+     * changed; an error its compute or its `equals` threw, or that a dependency holds, is thrown again, until a
+     * dependency changes.
+     * @pure
+     * @sharing none
+     * @complexity O(1) for a source, for a watched node when nothing it depends on was written since, and for any node
+     *   when nothing in the graph was; otherwise O(n) (n = nodes and edges it depends on), plus one compute per node
+     *   whose arguments changed
+     * @throws what the compute or the `equals` of this node, or of a node it depends on, threw (the same value)
+     * @throws RangeError when the nodes it depends on are nested deeper than the call stack allows (about 4,800 levels
+     *   on a first read with Node's default stack)
+     */
+    get(): T;
+    /**
+     * Calls `listener`, without arguments, once a write, or the batch that holds it, has changed what `get` gives
+     * (a value or a thrown error, by `Object.is`) from what this listener saw last; never during a batch, and never
+     * after the returned function has been called. Subscribing computes a derived node: the listener has seen that.
+     * @mutates this
+     * @sharing none
+     * @complexity O(n) for the first listener (n = nodes and edges it depends on, which it watches from then on), O(1)
+     *   for another
+     * @throws RangeError when the nodes it depends on are nested deeper than the call stack allows; nothing is then
+     *   subscribed
+     */
+    subscribe(listener: () => void): () => void;
+}
+```
+
+| Contract | Value |
+|---|---|
+| `@since` | 0.3 |
+| `@experimental` | yes |
+
+#### `ReadableNode.get`
+
+A member.
+
+The current value. A derived node computes it on its first read, then again only once a dependency's value has changed; an error its compute or its `equals` threw, or that a dependency holds, is thrown again, until a dependency changes.
+
+```ts
+get(): T;
+```
+
+| Contract | Value |
+|---|---|
+| `@pure` | yes |
+| `@sharing` | none |
+| `@complexity` | O(1) for a source, for a watched node when nothing it depends on was written since, and for any node when nothing in the graph was; otherwise O(n) (n = nodes and edges it depends on), plus one compute per node whose arguments changed |
+| `@throws` | what the compute or the `equals` of this node, or of a node it depends on, threw (the same value) |
+| `@throws` | RangeError when the nodes it depends on are nested deeper than the call stack allows (about 4,800 levels on a first read with Node's default stack) |
+
+#### `ReadableNode.subscribe`
+
+A member.
+
+Calls `listener`, without arguments, once a write, or the batch that holds it, has changed what `get` gives (a value or a thrown error, by `Object.is`) from what this listener saw last; never during a batch, and never after the returned function has been called. Subscribing computes a derived node: the listener has seen that.
+
+```ts
+subscribe(listener: () => void): () => void;
+```
+
+| Contract | Value |
+|---|---|
+| `@mutates` | this |
+| `@sharing` | none |
+| `@complexity` | O(n) for the first listener (n = nodes and edges it depends on, which it watches from then on), O(1) for another |
+| `@throws` | RangeError when the nodes it depends on are nested deeper than the call stack allows; nothing is then subscribed |
+
+### `SourceNode`
+
+A type.
+
+A node whose value is written by the caller.
+
+```ts
+export interface SourceNode<T> extends ReadableNode<T> {
+    /**
+     * Replaces the value, unless `equals` finds it the same. Outside a batch, notifies the listeners of every node whose
+     * value changed before returning; inside one, at its end.
+     * @mutates this
+     * @sharing none
+     * @complexity O(w) (w = watched nodes the write reaches), plus their computes and listeners
+     * @throws what `equals` throws, the value unchanged
+     * @throws what a listener throws, once every listener has run: the error itself, or an `AggregateError` of all
+     */
+    set(value: T): void;
+}
+```
+
+| Contract | Value |
+|---|---|
+| `@since` | 0.3 |
+| `@experimental` | yes |
+
+#### `SourceNode.set`
+
+A member.
+
+Replaces the value, unless `equals` finds it the same. Outside a batch, notifies the listeners of every node whose value changed before returning; inside one, at its end.
+
+```ts
+set(value: T): void;
+```
+
+| Contract | Value |
+|---|---|
+| `@mutates` | this |
+| `@sharing` | none |
+| `@complexity` | O(w) (w = watched nodes the write reaches), plus their computes and listeners |
+| `@throws` | what `equals` throws, the value unchanged |
+| `@throws` | what a listener throws, once every listener has run: the error itself, or an `AggregateError` of all |
+
+### `createGraph`
+
+A function.
+
+A new graph, empty, holding its own batches: a write in one never waits for a batch of another.
+
+```ts
+export declare function createGraph(): Graph;
+```
+
+| Contract | Value |
+|---|---|
+| `@pure` | yes |
+| `@sharing` | none |
+| `@complexity` | O(1) |
+| `@throws` | never |
+| `@since` | 0.3 |
+| `@experimental` | yes |
+
+**Example**
+
+```ts
+const graph = createGraph();
+const first = graph.source('Ada');
+const last = graph.source('Lovelace');
+const full = graph.derived([first, last], (a, b) => `${a} ${b}`);
+full.get() // 'Ada Lovelace'
+```
+
 ## `@yaltaan/core/result`
 
 ### `Err`

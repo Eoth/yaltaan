@@ -25,6 +25,7 @@ flowchart LR
 | [Merging and reshaping](reshape.md) | `@yaltaan/core/object` | Lay settings over defaults at every depth, fill missing options, map the values or the keys of a record, with the types kept. | A spread that merges one level, `lodash.merge` that changes its argument, `Object.fromEntries(Object.entries(x).map(…))` that loses the types. |
 | [Reading and writing by path](access.md) | `@yaltaan/core/object` | Read a place of a value by a `Path`, or get a copy with that place changed, removed or created, sharing the rest and telling a missing field from an `undefined` one. | `a?.b?.[i]` written in the code, a spread per level, `lodash.get`/`set` that change their argument and leave holes. |
 | [Issues](issue.md) | `@yaltaan/core/issue` | One error shape for everything, your own messages in your own languages, and the bridge to Standard Schema form engines. | One error format per library, and the glue code between them. |
+| [Reactive values](reactive.md) | `@yaltaan/core/reactive` | Values derived from others, computed only when read, never seen half-updated, batched explicitly, behind the contract of React's `useSyncExternalStore`. | Recomputing by hand after each change, an event per field, a framework's signals in business logic. |
 
 ## Available in `@yaltaan/temporal`
 

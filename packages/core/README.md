@@ -4,7 +4,7 @@ The shared contracts and data primitives of Yaltaan. The other packages build on
 
 **Not published yet**: the package is private until its first release. Every export is `@experimental`: it may change in a minor version until the contracts are frozen.
 
-It holds one sub-path per domain, each imported on its own (`@yaltaan/core/result`), so that an application ships only what it imports. Available today: `result`, `issue`, `path`, `equal`, `object` (selection by mask, merging, defaults, mapping, reading and writing by `Path`), `collection` (by key and by order), `string` and `number`. The others are planned:
+It holds one sub-path per domain, each imported on its own (`@yaltaan/core/result`), so that an application ships only what it imports. Available today: `result`, `issue`, `path`, `equal`, `object` (selection by mask, merging, defaults, mapping, reading and writing by `Path`), `collection` (by key and by order), `string`, `number` and `reactive`. The others are planned:
 
 | Sub-path | Holds |
 |---|---|
@@ -19,7 +19,7 @@ It holds one sub-path per domain, each imported on its own (`@yaltaan/core/resul
 | `diff` | Diffs and patches addressed by `Path`. |
 | `async` | Timeouts, retries, concurrency limits, debouncing and throttling, each cancellable by an `AbortSignal`, with an injectable clock. |
 | `cache` | Bounded caches, whose maximum size is mandatory, and memoization. |
-| `reactive` | Reactive nodes: lazy, glitch-free derived values behind the `get` and `subscribe` contract of React's `useSyncExternalStore`. |
+| `reactive` | Reactive nodes: sources and derived values in a graph instance, lazy, glitch-free and batched explicitly, behind the `get` and `subscribe` contract of React's `useSyncExternalStore`. |
 
 Zero runtime dependencies. ESM only, `"sideEffects": false`.
 
@@ -157,6 +157,29 @@ findHidden('user\u202Egnp.exe'); // → [{ index: 4, codePoint: 0x202e, kind: 'b
 ```
 
 How to use each sub-path, in English and in French: the [guide](../../docs/guide/README.md). The contract of each export is in the [reference](../../docs/reference/core.md).
+
+## `reactive`
+
+A graph holds sources and values derived from the nodes they name. A derived value computes only when read or watched, never on values of two states of the sources, and each listener runs once per write or batch, after it, when the value it last saw has changed.
+
+```ts
+import { createGraph } from '@yaltaan/core/reactive';
+
+const graph = createGraph();
+const quantity = graph.source(2);
+const unitPrice = graph.source(15);
+const total = graph.derived([quantity, unitPrice], (count, price) => count * price);
+
+const seen: number[] = [];
+total.subscribe(() => seen.push(total.get()));
+graph.batch(() => {
+  quantity.set(3);
+  unitPrice.set(20);
+});
+seen; // → [60]
+```
+
+The graph instance holds its batches, so nothing lives in the module and nothing runs but a call of the caller: no timer, no microtask. An error thrown by a computation is kept and thrown again by `get` until a dependency changes; a listener that throws stops no other. The whole module weighs under 1,000 bytes minified and compressed with brotli.
 
 ## License
 

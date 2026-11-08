@@ -25,6 +25,7 @@ flowchart LR
 | [Fusionner et transformer](reshape.md) | `@yaltaan/core/object` | Poser des réglages sur des valeurs par défaut à toute profondeur, combler les options absentes, transformer les valeurs ou les clés d'un objet, types gardés. | Une décomposition qui ne fusionne qu'un niveau, `lodash.merge` qui modifie son argument, `Object.fromEntries(Object.entries(x).map(…))` qui perd les types. |
 | [Lire et écrire par chemin](access.md) | `@yaltaan/core/object` | Lire un endroit d'une valeur par un `Path`, ou en obtenir une copie où cet endroit est changé, retiré ou créé, le reste partagé, un champ absent distinct d'un champ `undefined`. | `a?.b?.[i]` écrit dans le code, une décomposition par niveau, `lodash.get`/`set` qui modifient leur argument et laissent des trous. |
 | [Issues](issue.md) | `@yaltaan/core/issue` | Une seule forme d'erreur pour tout, vos propres messages dans vos langues, et le pont vers les moteurs de formulaire Standard Schema. | Un format d'erreur par librairie, et le code de colle entre eux. |
+| [Valeurs réactives](reactive.md) | `@yaltaan/core/reactive` | Des valeurs dérivées d'autres, calculées seulement quand on les lit, jamais vues à moitié à jour, regroupées explicitement, derrière le contrat de `useSyncExternalStore` de React. | Recalculer à la main après chaque changement, un événement par champ, les signaux d'un framework dans la logique métier. |
 
 ## Disponible dans `@yaltaan/temporal`
 
