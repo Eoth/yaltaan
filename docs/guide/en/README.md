@@ -45,6 +45,12 @@ flowchart LR
 |---|---|---|---|
 | [Rules](rules.md) | `@yaltaan/rules` | State what holds across fields, derive what is required, and hand it to any form engine, whatever the schema. | `if` statements after the schema, one set per engine. |
 
+## Available in `@yaltaan/form`
+
+| Page | Import | What you get | Instead of |
+|---|---|---|---|
+| [Forms](form.md) | `@yaltaan/form` | Fields and groups whose raw value, parsed value, issues and states (`dirty`, `touched`, `pending`, `submitted`, `disabled`) are nodes you read and watch, derived from values, each issue on its field. | Flags updated by hand after each change, a stale answer of a server check shown for the wrong value. |
+
 Every export is `@experimental` until the contracts are frozen: it may change in a minor version, and the [changelog](../../../CHANGELOG.md) says so in bold.
 
 ## Principles you can rely on

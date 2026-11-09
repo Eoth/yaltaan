@@ -1,0 +1,37 @@
+{
+  "name": "@yaltaan/form",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Form state of Yaltaan on reactive nodes: raw and parsed values, issues on their field, states.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Eoth/yaltaan.git",
+    "directory": "packages/form"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist/",
+    "!dist/**/*.test.*"
+  ],
+  "engines": {
+    "node": ">=22.12"
+  },
+  "dependencies": {
+    "@yaltaan/core": "0.0.0",
+    "@yaltaan/rules": "0.0.0",
+    "@yaltaan/schema": "0.0.0"
+  }
+}

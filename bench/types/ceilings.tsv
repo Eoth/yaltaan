@@ -7,3 +7,5 @@ schema-object	ts7	16000	ADR 0033: measured 14466, valibot on the same shape 5862
 schema-object	ts6	12700	ADR 0033: measured 11544, valibot on the same shape 30364
 path	ts7	18800	ADR 0038: measured 17031
 path	ts6	8400	ADR 0038: measured 7603
+form	ts7	17700	ADR 0043: measured 16058
+form	ts6	12300	ADR 0043: measured 11114

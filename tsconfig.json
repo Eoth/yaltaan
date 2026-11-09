@@ -14,6 +14,7 @@
     "packages/core/src/**/*.ts",
     "packages/schema/src/**/*.ts",
     "packages/rules/src/**/*.ts",
+    "packages/form/src/**/*.ts",
     "packages/temporal/src/**/*.ts"
   ]
 }

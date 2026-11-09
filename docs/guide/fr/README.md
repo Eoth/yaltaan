@@ -45,6 +45,12 @@ flowchart LR
 |---|---|---|---|
 | [Règles](rules.md) | `@yaltaan/rules` | Dire ce qui vaut entre les champs, en déduire ce qui est requis, et le confier à n'importe quel moteur de formulaire, quel que soit le schéma. | Des `if` après le schéma, un jeu par moteur. |
 
+## Disponible dans `@yaltaan/form`
+
+| Page | Import | Ce que vous obtenez | Au lieu de |
+|---|---|---|---|
+| [Formulaires](form.md) | `@yaltaan/form` | Des champs et des groupes dont la valeur brute, la valeur lue, les issues et les états (`dirty`, `touched`, `pending`, `submitted`, `disabled`) sont des nœuds qu'on lit et qu'on écoute, déduits des valeurs, chaque issue sur son champ. | Des drapeaux mis à jour à la main après chaque changement, la réponse périmée d'une vérification du serveur montrée pour la mauvaise valeur. |
+
 Chaque export reste `@experimental` jusqu'au gel des contrats : il peut changer dans une version mineure, et le [journal des changements](../../../CHANGELOG.md) le signale en gras.
 
 ## Ce sur quoi vous pouvez compter

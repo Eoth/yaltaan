@@ -66,6 +66,7 @@ const MESSAGES: Readonly<Record<string, (params: Params) => string>> = {
   'rules.ordered': () => 'This comes before the value it must follow.',
   'rules.too_large': (params) => `This list is too long: at most ${String(params['maximum'])} items.`,
   'rules.too_many_issues': () => 'This has too many errors to list them all.',
+  'form.validation_failed': () => 'This could not be checked: try again.',
   'issue.external': (params) => String(params['message']),
 };
 
