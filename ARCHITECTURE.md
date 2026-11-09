@@ -424,6 +424,7 @@ aggregate(arrayPath, fn, check)  when(discriminantPath, cases)  withContext(ctx 
 - Server errors: import of `Issue`s with their `Path` (`{ key }` segments included); a `clearOn: 'change' | 'submit'` policy; categories (validation, business, authorization, transport) carried by the namespace of the code.
 - Drafts: a snapshot is the raw value plus the schema version; restoration goes through the schema's migrations.
 - Multi-step forms: a step is a subset of paths; validating a step is filtering issues by path. No dedicated engine.
+- The first step exists: descriptions `field` and `group`, built by `createForm` on one graph, every value and state a node of it; `dirty` compares the raw value with the initial one, `pending` holds a node that a schema of its own, of an ancestor or of a descendant may still mark, a rejected answer is the issue `form.validation_failed`, and an issue goes to the deepest node its path names ([ADR 0043](docs/adr/0043-form-package.md)).
 
 **Condition for existing**: Angular Signal Forms is stable since Angular 22, and TanStack Form covers React. The added value of `@yaltaan/form` over these engines must be demonstrated by the vertical slice (see ROADMAP.md), then recorded by a decision record. If the answer is no, the product is `schema` + `rules` + bridges to the native engines, which remains a strong product and a much smaller one.
 
