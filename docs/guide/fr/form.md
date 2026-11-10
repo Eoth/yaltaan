@@ -108,6 +108,39 @@ form.children.billing.children.city.disabled.get(); // → false
 
 Pour l'instant, `disabled` ne change rien d'autre : les issues d'un nœud désactivé comptent toujours, et sa valeur reste dans la valeur lue.
 
+## Des listes dont les lignes bougent
+
+`array(element, options)` décrit une liste : chaque élément est un nœud construit à partir d'`element`, un champ, un groupe ou une autre liste. Un élément garde une clé tant qu'il vit, et son chemin finit par `{ key }`, si bien que ses états et les issues placées sur lui le suivent quand il bouge. Le formulaire numérote ses éléments à partir de 0 dans l'ordre où il les construit. Avec `identity`, le chemin d'une clé métier dans un élément, les écritures et les issues retrouvent un élément par la clé que porte sa valeur.
+
+```ts
+import { array, createForm, field, group } from '@yaltaan/form';
+import { array as list, object, string } from '@yaltaan/schema';
+
+const form = createForm(
+  group(
+    { contacts: array(group({ email: field('') }), { initial: [{ email: 'ada@example.org' }, { email: '' }] }) },
+    { schema: object({ contacts: list(object({ email: string({ minLength: 3 }) })) }) },
+  ),
+);
+const contacts = form.children.contacts;
+const empty = contacts.items.get()[1]!;
+empty.children.email.issues.get().map((issue) => issue.path); // → [['contacts', { key: 1 }, 'email']]
+contacts.move(empty, 0);
+empty.children.email.issues.get().map((issue) => issue.path); // → [['contacts', { key: 1 }, 'email']]
+contacts.dirty.get(); // → true
+const added = contacts.insert(2, { email: 'grace@example.org' });
+added.path; // → ['contacts', { key: 2 }]
+contacts.remove(contacts.items.get()[1]!); // → true
+contacts.raw.get(); // → [{ email: '' }, { email: 'grace@example.org' }]
+```
+
+- `insert(index, raw?)` construit un élément à partir de `raw`, ou de la valeur initiale de l'élément décrit, et le rend ; `remove(item)` et `move(item, index)` disent si l'élément était là. Un index hors limites lève une `RangeError`, une valeur qui ne va pas à l'élément une `TypeError` : rien n'est écrit.
+- `set(list)` garde les éléments par position, ou avec `identity` l'élément qui porte la clé de chaque valeur ; une valeur de reste construit un élément, un élément de reste est retiré. `reset()` rend les éléments de la dernière remise à zéro, dans leur ordre.
+- `dirty` compare la valeur brute de la liste à sa valeur initiale : une ligne déplacée la rend modifiée, remise en place elle ne l'est plus.
+- Un schéma de la liste nomme un élément par son index dans la valeur qu'il a lue : l'issue va à cet élément, son index remplacé par la `{ key }` de l'élément. Le schéma de l'élément, sur chaque élément, n'est pas interrogé de nouveau quand l'élément bouge.
+- Une condition dans un élément lit un champ du même élément par `{ key: undefined }`, que `@yaltaan/rules` appelle `anyElement` : `{ reads: [['contacts', { key: undefined }, 'primary']], when: (primary) => primary === true }`.
+- Une liste tient au plus `maxLength` éléments, 1 000 par défaut, et une écriture lit au plus `maxItems` éléments de tout le formulaire, 10 000 par défaut (une option de `createForm`) : au-delà de l'une ou l'autre, l'écriture lève une `RangeError` et n'écrit rien.
+
 ## Un schéma qui répond plus tard
 
 Un Standard Schema peut répondre par une promesse, une vérification du serveur par exemple. Les nœuds sur lesquels il peut placer des issues sont `pending` jusqu'à sa réponse, et leur valeur lue n'est pas `ok` entre-temps. La réponse pour une valeur que l'utilisateur a remplacée depuis n'est jamais livrée, quel que soit l'ordre d'arrivée des réponses.

@@ -1,25 +1,35 @@
-// The laws of the form, judged against a naive model: plain values for each field (raw, initial, touched) and for the
-// form (submitted), every state computed again from them at each look, by the rules the module's documentation
-// states, with no graph. Random programs build a tree of fields and groups up to three levels deep, some with a
-// schema answering at once, with a promise, or either depending on the value, whose output differs from what it
-// reads, and some with a disabled condition reading any node; then they set, touch, reset, submit, batch, and settle
-// or reject the promises the schemas gave, in any order, the late ones included. After each step, for every node:
-//   - consistency: raw, dirty, touched, submitted, disabled, pending, issues and parsed are the model's, the keys of
-//     every object in the order of the description;
+// The laws of the form, judged against a naive model: plain values for each field (raw, initial, touched), for each
+// array (its items, those of its last reset, its initial list) and for the form (submitted), every state computed again
+// from them at each look, by the rules the module's documentation states, with no graph. Random programs build a tree
+// of fields, groups and arrays up to three levels deep, arrays holding fields, groups or arrays, some kept by the key
+// their first field holds, some nodes with a schema answering at once, with a promise, or either depending on the
+// value, whose output differs from what it reads, and some with a disabled condition reading any node it can name, an
+// item through `{ key: undefined }`; then they set, touch, reset, submit, batch, insert, remove and move items, set
+// arrays to lists that reorder, keep, build and drop items, and settle or reject the promises the schemas gave, in any
+// order, the late ones included. After each step, for every node of the tree, in the order of the description:
+//   - consistency: path, raw, dirty, touched, submitted, disabled, pending, issues and parsed are the model's, the keys
+//     of every object in the order of the description; an item holds the key it took when it was built, its business
+//     key or one the form gave it, never taken by another item of the form, so that an item moved keeps its states and
+//     its issues, the path of an issue naming its item by `{ key }`;
 //   - one validation per change: each schema has been asked exactly once for each value its node took between two
 //     looks, never twice for the same, and an answer settled for a value since replaced changes nothing;
-//   - notification, when every state of every node is watched from the start: a listener is called once by a step
-//     that changes its state, never by a step that leaves it as it was. A field's raw value changes by `Object.is`,
-//     a group's when one of its fields' does, a read value when it turns ok or not, when its issues change by content,
-//     or when its value is another (a schema's output is a new value each time it is asked); issues change by content;
-//   - a write that throws (a group set to anything else than an object, at any level) writes nothing, and a batch
-//     keeps the writes made before it.
+//   - notification, when every state of every node is watched from the start, and of every item from the look after it
+//     was built: a listener is called once by a step that changes its state, never by a step that leaves it as it was.
+//     A field's raw value changes by `Object.is`, a group's when one of its fields' does, an array's when its items or
+//     one of their raw values do, its items even when a later write of the same batch gives the old ones back; a read
+//     value when it turns ok or not, when its issues change by content, or when its value is another (a schema's
+//     output is a new value each time it is asked); issues change by content;
+//   - a write that throws (a group set to anything else than an object, an array to anything else than an array or to
+//     more items than it may hold, two items with the same key or a blank one, an index out of range) writes nothing,
+//     and a batch keeps the writes made before it.
 // Values are small integers and, now and then, a list built anew at each write, which is never the same value as
 // another and always equal by content. Blind spots: `equals`, `NaN` and `-0` are left to the examples of
 // index.test.ts; schemas and conditions never throw, left to the examples too, with schemas of @yaltaan/schema, whose
-// issues keep their code (here every issue comes from the Standard Schema interface, `issue.external`, or is the
-// form's own); a listener never reads another node during a write, so what one batch holds is left to the examples;
-// every state is read at each look, so laziness is left to the examples; and so is the cost of a step.
+// issues keep their code (here every issue comes from the Standard Schema interface, `issue.external`, is the form's
+// own, or comes from a schema that names items by `{ key }`); a field inside an array has no schema, since its value
+// would not tell which item asked; the listeners of an item removed are no longer checked; a listener never reads
+// another node during a write, so what one batch holds is left to the examples; every state is read at each look, so
+// laziness is left to the examples; and so is the cost of a step.
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { isDeepStrictEqual } from 'node:util';
@@ -30,41 +40,89 @@ import type { Result } from '@yaltaan/core/result';
 import type { StandardResult, StandardSchema } from '@yaltaan/schema';
 import { fc } from '@yaltaan/testing';
 
-import { createForm, field, group, type FormNode, type Spec } from './index.ts';
+import { array, createForm, field, group, type FormNode, type Spec } from './index.ts';
 
-type SchemaKind = 'sync' | 'async' | 'mixed';
+type SchemaKind = 'sync' | 'async' | 'mixed' | 'keyed';
+type Kind = 'field' | 'group' | 'array';
 
 interface Shape {
-  readonly kind: 'field' | 'group';
+  readonly kind: Kind;
   readonly initial: number;
+  /** A group's children; an array's element, alone. */
   readonly children: readonly Shape[];
   readonly schema: SchemaKind | null;
   readonly condition: { readonly reads: readonly number[]; readonly salt: number } | null;
+  /** An array's: whether its items are kept by the key their first field holds, when its element allows it. */
+  readonly identity: boolean;
+  /** An array's: the seed of its initial items. */
+  readonly start: readonly number[];
 }
 
-/** A node of the program's tree: its shape, its place, and what the model holds for it. */
-interface Model {
+const ANY = { key: undefined };
+type Segment = string | { readonly key: undefined };
+
+/** A node of the description: its shape, its place, and what its condition reads. */
+interface Template {
   readonly id: number;
   readonly shape: Shape;
-  readonly key: string;
-  readonly path: readonly string[];
+  /** Its key in its group; `undefined` for the root and for an array's element. */
+  readonly key: string | undefined;
+  readonly parent: Template | undefined;
+  readonly children: readonly Template[];
+  /** From the root, `{ key: undefined }` for an item. */
+  readonly path: readonly Segment[];
+  /** The arrays that hold it, outermost first. */
+  readonly arrays: readonly Template[];
+  readonly identity: boolean;
+  reads: readonly Template[];
+  /** An array's initial raw value, as the form holds it. */
+  start: unknown[];
+}
+
+const UNSET = Symbol('unset');
+
+/** A node of the tree, as the model holds it. */
+interface Model {
+  readonly id: number;
+  readonly template: Template;
   readonly parent: Model | undefined;
-  children: readonly Model[];
-  reads: readonly Model[];
+  readonly children: readonly Model[];
+  items: Model[];
+  /** How many times its items changed, back to the same ones included. */
+  revision: number;
+  first: Model[];
+  start: unknown;
+  /** An item's key: its business key, or `UNSET` until the form's is read. */
+  key: unknown;
   raw: unknown;
   initial: unknown;
   touched: boolean;
 }
 
-/** A question a schema was asked: its value, its answer, and how its promise, if any, settled. */
+/** A value's identity, for the notification law: `Object.is` of each leaf, through groups and the items of arrays. */
+type Identity =
+  | { readonly leaf: unknown }
+  | { readonly group: readonly Identity[] }
+  | { readonly list: readonly (readonly [number, Identity])[]; readonly revision: number };
+
+/** A question a schema was asked: its value and its identity, its answer, and how its promise, if any, settled. */
 interface Request {
   readonly value: unknown;
-  readonly answer: StandardResult<unknown>;
+  readonly identity: Identity;
+  readonly answer: StandardResult<unknown> | Keyed;
   settled: 'resolved' | 'rejected' | undefined;
+}
+
+/** What a schema of @yaltaan/schema answers through `parse`: issues whose paths may hold `{ key }` segments. */
+interface Keyed {
+  readonly keyed: true;
+  readonly issues: readonly Raised[];
+  readonly value?: unknown;
 }
 
 /** A question as the schema recorded it, with the function that settles its promise. */
 interface Asked {
+  readonly template: number;
   readonly value: unknown;
   readonly settle: ((how: 'resolve' | 'reject') => void) | undefined;
   settled: boolean;
@@ -73,7 +131,10 @@ interface Asked {
 type Write =
   | { readonly kind: 'set'; readonly node: number; readonly seed: readonly number[] }
   | { readonly kind: 'touch'; readonly node: number }
-  | { readonly kind: 'reset'; readonly node: number; readonly seed: readonly number[] | null };
+  | { readonly kind: 'reset'; readonly node: number; readonly seed: readonly number[] | null }
+  | { readonly kind: 'insert'; readonly node: number; readonly index: number; readonly seed: readonly number[] | null }
+  | { readonly kind: 'remove'; readonly node: number; readonly item: number }
+  | { readonly kind: 'move'; readonly node: number; readonly item: number; readonly to: number };
 
 type Step =
   | Write
@@ -81,26 +142,29 @@ type Step =
   | { readonly kind: 'settle'; readonly node: number; readonly which: number; readonly how: 'resolve' | 'reject' }
   | { readonly kind: 'batch'; readonly steps: readonly Write[] };
 
-/** A write with the value it gives, built once and handed to the form and to the model alike. */
-type Resolved =
-  | { readonly kind: 'set'; readonly node: number; readonly value: unknown }
-  | { readonly kind: 'touch'; readonly node: number }
-  | { readonly kind: 'reset'; readonly node: number; readonly value: unknown };
+/** A write with its node, the place of that node in the tree before it, and the value it gives, built once. */
+type Resolved = Write & { readonly target: number; readonly value?: unknown };
 
 const ABSENT = Symbol('absent');
+const MAX_LENGTH = 3;
 
-const shapes = (depth: number): fc.Arbitrary<Shape> => {
-  const options = {
-    schema: fc.constantFrom<SchemaKind | null>(null, null, 'sync', 'async', 'mixed'),
-    condition: fc.option(fc.record({ reads: fc.array(fc.nat(30), { minLength: 1, maxLength: 2 }), salt: fc.nat(3) }), {
-      freq: 3,
-    }),
-  };
+const conditions = fc.option(
+  fc.record({ reads: fc.array(fc.nat(40), { minLength: 1, maxLength: 2 }), salt: fc.nat(3) }),
+  {
+    freq: 3,
+  },
+);
+const seeds = fc.array(fc.nat(5), { minLength: 1, maxLength: 8 });
+
+const shapes = (depth: number, inArray: boolean): fc.Arbitrary<Shape> => {
   const leaf = fc.record({
     kind: fc.constant('field' as const),
     initial: fc.nat(3),
     children: fc.constant([]),
-    ...options,
+    schema: inArray ? fc.constant(null) : fc.constantFrom<SchemaKind | null>(null, null, 'sync', 'async', 'mixed'),
+    condition: conditions,
+    identity: fc.constant(false),
+    start: fc.constant([]),
   });
   if (depth === 0) {
     return leaf;
@@ -108,18 +172,54 @@ const shapes = (depth: number): fc.Arbitrary<Shape> => {
   const node = fc.record({
     kind: fc.constant('group' as const),
     initial: fc.constant(0),
-    children: fc.array(shapes(depth - 1), { minLength: 1, maxLength: 3 }),
-    ...options,
+    children: fc.array(shapes(depth - 1, inArray), { minLength: 1, maxLength: 3 }),
+    schema: fc.constantFrom<SchemaKind | null>(null, null, 'sync', 'async', 'mixed'),
+    condition: conditions,
+    identity: fc.constant(false),
+    start: fc.constant([]),
   });
-  return fc.oneof(leaf, node);
+  return fc.oneof(
+    { arbitrary: leaf, weight: 2 },
+    { arbitrary: node, weight: 2 },
+    { arbitrary: lists(depth), weight: 2 },
+  );
 };
 
-const seeds = fc.array(fc.nat(5), { minLength: 1, maxLength: 8 });
+const lists = (depth: number): fc.Arbitrary<Shape> =>
+  fc.record({
+    kind: fc.constant('array' as const),
+    initial: fc.constant(0),
+    children: shapes(depth - 1, true).map((element) => [element]),
+    schema: fc.constantFrom<SchemaKind | null>(null, null, 'sync', 'async', 'mixed', 'keyed'),
+    condition: conditions,
+    identity: fc.boolean(),
+    start: seeds,
+  });
 
 const writes: fc.Arbitrary<Write> = fc.oneof(
-  fc.record({ kind: fc.constant('set' as const), node: fc.nat(30), seed: seeds }),
-  fc.record({ kind: fc.constant('touch' as const), node: fc.nat(30) }),
-  fc.record({ kind: fc.constant('reset' as const), node: fc.nat(30), seed: fc.option(seeds) }),
+  { arbitrary: fc.record({ kind: fc.constant('set' as const), node: fc.nat(40), seed: seeds }), weight: 3 },
+  { arbitrary: fc.record({ kind: fc.constant('touch' as const), node: fc.nat(40) }), weight: 1 },
+  {
+    arbitrary: fc.record({ kind: fc.constant('reset' as const), node: fc.nat(40), seed: fc.option(seeds) }),
+    weight: 2,
+  },
+  {
+    arbitrary: fc.record({
+      kind: fc.constant('insert' as const),
+      node: fc.nat(40),
+      index: fc.nat(3),
+      seed: fc.option(seeds),
+    }),
+    weight: 3,
+  },
+  {
+    arbitrary: fc.record({ kind: fc.constant('remove' as const), node: fc.nat(40), item: fc.nat(3) }),
+    weight: 2,
+  },
+  {
+    arbitrary: fc.record({ kind: fc.constant('move' as const), node: fc.nat(40), item: fc.nat(3), to: fc.nat(2) }),
+    weight: 4,
+  },
 );
 
 const steps: fc.Arbitrary<Step> = fc.oneof(
@@ -128,7 +228,7 @@ const steps: fc.Arbitrary<Step> = fc.oneof(
   {
     arbitrary: fc.record({
       kind: fc.constant('settle' as const),
-      node: fc.nat(30),
+      node: fc.nat(40),
       which: fc.nat(3),
       how: fc.constantFrom<'resolve' | 'reject'>('resolve', 'resolve', 'resolve', 'reject'),
     }),
@@ -148,14 +248,31 @@ interface Program {
 
 const programs: fc.Arbitrary<Program> = fc.record({
   root: fc.oneof(
-    { arbitrary: shapes(3), weight: 1 },
+    { arbitrary: shapes(3, false), weight: 1 },
     {
       arbitrary: fc.record({
         kind: fc.constant('group' as const),
         initial: fc.constant(0),
-        children: fc.array(shapes(2), { minLength: 1, maxLength: 3 }),
+        children: fc.array(shapes(2, false), { minLength: 1, maxLength: 3 }),
         schema: fc.constantFrom<SchemaKind | null>(null, 'sync', 'async', 'mixed'),
         condition: fc.constant(null),
+        identity: fc.constant(false),
+        start: fc.constant([]),
+      }),
+      weight: 3,
+    },
+    {
+      // An array first, so that every program of this kind moves items.
+      arbitrary: fc.record({
+        kind: fc.constant('group' as const),
+        initial: fc.constant(0),
+        children: fc
+          .tuple(lists(2), fc.array(shapes(2, false), { maxLength: 2 }))
+          .map(([first, rest]) => [first, ...rest]),
+        schema: fc.constantFrom<SchemaKind | null>(null, 'sync', 'async', 'mixed'),
+        condition: fc.constant(null),
+        identity: fc.constant(false),
+        start: fc.constant([]),
       }),
       weight: 4,
     },
@@ -164,25 +281,38 @@ const programs: fc.Arbitrary<Program> = fc.record({
   watched: fc.boolean(),
 });
 
+const isObject = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null;
+
+const own = (value: unknown, key: PropertyKey): unknown =>
+  isObject(value) && Object.hasOwn(value, key) ? value[key as string] : undefined;
+
+const isBlank = (value: unknown): boolean =>
+  value === undefined || value === null || value === '' || (Array.isArray(value) && value.length === 0);
+
 /**
- * The value a seed gives to a node: small integers, a list built anew, a key left out now and then, and a group that
- * is not an object.
+ * The value a seed gives to a node: small integers, a list built anew, a key left out now and then, a group or an
+ * array that is not one, and lists of every length up to one more than an array may hold.
  */
-function valueOf(shape: Shape, seed: readonly number[], cursor = { at: 0 }): unknown {
+function valueOf(template: Template, seed: readonly number[], cursor = { at: 0 }): unknown {
   const next = seed[cursor.at++ % seed.length]!;
   if (next === 4) {
     return ABSENT;
   }
-  if (shape.kind === 'field') {
+  const { kind } = template.shape;
+  if (kind === 'field') {
     return next === 5 ? [1] : next;
   }
-  const value: Record<string, unknown> = {};
-  shape.children.forEach((child, index) => {
-    const childValue = valueOf(child, seed, cursor);
-    if (childValue !== ABSENT) {
-      value[`k${index}`] = childValue;
+  const value: Record<string, unknown> | unknown[] = kind === 'group' ? {} : [];
+  const length = kind === 'group' ? template.children.length : next === 5 ? MAX_LENGTH + 1 : next;
+  for (let index = 0; index < length; index++) {
+    const child = template.children[kind === 'group' ? index : 0]!;
+    const inner = valueOf(child, seed, cursor);
+    if (kind === 'array') {
+      (value as unknown[]).push(given(inner));
+    } else if (inner !== ABSENT) {
+      (value as Record<string, unknown>)[child.key!] = inner;
     }
-  });
+  }
   return value;
 }
 
@@ -199,7 +329,7 @@ function holds(values: readonly unknown[], salt: number): boolean {
 
 interface Raised {
   readonly message: string;
-  readonly path?: readonly (PropertyKey | { key: string })[];
+  readonly path?: readonly (PropertyKey | { readonly key: PropertyKey })[];
 }
 
 /** A field's schema: an integer that is even, 2 a failure without an issue; its output, ten times the integer. */
@@ -253,62 +383,171 @@ function groupAnswer(value: unknown): StandardResult<unknown> {
   return issues.length ? { issues } : { value: { ...record, sum } };
 }
 
-const answerOf = (shape: Shape, value: unknown): StandardResult<unknown> =>
-  shape.kind === 'field' ? fieldAnswer(value) : groupAnswer(value);
+/**
+ * An array's schema: a 3 on an item, a 1 on its first field, a 2 under its first field, which names no node of a field
+ * and stays there, a length that is a multiple of three on the array, and an index past the end, which stays on the
+ * array; its output, a new object holding the list and its length.
+ */
+function arrayAnswer(value: unknown): StandardResult<unknown> {
+  const list = value as unknown[];
+  const issues: Raised[] = [];
+  list.forEach((item, index) => {
+    const first = own(item, 'k0');
+    if (item === 3) {
+      issues.push({ message: 'three', path: [index] });
+    } else if (first === 1) {
+      issues.push({ message: 'one', path: [{ key: index }, 'k0'] });
+    } else if (first === 2) {
+      issues.push({ message: 'two', path: [index, 'k0', 'zz'] });
+    }
+  });
+  if (list.length % 3 === 0) {
+    issues.push({ message: 'length' });
+  }
+  if (list.length === 2) {
+    issues.push({ message: 'past', path: [2] });
+  }
+  return issues.length ? { issues } : { value: { list, length: list.length } };
+}
+
+/**
+ * The answer of a schema of @yaltaan/schema on an array: a `{ key }` segment holding an item's first field, or its
+ * index, which may name another item, or none; always at once, through `parse`.
+ */
+function keyedAnswer(value: unknown): Keyed {
+  const list = value as unknown[];
+  const issues: Raised[] = [];
+  list.forEach((item, index) => {
+    const first = isObject(item) ? own(item, 'k0') : item;
+    if (first === 1 || first === 3) {
+      issues.push({ message: 'keyed', path: [{ key: first === 1 ? index : first }] });
+    }
+  });
+  return issues.length ? { keyed: true, issues } : { keyed: true, issues, value: { keyed: list } };
+}
+
+function answerOf(template: Template, value: unknown): StandardResult<unknown> | Keyed {
+  const { kind, schema } = template.shape;
+  if (schema === 'keyed') {
+    return keyedAnswer(value);
+  }
+  return kind === 'field' ? fieldAnswer(value) : kind === 'group' ? groupAnswer(value) : arrayAnswer(value);
+}
 
 const isAsync = (kind: SchemaKind, value: unknown): boolean =>
   kind === 'async' || (kind === 'mixed' && String(JSON.stringify(value)).length % 2 === 1);
 
-function buildModel(
+function buildTemplates(
   shape: Shape,
-  key: string,
-  path: readonly string[],
-  parent: Model | undefined,
-  all: Model[],
-): Model {
-  const model: Model = {
+  key: string | undefined,
+  parent: Template | undefined,
+  all: Template[],
+): Template {
+  const keyed = shape.kind === 'array' && shape.children[0]!.kind === 'group';
+  const template: Template = {
     id: all.length,
     shape,
     key,
-    path,
     parent,
     children: [],
+    path: parent ? [...parent.path, key ?? ANY] : [],
+    arrays: parent ? (parent.shape.kind === 'array' ? [...parent.arrays, parent] : parent.arrays) : [],
+    identity: shape.identity && keyed && shape.children[0]!.children[0]!.kind === 'field',
     reads: [],
-    raw: shape.initial,
-    initial: shape.initial,
-    touched: false,
+    start: [],
   };
-  all.push(model);
-  model.children = shape.children.map((child, index) =>
-    buildModel(child, `k${index}`, [...path, `k${index}`], model, all),
+  all.push(template);
+  (template as unknown as { children: Template[] }).children = shape.children.map((child, index) =>
+    buildTemplates(child, shape.kind === 'group' ? `k${index}` : undefined, template, all),
   );
-  return model;
+  return template;
+}
+
+/** The key of an item's raw value: its first field. */
+const keyOf = (value: unknown): unknown => own(value, 'k0');
+
+/**
+ * `value` as the form holds it, read as `set` reads a value: or the error that reading it throws, in the order the
+ * form reads.
+ */
+function normalize(template: Template, value: unknown): unknown {
+  const { kind } = template.shape;
+  if (kind === 'field') {
+    return value;
+  }
+  if (kind === 'group') {
+    if (!isObject(value)) {
+      throw new TypeError('a group is set to an object');
+    }
+    return Object.fromEntries(template.children.map((child) => [child.key!, normalize(child, own(value, child.key!))]));
+  }
+  if (!Array.isArray(value)) {
+    throw new TypeError('an array is set to an array');
+  }
+  if (value.length > MAX_LENGTH) {
+    throw new RangeError('too many items');
+  }
+  const seen = new Set<unknown>();
+  return value.map((_, index) => {
+    const item = own(value, index);
+    if (template.identity) {
+      const key = keyOf(item);
+      if (isBlank(key) || seen.has(key)) {
+        throw new TypeError('a key blank or taken');
+      }
+      seen.add(key);
+    }
+    return normalize(template.children[0]!, item);
+  });
+}
+
+/** The initial raw value of a node of the description. */
+function initialOf(template: Template): unknown {
+  const { kind } = template.shape;
+  if (kind === 'field') {
+    return template.shape.initial;
+  }
+  return kind === 'group'
+    ? Object.fromEntries(template.children.map((child) => [child.key!, initialOf(child)]))
+    : template.start;
 }
 
 /** The description of a node, with the schema that records every question it is asked. */
-function specOf(model: Model, asked: Map<number, Asked[]>): Spec {
-  const { shape } = model;
+function specOf(template: Template, asked: Asked[]): Spec {
+  const { shape } = template;
   const options: {
     schema?: StandardSchema;
-    disabled?: { reads: string[][]; when: (...values: unknown[]) => boolean };
+    disabled?: { reads: Segment[][]; when: (...values: unknown[]) => boolean };
   } = {};
-  if (shape.schema) {
+  if (shape.schema === 'keyed') {
+    options.schema = {
+      '~standard': { version: 1, vendor: 'yaltaan', validate: () => ({ issues: [{ message: 'unused' }] }) },
+      '~run': (value: unknown, reading: { issues: Issue[] }) => {
+        asked.push({ template: template.id, value, settle: undefined, settled: true });
+        const answer = keyedAnswer(value);
+        for (const issue of answer.issues) {
+          reading.issues.push({ code: 'law.keyed', path: issue.path as Issue['path'], params: { message: 'keyed' } });
+        }
+        return answer.value;
+      },
+    } as unknown as StandardSchema;
+  } else if (shape.schema) {
     const kind = shape.schema;
     options.schema = {
       '~standard': {
         version: 1,
         vendor: 'law',
         validate: (value: unknown) => {
-          const requests = asked.get(model.id) ?? [];
-          asked.set(model.id, requests);
           if (!isAsync(kind, value)) {
-            requests.push({ value, settle: undefined, settled: true });
-            return answerOf(shape, value);
+            asked.push({ template: template.id, value, settle: undefined, settled: true });
+            return answerOf(template, value) as StandardResult<unknown>;
           }
           return new Promise((resolve, reject) => {
             const settle = (how: 'resolve' | 'reject'): void =>
-              how === 'resolve' ? resolve(answerOf(shape, value)) : reject(new Error('unreachable'));
-            requests.push({ value, settle, settled: false });
+              how === 'resolve'
+                ? resolve(answerOf(template, value) as StandardResult<unknown>)
+                : reject(new Error('no'));
+            asked.push({ template: template.id, value, settle, settled: false });
           });
         },
       },
@@ -316,108 +555,237 @@ function specOf(model: Model, asked: Map<number, Asked[]>): Spec {
   }
   if (shape.condition) {
     const { salt } = shape.condition;
-    options.disabled = { reads: model.reads.map((read) => [...read.path]), when: (...values) => holds(values, salt) };
+    options.disabled = {
+      reads: template.reads.map((read) => [...read.path]),
+      when: (...values) => holds(values, salt),
+    };
   }
   if (shape.kind === 'field') {
     return field(shape.initial, options);
   }
-  return group(Object.fromEntries(model.children.map((child) => [child.key, specOf(child, asked)])), options);
+  if (shape.kind === 'group') {
+    return group(Object.fromEntries(template.children.map((child) => [child.key!, specOf(child, asked)])), options);
+  }
+  return array(specOf(template.children[0]!, asked), {
+    ...options,
+    initial: template.start,
+    maxLength: MAX_LENGTH,
+    ...(template.identity ? { identity: ['k0'] } : {}),
+  } as never);
 }
 
 interface Plain {
   readonly code: string;
-  readonly path: readonly PropertyKey[];
+  readonly path: readonly unknown[];
   readonly message: unknown;
+  /** The schema's own issue, with the index it gave; the message of a rejection. */
+  readonly cause: unknown;
 }
 
 type PlainResult = { readonly ok: true; readonly value: unknown } | { readonly ok: false; readonly error: Plain[] };
-
-/** A value's identity, for the notification law: `Object.is` of each leaf, through the groups. */
-type Identity = { readonly leaf: unknown } | { readonly group: readonly Identity[] };
 
 function sameIdentity(a: Identity, b: Identity): boolean {
   if ('leaf' in a) {
     return 'leaf' in b && Object.is(a.leaf, b.leaf);
   }
-  return 'group' in b && a.group.length === b.group.length && a.group.every((x, i) => sameIdentity(x, b.group[i]!));
+  if ('group' in a) {
+    return 'group' in b && a.group.length === b.group.length && a.group.every((x, i) => sameIdentity(x, b.group[i]!));
+  }
+  return (
+    'list' in b &&
+    a.revision === b.revision &&
+    a.list.length === b.list.length &&
+    a.list.every(([id, x], i) => id === b.list[i]![0] && sameIdentity(x, b.list[i]![1]))
+  );
 }
 
 /** The naive model: every state from the plain values, at each look. */
 class Naive {
   readonly requests = new Map<number, Request[]>();
+  /** Every node ever built, by id. */
+  readonly built: Model[] = [];
   readonly root: Model;
-  readonly all: readonly Model[];
   submitted = false;
 
-  constructor(root: Model, all: readonly Model[]) {
-    this.root = root;
-    this.all = all;
+  constructor(template: Template) {
+    this.root = this.instantiate(template, initialOf(template), undefined);
+  }
+
+  /** A node built from `value`, its raw value as the form holds it. */
+  instantiate(template: Template, value: unknown, parent: Model | undefined): Model {
+    const model: Model = {
+      id: this.built.length,
+      template,
+      parent,
+      children: [],
+      items: [],
+      revision: 0,
+      first: [],
+      start: undefined,
+      key: parent?.template.shape.kind === 'array' ? UNSET : undefined,
+      raw: value,
+      initial: value,
+      touched: false,
+    };
+    this.built.push(model);
+    const { kind } = template.shape;
+    if (kind === 'group') {
+      (model as unknown as { children: Model[] }).children = template.children.map((child) =>
+        this.instantiate(child, own(value, child.key!), model),
+      );
+    } else if (kind === 'array') {
+      model.items = (value as unknown[]).map((item) => this.instantiate(template.children[0]!, item, model));
+      model.first = model.items;
+      model.start = value;
+    }
+    return model;
+  }
+
+  /** Every node of the tree: the root, then depth first, children and items in order. */
+  nodes(model = this.root, into: Model[] = []): Model[] {
+    into.push(model);
+    for (const child of model.template.shape.kind === 'array' ? model.items : model.children) {
+      this.nodes(child, into);
+    }
+    return into;
+  }
+
+  /** Gives an array other items: a new raw value, even when a later write of the batch gives the old ones back. */
+  relist(model: Model, items: Model[]): void {
+    if (items.length !== model.items.length || items.some((item, index) => item !== model.items[index])) {
+      model.items = items;
+      model.revision++;
+    }
+  }
+
+  /** Whether `model` is still in the tree: every item on its way is among the items of its array. */
+  attached(model: Model): boolean {
+    for (let at = model; at.parent; at = at.parent) {
+      if (at.parent.template.shape.kind === 'array' && !at.parent.items.includes(at)) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  pathOf(model: Model): readonly unknown[] {
+    if (!model.parent) {
+      return [];
+    }
+    return [...this.pathOf(model.parent), model.template.key ?? { key: model.key }];
   }
 
   raw(model: Model): unknown {
-    return model.shape.kind === 'field'
-      ? model.raw
-      : Object.fromEntries(model.children.map((child) => [child.key, this.raw(child)]));
+    const { kind } = model.template.shape;
+    if (kind === 'field') {
+      return model.raw;
+    }
+    return kind === 'group'
+      ? Object.fromEntries(model.children.map((child) => [child.template.key!, this.raw(child)]))
+      : model.items.map((item) => this.raw(item));
   }
 
-  /** The identity of a raw value, given as the model holds it now or as it was recorded for a question. */
-  identity(model: Model, value: unknown): Identity {
-    return model.shape.kind === 'field'
-      ? { leaf: value }
-      : { group: model.children.map((child) => this.identity(child, (value as Record<string, unknown>)[child.key])) };
+  identity(model: Model): Identity {
+    const { kind } = model.template.shape;
+    if (kind === 'field') {
+      return { leaf: model.raw };
+    }
+    return kind === 'group'
+      ? { group: model.children.map((child) => this.identity(child)) }
+      : { list: model.items.map((item) => [item.id, this.identity(item)] as const), revision: model.revision };
   }
 
   dirty(model: Model): boolean {
-    return model.shape.kind === 'field'
-      ? !isDeepStrictEqual(model.raw, model.initial)
-      : model.children.some((child) => this.dirty(child));
+    const { kind } = model.template.shape;
+    if (kind === 'field') {
+      return !isDeepStrictEqual(model.raw, model.initial);
+    }
+    return kind === 'group'
+      ? model.children.some((child) => this.dirty(child))
+      : !isDeepStrictEqual(model.start, this.raw(model));
   }
 
   touched(model: Model): boolean {
-    return model.shape.kind === 'field' ? model.touched : model.children.some((child) => this.touched(child));
+    const { kind } = model.template.shape;
+    if (kind === 'field') {
+      return model.touched;
+    }
+    return (kind === 'group' ? model.children : model.items).some((child) => this.touched(child));
+  }
+
+  /** The node a condition of `from` reads: `template`, through the items that hold `from`. */
+  resolve(template: Template, from: Model): Model {
+    let model = this.root;
+    for (const segment of template.path) {
+      if (typeof segment === 'string') {
+        model = model.children[Number(segment.slice(1))]!;
+      } else {
+        let at: Model = from;
+        while (at.parent !== model) {
+          at = at.parent!;
+        }
+        model = at;
+      }
+    }
+    return model;
   }
 
   disabled(model: Model): boolean {
-    const { condition } = model.shape;
-    const values = model.reads.map((read) => this.raw(read));
+    const { condition } = model.template.shape;
+    const values = model.template.reads.map((read) => this.raw(this.resolve(read, model)));
     return (condition !== null && holds(values, condition.salt)) || (!!model.parent && this.disabled(model.parent));
   }
 
-  /** Records the question a schema is asked when its node's value changed since the last one: called at each look. */
-  ask(): void {
-    for (const model of this.all) {
-      if (model.shape.schema) {
+  /**
+   * Records the question a schema is asked when its node's value changed since the last one: called at each look, for
+   * the tree and for the nodes `gone` from it since the last look, whose listeners read them until then.
+   */
+  ask(gone: readonly Model[]): void {
+    for (const model of [...this.nodes(), ...gone]) {
+      const { schema } = model.template.shape;
+      if (schema) {
         const value = this.raw(model);
+        const identity = this.identity(model);
         const requests = this.requests.get(model.id) ?? [];
         this.requests.set(model.id, requests);
         const last = requests.at(-1);
-        if (last === undefined || !sameIdentity(this.identity(model, last.value), this.identity(model, value))) {
-          const settled = isAsync(model.shape.schema, value) ? undefined : 'resolved';
-          requests.push({ value, answer: answerOf(model.shape, value), settled });
+        if (last === undefined || !sameIdentity(last.identity, identity)) {
+          const settled = schema !== 'keyed' && isAsync(schema, value) ? undefined : 'resolved';
+          requests.push({ value, identity, answer: answerOf(model.template, value), settled });
         }
       }
     }
   }
 
   /** The issues and the output of a node's schema now, as the form reads them; `undefined` while pending. */
-  answer(model: Model): { readonly issues: readonly Raised[] | 'failed'; readonly output?: unknown } | undefined {
+  answer(
+    model: Model,
+  ):
+    { readonly issues: readonly Raised[] | 'failed'; readonly output?: unknown; readonly cause?: unknown } | undefined {
     const request = this.requests.get(model.id)!.at(-1)!;
     if (request.settled === undefined) {
       return undefined;
     }
     const { answer } = request;
+    if ('keyed' in answer) {
+      return answer.issues.length ? { issues: answer.issues } : { issues: [], output: answer.value };
+    }
     if (request.settled === 'rejected' || answer.issues?.length === 0) {
-      return { issues: 'failed' };
+      return { issues: 'failed', cause: request.settled === 'rejected' ? 'no' : undefined };
     }
     return answer.issues ? { issues: answer.issues as Raised[] } : { issues: [], output: answer.value };
   }
 
   ownPending(model: Model): boolean {
-    return model.shape.schema !== null && this.answer(model) === undefined;
+    return model.template.shape.schema !== null && this.answer(model) === undefined;
+  }
+
+  under(model: Model): readonly Model[] {
+    return model.template.shape.kind === 'array' ? model.items : model.children;
   }
 
   pending(model: Model): boolean {
-    const below = (node: Model): boolean => this.ownPending(node) || node.children.some(below);
+    const below = (node: Model): boolean => this.ownPending(node) || this.under(node).some(below);
     let above = false;
     for (let at = model.parent; at; at = at.parent) {
       above ||= this.ownPending(at);
@@ -433,27 +801,54 @@ class Naive {
     }
     const placed: Plain[] = [];
     for (const owner of ancestors) {
-      const answer = owner.shape.schema ? this.answer(owner) : undefined;
+      const answer = owner.template.shape.schema ? this.answer(owner) : undefined;
       if (answer?.issues === 'failed') {
         if (owner === model) {
-          placed.push({ code: 'form.validation_failed', path: owner.path, message: undefined });
+          placed.push({
+            code: 'form.validation_failed',
+            path: this.pathOf(owner),
+            message: undefined,
+            cause: answer.cause,
+          });
         }
         continue;
       }
+      const keyed = owner.template.shape.schema === 'keyed';
       for (const issue of answer?.issues ?? []) {
-        const relative = (issue.path ?? []).map((segment) =>
-          typeof segment === 'object' ? (segment as { key: PropertyKey }).key : segment,
+        // The Standard Schema interface reads a `{ key }` segment as the key it holds.
+        const relative: unknown[] = (issue.path ?? []).map((segment) =>
+          !keyed && typeof segment === 'object' ? (segment as { key: PropertyKey }).key : segment,
         );
         let target = owner;
-        for (const key of relative) {
-          const next = target.children.find((child) => child.key === key);
+        for (const [at, segment] of relative.entries()) {
+          let next: Model | undefined;
+          if (target.template.shape.kind === 'array') {
+            next =
+              typeof segment === 'number'
+                ? target.items[segment]
+                : isObject(segment)
+                  ? target.items.find((item) =>
+                      new Set([target.template.identity ? keyOf(this.raw(item)) : item.key]).has(segment['key']),
+                    )
+                  : undefined;
+            if (next) {
+              relative[at] = { key: next.key };
+            }
+          } else if (target.template.shape.kind === 'group') {
+            next = target.children.find((child) => child.template.key === segment);
+          }
           if (next === undefined) {
             break;
           }
           target = next;
         }
         if (target === model) {
-          placed.push({ code: 'issue.external', path: [...owner.path, ...relative], message: issue.message });
+          placed.push({
+            code: keyed ? 'law.keyed' : 'issue.external',
+            path: [...this.pathOf(owner), ...relative],
+            message: issue.message,
+            cause: keyed ? undefined : issue,
+          });
         }
       }
     }
@@ -461,26 +856,37 @@ class Naive {
   }
 
   allIssues(model: Model): Plain[] {
-    return [...this.issues(model), ...model.children.flatMap((child) => this.allIssues(child))];
+    return [...this.issues(model), ...this.under(model).flatMap((child) => this.allIssues(child))];
   }
 
   output(model: Model): unknown {
-    if (model.shape.schema) {
+    const { kind, schema } = model.template.shape;
+    if (schema) {
       return this.answer(model)?.output;
     }
-    return model.shape.kind === 'field'
-      ? model.raw
-      : Object.fromEntries(model.children.map((child) => [child.key, this.output(child)]));
+    if (kind === 'field') {
+      return model.raw;
+    }
+    return kind === 'group'
+      ? Object.fromEntries(model.children.map((child) => [child.template.key!, this.output(child)]))
+      : model.items.map((item) => this.output(item));
   }
 
   /** The identity of the read value: a schema's output is the one recorded with its question. */
   outputIdentity(model: Model): Identity {
-    if (model.shape.schema) {
+    const { kind, schema } = model.template.shape;
+    if (schema) {
       return { leaf: this.answer(model)?.output };
     }
-    return model.shape.kind === 'field'
-      ? { leaf: model.raw }
-      : { group: model.children.map((child) => this.outputIdentity(child)) };
+    if (kind === 'field') {
+      return { leaf: model.raw };
+    }
+    return kind === 'group'
+      ? { group: model.children.map((child) => this.outputIdentity(child)) }
+      : {
+          list: model.items.map((item) => [item.id, this.outputIdentity(item)] as const),
+          revision: model.revision,
+        };
   }
 
   parsed(model: Model): PlainResult {
@@ -491,56 +897,142 @@ class Naive {
   }
 
   fields(model: Model): Model[] {
-    return model.shape.kind === 'field' ? [model] : model.children.flatMap((child) => this.fields(child));
+    return model.template.shape.kind === 'field' ? [model] : this.under(model).flatMap((child) => this.fields(child));
   }
 
-  /** The value of each field below `model` in `value`, or a `TypeError` for a group given anything but an object. */
-  read(model: Model, value: unknown): unknown[] | TypeError {
-    if (model.shape.kind === 'field') {
-      return [value];
+  /**
+   * Notes in `ops` what writing `value` at `model` does, mode by mode as the form documents them, and returns the value
+   * as the form holds it; throws what the form throws, before anything is noted as done.
+   */
+  plan(model: Model, value: unknown, mode: 'set' | 'reset' | 'restore', ops: (() => void)[]): unknown {
+    const { template } = model;
+    const { kind } = template.shape;
+    const restore = mode === 'restore';
+    if (kind === 'field') {
+      ops.push(() => {
+        if (mode === 'reset') {
+          model.initial = value;
+        }
+        model.raw = mode === 'set' ? value : model.initial;
+        model.touched &&= mode === 'set';
+      });
+      return restore ? model.initial : value;
     }
-    if (typeof value !== 'object' || value === null) {
-      return new TypeError('a group is set to an object');
-    }
-    const values: unknown[] = [];
-    for (const child of model.children) {
-      const inner = Object.hasOwn(value, child.key) ? (value as Record<string, unknown>)[child.key] : undefined;
-      const read = this.read(child, inner);
-      if (read instanceof TypeError) {
-        return read;
+    if (kind === 'group') {
+      if (!restore && !isObject(value)) {
+        throw new TypeError('a group is set to an object');
       }
-      values.push(...read);
+      return Object.fromEntries(
+        model.children.map((child) => [
+          child.template.key!,
+          this.plan(child, own(value, child.template.key!), mode, ops),
+        ]),
+      );
     }
+    if (restore) {
+      const values = model.first.map((item) => this.plan(item, undefined, mode, ops));
+      ops.push(() => {
+        this.relist(model, [...model.first]);
+        model.start = values;
+      });
+      return values;
+    }
+    if (!Array.isArray(value)) {
+      throw new TypeError('an array is set to an array');
+    }
+    if (value.length > MAX_LENGTH) {
+      throw new RangeError('too many items');
+    }
+    const seen = new Set<unknown>();
+    const values: unknown[] = [];
+    const entries = value.map((_, index): Model | { readonly value: unknown } => {
+      const item = own(value, index);
+      let found = model.items[index];
+      if (template.identity) {
+        const key = keyOf(item);
+        if (isBlank(key) || seen.has(key)) {
+          throw new TypeError('a key blank or taken');
+        }
+        seen.add(key);
+        // The key each item's value holds now, the last item winning, as a map built from the items keeps it.
+        found = model.items.findLast((candidate) => new Set([keyOf(this.raw(candidate))]).has(key));
+      }
+      values.push(found ? this.plan(found, item, mode, ops) : normalize(template.children[0]!, item));
+      return found ?? { value: values[index] };
+    });
+    ops.push(() => {
+      this.relist(
+        model,
+        entries.map((entry) =>
+          'id' in entry ? (entry as Model) : this.instantiate(template.children[0]!, entry.value, model),
+        ),
+      );
+      if (mode === 'reset') {
+        model.first = model.items;
+        model.start = values;
+      }
+    });
     return values;
   }
 
-  /** Applies a write, or returns the error it throws, nothing written. */
-  apply(write: Resolved): TypeError | undefined {
-    const model = this.all[write.node % this.all.length]!;
-    const targets = this.fields(model);
-    if (write.kind === 'touch') {
-      targets.forEach((target) => (target.touched = true));
-      return undefined;
-    }
-    const values = write.kind === 'set' || write.value !== undefined ? this.read(model, write.value) : undefined;
-    if (values instanceof TypeError) {
-      return values;
-    }
-    targets.forEach((target, index) => {
-      if (write.kind === 'set') {
-        target.raw = values![index];
-        return;
+  /** Applies a write to the node it was resolved to, or returns the error it throws, nothing written. */
+  apply(write: Resolved, nodes: readonly Model[]): Error | undefined {
+    const model = nodes[write.target]!;
+    try {
+      switch (write.kind) {
+        case 'touch':
+          this.fields(model).forEach((target) => (target.touched = true));
+          return undefined;
+        case 'set':
+        case 'reset': {
+          const ops: (() => void)[] = [];
+          const mode = write.kind === 'set' ? 'set' : write.value === undefined ? 'restore' : 'reset';
+          this.plan(model, write.value, mode, ops);
+          ops.forEach((op) => op());
+          if (write.kind === 'reset' && model === this.root) {
+            this.submitted = false;
+          }
+          return undefined;
+        }
+        case 'insert': {
+          const { items } = model;
+          if (write.index > items.length || items.length >= MAX_LENGTH) {
+            throw new RangeError('an index out of range, or too many items');
+          }
+          const element = model.template.children[0]!;
+          const value = write.value === undefined ? initialOf(element) : normalize(element, write.value);
+          if (model.template.identity) {
+            const key = keyOf(value);
+            if (isBlank(key) || items.some((item) => new Set([keyOf(this.raw(item))]).has(key))) {
+              throw new TypeError('a key blank or taken');
+            }
+          }
+          this.relist(model, items.toSpliced(write.index, 0, this.instantiate(element, value, model)));
+          return undefined;
+        }
+        case 'remove': {
+          const item = model.items[write.item % Math.max(1, model.items.length)];
+          if (item) {
+            this.relist(
+              model,
+              model.items.filter((other) => other !== item),
+            );
+          }
+          return undefined;
+        }
+        case 'move': {
+          const { items } = model;
+          if (write.to > items.length - 1) {
+            throw new RangeError('an index out of range');
+          }
+          const item = items[write.item % items.length]!;
+          this.relist(model, items.filter((other) => other !== item).toSpliced(write.to, 0, item));
+          return undefined;
+        }
       }
-      if (values) {
-        target.initial = values[index];
-      }
-      target.raw = target.initial;
-      target.touched = false;
-    });
-    if (write.kind === 'reset' && model === this.root) {
-      this.submitted = false;
+    } catch (error) {
+      return error as Error;
     }
-    return undefined;
   }
 
   submit(): void {
@@ -553,8 +1045,9 @@ class Naive {
 
 const plain = (issue: Issue): Plain => ({
   code: issue.code,
-  path: issue.path as PropertyKey[],
+  path: issue.path as unknown[],
   message: issue.params?.['message'],
+  cause: issue.cause instanceof Error ? issue.cause.message : issue.cause,
 });
 
 function plainResult(result: Result<unknown, readonly Issue[]>): PlainResult {
@@ -572,14 +1065,23 @@ function order(value: unknown): unknown {
 const STATES = ['raw', 'dirty', 'touched', 'submitted', 'disabled', 'pending', 'issues', 'parsed'] as const;
 type State = (typeof STATES)[number];
 
-/** Every node of the form, by the id of its model: the root, then depth first in the order of the description. */
-function nodesOf(form: FormNode<unknown, unknown>): FormNode<unknown, unknown>[] {
-  const nodes = [form];
-  const children = (form as { children?: Record<string, FormNode<unknown, unknown>> }).children;
-  for (const child of Object.values(children ?? {})) {
-    nodes.push(...nodesOf(child));
+type AnyNode = FormNode<unknown, unknown> & {
+  readonly kind: Kind;
+  readonly key?: unknown;
+  readonly children?: Record<string, AnyNode>;
+  readonly items?: ReadableNode<readonly AnyNode[]>;
+  insert(index: number, raw?: unknown): AnyNode;
+  remove(item: AnyNode): boolean;
+  move(item: AnyNode, index: number): boolean;
+};
+
+/** Every node of the form: the root, then depth first, children and items in order. */
+function nodesOf(node: AnyNode, into: AnyNode[] = []): AnyNode[] {
+  into.push(node);
+  for (const child of node.items?.get() ?? Object.values(node.children ?? {})) {
+    nodesOf(child, into);
   }
-  return nodes;
+  return into;
 }
 
 function expected(naive: Naive, model: Model, state: State): unknown {
@@ -606,7 +1108,7 @@ function expected(naive: Naive, model: Model, state: State): unknown {
 /** What tells a change of `state` to its listener, in the model: see the header. */
 function seenBy(naive: Naive, model: Model, state: State, value: unknown): unknown {
   if (state === 'raw') {
-    return naive.identity(model, naive.raw(model));
+    return naive.identity(model);
   }
   if (state === 'parsed') {
     const parsed = value as PlainResult;
@@ -626,7 +1128,7 @@ function changed(state: State, before: unknown, after: unknown): boolean {
   return !isDeepStrictEqual(before, after);
 }
 
-function actual(node: FormNode<unknown, unknown>, state: State): unknown {
+function actual(node: AnyNode, state: State): unknown {
   const value = (node[state] as ReadableNode<unknown>).get();
   if (state === 'issues') {
     return (value as readonly Issue[]).map(plain);
@@ -644,96 +1146,207 @@ interface Counts {
   thrown: number;
   pendingSeen: number;
   failedSeen: number;
+  inserted: number;
+  removed: number;
+  moved: number;
+  movedWithIssues: number;
+  keyedIssues: number;
+  mostItems: number;
 }
 
-function resolveWrite(write: Write, all: readonly Model[]): Resolved {
-  if (write.kind === 'touch') {
-    return write;
+function resolveWrite(write: Write, nodes: readonly Model[]): Resolved {
+  const arrays = nodes.flatMap((model, index) => (model.template.shape.kind === 'array' ? [index] : []));
+  const target =
+    write.kind === 'insert' || write.kind === 'remove' || write.kind === 'move'
+      ? (arrays[write.node % Math.max(1, arrays.length)] ?? -1)
+      : write.node % nodes.length;
+  if (write.kind === 'touch' || write.kind === 'remove' || write.kind === 'move' || target < 0) {
+    return { ...write, target };
   }
-  const { shape } = all[write.node % all.length]!;
-  return { kind: write.kind, node: write.node, value: write.seed ? given(valueOf(shape, write.seed)) : undefined };
+  const template = nodes[target]!.template;
+  const shape = write.kind === 'insert' ? template.children[0]! : template;
+  return { ...write, target, value: write.seed ? given(valueOf(shape, write.seed)) : undefined };
 }
 
-function applyTo(nodes: readonly FormNode<unknown, unknown>[], write: Resolved): void {
-  const node = nodes[write.node % nodes.length]!;
-  if (write.kind === 'touch') {
-    node.touch();
-  } else if (write.kind === 'set') {
-    node.set(write.value);
-  } else {
-    node.reset(write.value);
+function applyTo(nodes: readonly AnyNode[], write: Resolved): void {
+  const node = nodes[write.target]!;
+  switch (write.kind) {
+    case 'touch':
+      node.touch();
+      break;
+    case 'set':
+      node.set(write.value);
+      break;
+    case 'reset':
+      node.reset(write.value);
+      break;
+    case 'insert':
+      node.insert(write.index, write.value);
+      break;
+    case 'remove': {
+      const items = node.items!.get();
+      const item = items[write.item % Math.max(1, items.length)];
+      if (item) {
+        assert.equal(node.remove(item), true, 'remove of an item');
+      }
+      break;
+    }
+    case 'move': {
+      const items = node.items!.get();
+      const item = items[write.item % Math.max(1, items.length)] ?? node;
+      node.move(item, write.to);
+      break;
+    }
   }
 }
 
 async function run(program: Program, counts: Counts): Promise<void> {
-  const all: Model[] = [];
-  const root = buildModel(program.root, '', [], undefined, all);
-  for (const model of all) {
-    model.reads = (model.shape.condition?.reads ?? []).map((read) => all[read % all.length]!);
+  const templates: Template[] = [];
+  const top = buildTemplates(program.root, undefined, undefined, templates);
+  for (const template of templates) {
+    const candidates = templates.filter((other) => other.arrays.every((outer) => template.arrays.includes(outer)));
+    template.reads = (template.shape.condition?.reads ?? []).map((read) => candidates[read % candidates.length]!);
   }
-  const asked = new Map<number, Asked[]>();
-  const form = createForm(specOf(root, asked));
-  const nodes = nodesOf(form);
-  assert.equal(nodes.length, all.length);
-  const naive = new Naive(root, all);
-  const calls = new Map<string, number>();
-  if (program.watched) {
-    nodes.forEach((node, id) => {
-      for (const state of STATES) {
-        (node[state] as ReadableNode<unknown>).subscribe(() => {
-          calls.set(`${id} ${state}`, (calls.get(`${id} ${state}`) ?? 0) + 1);
-        });
+  // Initial lists from the innermost arrays out, each read as the form reads it, or none when the seed gives none.
+  for (const template of [...templates].reverse()) {
+    if (template.shape.kind === 'array') {
+      try {
+        template.start = normalize(template, given(valueOf(template, template.shape.start))) as unknown[];
+      } catch {
+        template.start = [];
       }
-    });
+    }
   }
-  let previous = new Map<string, unknown>();
+  const asked: Asked[] = [];
+  const form = createForm(specOf(top, asked)) as unknown as AnyNode & {
+    readonly graph: { batch(run: () => void): void };
+    submit(): unknown;
+  };
+  const naive = new Naive(top);
+  // What the form asked, by the node of the model that asked it.
+  const askedBy = new Map<number, Asked[]>();
+  let attributed = 0;
+  const calls = new Map<AnyNode, Map<State, number>>();
+  // The listeners of each node watched, until a look finds it out of the tree.
+  const watched = new Map<AnyNode, (() => void)[]>();
+  const watch = (node: AnyNode): void => {
+    const counts = new Map<State, number>();
+    calls.set(node, counts);
+    watched.set(
+      node,
+      STATES.map((state) =>
+        (node[state] as ReadableNode<unknown>).subscribe(() => counts.set(state, (counts.get(state) ?? 0) + 1)),
+      ),
+    );
+  };
+  const modelOf = new Map<AnyNode, Model>();
+  const generated = new Set<unknown>();
+  let previous = new Map<AnyNode, Map<State, unknown>>();
+  let pairs: [AnyNode, Model][] = [];
   const look = (label: string): void => {
-    naive.ask();
-    const seen = new Map<string, unknown>();
-    nodes.forEach((node, id) => {
-      const model = all[id]!;
+    const nodes = nodesOf(form);
+    const models = naive.nodes();
+    assert.equal(nodes.length, models.length, `${label}: number of nodes`);
+    pairs = nodes.map((node, index) => [node, models[index]!]);
+    const gone = [...watched.keys()]
+      .filter((node) => !nodes.includes(node))
+      .map((node) => [node, modelOf.get(node)!] as const);
+    for (const [node, model] of pairs) {
+      modelOf.set(node, model);
+      assert.equal(node.kind, model.template.shape.kind, `${label}: kind of a node`);
+      if (model.key === UNSET) {
+        assert.ok(!generated.has(node.key), `${label}: key ${String(node.key)} given twice`);
+        generated.add(node.key);
+        model.key = node.key;
+      }
+      assert.ok(Object.is(node.key, model.key), `${label}: key of ${naive.pathOf(model).join('.')}`);
+      assert.deepStrictEqual(node.path, naive.pathOf(model), `${label}: path`);
+      if (model.template.shape.kind === 'array') {
+        counts.mostItems = Math.max(counts.mostItems, model.items.length);
+      }
+    }
+    if (program.watched) {
+      for (const [node] of pairs) {
+        if (!watched.has(node)) {
+          watch(node);
+        }
+      }
+    }
+    naive.ask(gone.map(([, model]) => model));
+    const seen = new Map<AnyNode, Map<State, unknown>>();
+    for (const [node, model] of pairs) {
+      const states = new Map<State, unknown>();
+      seen.set(node, states);
       for (const state of STATES) {
         const want = expected(naive, model, state);
         const got = actual(node, state);
-        const at = `${label}: ${state} of node ${id} (${model.path.join('.')})`;
+        const at = `${label}: ${state} of ${JSON.stringify(naive.pathOf(model))}`;
         assert.deepStrictEqual(got, want, at);
         assert.deepStrictEqual(order(got), order(want), `${at}, keys in order`);
-        seen.set(`${id} ${state}`, seenBy(naive, model, state, want));
+        states.set(state, seenBy(naive, model, state, want));
         counts.pendingSeen += state === 'pending' && want === true ? 1 : 0;
-        if (state === 'issues' && (want as Plain[]).some((issue) => issue.code === 'form.validation_failed')) {
-          counts.failedSeen++;
+        if (state === 'issues') {
+          const plainIssues = want as Plain[];
+          counts.failedSeen += plainIssues.some((issue) => issue.code === 'form.validation_failed') ? 1 : 0;
+          counts.keyedIssues += plainIssues.filter((issue) => issue.code === 'law.keyed').length;
         }
       }
-    });
-    for (const model of all) {
-      if (model.shape.schema) {
-        const made = (asked.get(model.id) ?? []).map((request) => request.value);
+    }
+    // Who asked: the only node of a description outside arrays, or the node whose raw value is the value asked.
+    const byRaw = new Map<unknown, Model>();
+    for (const [node, model] of [...pairs, ...gone]) {
+      if (model.template.shape.schema) {
+        byRaw.set(model.template.arrays.length ? node.raw.get() : model.template.id, model);
+      }
+    }
+    for (const request of asked.slice(attributed)) {
+      const template = templates[request.template]!;
+      const model = byRaw.get(template.arrays.length ? request.value : template.id);
+      assert.ok(model?.template === template, `${label}: a question of the schema of node ${template.id} has its node`);
+      askedBy.set(model.id, [...(askedBy.get(model.id) ?? []), request]);
+    }
+    attributed = asked.length;
+    for (const [node, model] of [...pairs, ...gone]) {
+      if (model.template.shape.schema) {
+        const made = (askedBy.get(model.id) ?? []).map((request) => request.value);
         const want = naive.requests.get(model.id)!.map((request) => request.value);
-        assert.deepStrictEqual(made, want, `${label}: questions asked of the schema of node ${model.id}`);
+        assert.deepStrictEqual(made, want, `${label}: questions asked of ${JSON.stringify(node.path)}`);
       }
     }
-    if (program.watched && previous.size) {
-      for (const [key, value] of seen) {
-        const state = key.split(' ')[1] as State;
-        const count = calls.get(key) ?? 0;
-        const want = changed(state, previous.get(key), value) ? 1 : 0;
-        assert.equal(count, want, `${label}: calls of the listener of ${key}`);
-        counts.notifications += count;
+    for (const [node] of gone) {
+      watched.get(node)!.forEach((unsubscribe) => unsubscribe());
+      watched.delete(node);
+      calls.delete(node);
+    }
+    if (program.watched) {
+      for (const [node, states] of seen) {
+        const before = previous.get(node);
+        if (!before) {
+          continue;
+        }
+        for (const [state, value] of states) {
+          const count = calls.get(node)!.get(state) ?? 0;
+          const want: number = changed(state, before.get(state), value) ? 1 : 0;
+          assert.equal(count, want, `${label}: calls of the listener of ${state} of ${node.path.join('.')}`);
+          counts.notifications += count;
+        }
+      }
+      for (const counted of calls.values()) {
+        counted.clear();
       }
     }
-    calls.clear();
     previous = seen;
   };
   look('built');
   for (const [index, step] of program.steps.entries()) {
     const label = `step ${index} ${JSON.stringify(step)}`;
     let thrown: unknown;
-    let want: TypeError | undefined;
+    let want: Error | undefined;
     if (step.kind === 'settle') {
-      const owners = all.filter((model) => (asked.get(model.id) ?? []).some((request) => !request.settled));
+      const owners = naive.built.filter((model) => (askedBy.get(model.id) ?? []).some((request) => !request.settled));
       const owner = owners[step.node % Math.max(owners.length, 1)];
       if (owner) {
-        const requests = asked.get(owner.id)!;
+        const requests = askedBy.get(owner.id)!;
         const open = requests.filter((request) => !request.settled);
         const request = open[step.which % open.length]!;
         request.settled = true;
@@ -747,45 +1360,126 @@ async function run(program: Program, counts: Counts): Promise<void> {
       form.submit();
       naive.submit();
     } else {
-      const resolved =
-        step.kind === 'batch' ? step.steps.map((inner) => resolveWrite(inner, all)) : [resolveWrite(step, all)];
-      try {
-        form.graph.batch(() => resolved.forEach((write) => applyTo(nodes, write)));
-      } catch (error) {
-        thrown = error;
-      }
+      const models = pairs.map(([, model]) => model);
+      const nodes = pairs.map(([node]) => node);
+      const resolved = (step.kind === 'batch' ? step.steps : [step])
+        .map((inner) => resolveWrite(inner, models))
+        .filter((write) => write.target >= 0);
+      // The model goes first, so that a write to an item an earlier write of the batch removed is left out of both.
+      const applies: boolean[] = [];
       for (const write of resolved) {
-        want = naive.apply(write);
+        const model = models[write.target]!;
+        applies.push(naive.attached(model));
+        if (!applies.at(-1)) {
+          continue;
+        }
+        // Counted outside a batch only, where every node of the item has been looked at.
+        if (step.kind === 'move' && write.kind === 'move' && model.items.length && write.to < model.items.length) {
+          counts.moved++;
+          counts.movedWithIssues += naive.allIssues(model.items[write.item % model.items.length]!).length ? 1 : 0;
+        }
+        const before = model.items.length;
+        want = naive.apply(write, models);
         if (want) {
           break;
         }
+        counts.inserted += write.kind === 'insert' ? 1 : 0;
+        counts.removed += write.kind === 'remove' && model.items.length < before ? 1 : 0;
+      }
+      try {
+        form.graph.batch(() => resolved.forEach((write, at) => applies[at] && applyTo(nodes, write)));
+      } catch (error) {
+        thrown = error;
       }
     }
     await tick();
     if (want) {
       counts.thrown++;
-      assert.ok(thrown instanceof TypeError, `${label}: throws a TypeError`);
+      assert.ok(
+        thrown instanceof want.constructor,
+        `${label}: throws a ${want.constructor.name}, not ${String(thrown)}`,
+      );
     } else {
       assert.equal(thrown, undefined, `${label}: throws nothing`);
     }
     look(label);
   }
-  counts.validations += [...asked.values()].reduce((sum, requests) => sum + requests.length, 0);
+  counts.validations += asked.length;
 }
 
-test('every state of every node follows the naive model, through writes, submissions and late answers', async () => {
-  const counts: Counts = {
-    validations: 0,
-    settledLate: 0,
-    rejected: 0,
-    notifications: 0,
-    thrown: 0,
-    pendingSeen: 0,
-    failedSeen: 0,
-  };
+const fresh = (): Counts => ({
+  validations: 0,
+  settledLate: 0,
+  rejected: 0,
+  notifications: 0,
+  thrown: 0,
+  pendingSeen: 0,
+  failedSeen: 0,
+  inserted: 0,
+  removed: 0,
+  moved: 0,
+  movedWithIssues: 0,
+  keyedIssues: 0,
+  mostItems: 0,
+});
+
+test('every state of every node follows the naive model, through writes, moving items and late answers', async () => {
+  const counts = fresh();
   await fc.assert(
     fc.asyncProperty(programs, (program) => run(program, counts)),
     { numRuns: 400 },
   );
   console.log(counts);
+});
+
+// An array of groups, its items with a schema and the array with one, under a group with a schema: long programs of
+// structural writes, so that items move often while they hold issues of each schema.
+const crowded: fc.Arbitrary<Program> = fc.record({
+  root: fc.record({
+    kind: fc.constant('group' as const),
+    initial: fc.constant(0),
+    children: fc
+      .record({
+        kind: fc.constant('array' as const),
+        initial: fc.constant(0),
+        children: shapes(1, true).map((element) => [
+          {
+            ...element,
+            kind: 'group' as const,
+            children: element.children.length ? element.children : [element],
+            schema: 'mixed' as const,
+          },
+        ]),
+        schema: fc.constantFrom<SchemaKind | null>('sync', 'async', 'keyed'),
+        condition: conditions,
+        identity: fc.boolean(),
+        start: seeds,
+      })
+      .map((list) => [list]),
+    schema: fc.constantFrom<SchemaKind | null>(null, 'sync', 'async'),
+    condition: fc.constant(null),
+    identity: fc.constant(false),
+    start: fc.constant([]),
+  }),
+  steps: fc.array(
+    fc.oneof(
+      { arbitrary: steps, weight: 1 },
+      {
+        arbitrary: fc.record({ kind: fc.constant('move' as const), node: fc.nat(40), item: fc.nat(3), to: fc.nat(2) }),
+        weight: 1,
+      },
+    ),
+    { minLength: 10, maxLength: 40 },
+  ),
+  watched: fc.boolean(),
+});
+
+test('moving items keep their states and issues, under schemas of the item, the array and the form', async () => {
+  const counts = fresh();
+  await fc.assert(
+    fc.asyncProperty(crowded, (program) => run(program, counts)),
+    { numRuns: 200 },
+  );
+  console.log(counts);
+  assert.ok(counts.movedWithIssues > 200, `${counts.movedWithIssues} items moved while they held issues`);
 });

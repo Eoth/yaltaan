@@ -688,7 +688,10 @@ test('a description is refused when it is not one, and builds a new form each ti
     assert.throws(() => group({ [key]: field(0) }), { name: 'TypeError', message: `${key} cannot name a child` });
   }
   for (const spec of [null, undefined, {}, { kind: 'list' }]) {
-    assert.throws(() => createForm(spec as never), { name: 'TypeError', message: 'spec is a spec of field or group' });
+    assert.throws(() => createForm(spec as never), {
+      name: 'TypeError',
+      message: 'spec is a spec of field, group or array',
+    });
   }
   const spec = group({ a: field(1), b: field(1) });
   const one = createForm(spec);

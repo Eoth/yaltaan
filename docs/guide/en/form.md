@@ -108,6 +108,39 @@ form.children.billing.children.city.disabled.get(); // → false
 
 For now `disabled` changes nothing else: the issues of a disabled node still count, and its value stays in the parsed value.
 
+## Lists whose rows move
+
+`array(element, options)` describes a list: each item is a node built from `element`, a field, a group or another array. An item keeps a key for as long as it lives, and its path ends with `{ key }`, so that its states and the issues placed on it follow it when it moves. The form numbers its items from 0 in the order it builds them. With `identity`, the path of a business key inside an item, writes and issues find an item by the key its value holds.
+
+```ts
+import { array, createForm, field, group } from '@yaltaan/form';
+import { array as list, object, string } from '@yaltaan/schema';
+
+const form = createForm(
+  group(
+    { contacts: array(group({ email: field('') }), { initial: [{ email: 'ada@example.org' }, { email: '' }] }) },
+    { schema: object({ contacts: list(object({ email: string({ minLength: 3 }) })) }) },
+  ),
+);
+const contacts = form.children.contacts;
+const empty = contacts.items.get()[1]!;
+empty.children.email.issues.get().map((issue) => issue.path); // → [['contacts', { key: 1 }, 'email']]
+contacts.move(empty, 0);
+empty.children.email.issues.get().map((issue) => issue.path); // → [['contacts', { key: 1 }, 'email']]
+contacts.dirty.get(); // → true
+const added = contacts.insert(2, { email: 'grace@example.org' });
+added.path; // → ['contacts', { key: 2 }]
+contacts.remove(contacts.items.get()[1]!); // → true
+contacts.raw.get(); // → [{ email: '' }, { email: 'grace@example.org' }]
+```
+
+- `insert(index, raw?)` builds an item from `raw`, or from the initial value of the element, and returns it; `remove(item)` and `move(item, index)` return whether the item was there. An index out of range throws a `RangeError`, a value that does not fit the element a `TypeError`: nothing is written.
+- `set(list)` keeps the items by position, or with `identity` the item that holds the key of each value; a value left builds an item, an item left is removed. `reset()` gives back the items of the last reset, in their order.
+- `dirty` compares the raw value of the list with its initial one: a row moved makes it dirty, moved back it is not.
+- A schema of the list names an item by its index in the value it read: the issue goes to that item, its index replaced by the item's `{ key }`. A schema of the element, on each item, is not asked again when the item moves.
+- A condition inside an item reads a field of the same item through `{ key: undefined }`, which `@yaltaan/rules` names `anyElement`: `{ reads: [['contacts', { key: undefined }, 'primary']], when: (primary) => primary === true }`.
+- An array holds at most `maxLength` items, 1,000 by default, and one write reads at most `maxItems` items of the whole form, 10,000 by default (an option of `createForm`): past either, the write throws a `RangeError` and writes nothing.
+
 ## A schema that answers later
 
 A Standard Schema may answer with a promise, a server check for instance. The nodes it may place issues on are `pending` until it answers, and their parsed value is not `ok` meanwhile. An answer for a value the user has since replaced is never delivered, whatever order the answers come in.
