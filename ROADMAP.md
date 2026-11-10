@@ -27,7 +27,7 @@ Outillage de développement (empreinte installée, à ne laisser croître que pa
 
 Une version utilisable d'abord (décision du propriétaire du 2026-10-23, §3) : la 0.1.0 livre `@yaltaan/core`, les utilitaires que les équipes recodent, sur les contrats de §5 d'`ARCHITECTURE.md` ; la 0.2.0 ajoute schéma et règles, validés sur le formulaire pilote ; la 0.3.0 le formulaire et Angular. L'outillage qui reste attend d'être utile. Ces versions sont des jalons de travail : **rien n'est publié avant la v1** (décision du propriétaire du 2026-11-02, §3). Les contrats se gèlent après le pilote (T2.7), pas avant. Une itération peut prendre deux tickets S ou M d'un même domaine.
 
-**Avancement** : 41 étapes closes sur 98 ; prochaine : T2.1 a.
+**Avancement** : 41 étapes closes sur 99 ; prochaine : T2.1 a.
 
 | # | Lot | Tickets, dans l'ordre | Avancement | Sortie |
 |---|---|---|---|---|
@@ -36,7 +36,7 @@ Une version utilisable d'abord (décision du propriétaire du 2026-10-23, §3) :
 | 3 | Temporal devant (décision du 2026-11-03, §3) | T4.5, T0.20 b, T4.6, T4.1, T4.2, T4.3, T4.7 | 7 / 7 clos, terminé | Juge test262 et comparateur dayjs d'abord, puis `@yaltaan/temporal` et un kit d'archives pour les bêta-testeurs, rien de publié. |
 | 4 | 0.2.0 — Schéma et règles sur le pilote | T2.1 a, b, T2.8, T2.2, T2.9, T2.3, T1.4 | 6 / 7 clos ; prochain : T2.1 a | Schéma Standard Schema minimal et règles relationnelles, scénarios du pilote verts sans `form`. |
 | 5 | 0.3.0 — Formulaire et Angular | T0.14, T1.6 a, T1.6 b, T2.4 a, b, c, d, e, T2.5, T2.6, T2.7 | 5 / 11 clos ; prochain : T2.4 c | Pilote de bout en bout dans Angular, mesures, **ADR go/no-go de `form`**, gel des contrats. |
-| 6 | Outillage reporté | T1.7, T0.18, T0.19, T0.21, T0.22, T0.24, T0.25, T0.8, T0.9, T0.13, T0.15 | 0 / 11 clos ; prochain : T1.7 | Selon le besoin réel des versions précédentes. |
+| 6 | Outillage reporté | T1.7, T0.18, T0.19, T0.21, T0.22, T0.24, T0.25, T0.26, T0.8, T0.9, T0.13, T0.15 | 0 / 12 clos ; prochain : T1.7 | Selon le besoin réel des versions précédentes. |
 | 7 | 3 — Données (suite) | T3.13, T3.3 c, T3.10, T3.11, T3.12 a, b, T3.6 a, b, c, T3.7 a, b, T3.8, T3.9 | 0 / 13 clos ; prochain : T3.13 | Modules `@experimental`. |
 | 8 | 4 — Temporal (suite) | T4.4, T4.8 | 0 / 2 clos ; prochain : T4.4 | Codecs des types Temporal, après T5.2 ; second polyfill. |
 | 9 | 5 — Schéma et règles complets | T5.1 a, b, T5.2, T5.3, T5.4, T5.5, T5.6, T5.7 | 0 / 8 clos ; prochain : T5.1 a | Interopérabilité Standard Schema vérifiée avec au moins deux moteurs tiers. |
@@ -204,6 +204,13 @@ Une décision réservée au propriétaire (nom, licence, API publique, contrat t
 - **Où** : crochet local ou contrôle hors dépôt (non suivis).
 - **Accepté si** : une passation au-delà du plafond est refusée ; plafond calibré sur les 1 040 mots d'avant la cure.
 - **Taille** S · **Prio** P2 · **Dépend de** —
+
+#### T0.26 — Tests d'échelle chronométrés qui tiennent sous charge
+- **Pourquoi** : le 2026-11-10, la porte de la CI locale a rougi sur `scale: a ladder of diamonds reads, and writes when watched, in time linear in its rungs` (`@yaltaan/core/reactive`) : 8,3 fois plus long pour deux fois la taille, au-delà du seuil de 8, sur un code qu'aucun commit n'avait touché, vert seul 3 fois sur 3 puis à la relance ; une porte qui rougit au hasard apprend à relancer sans lire.
+- **Faire** : passer les tests d'échelle qui chronomètrent (`assertScales` et `fastest` de `core/reactive`, `core/string` et `form`) au comptage d'instructions de T0.19, ou à défaut à une mesure qui résiste à la charge (tailles n et 8n, médiane de passes alternées), en gardant leur capacité à rougir sur une version exponentielle ou quadratique fabriquée.
+- **Où** : `packages/*/src/**/*.test.ts`, `scripts/perf-count.sh`.
+- **Accepté si** : chaque test d'échelle rouge sur sa version fabriquée ; vert 50 fois de suite pendant qu'une porte complète tourne à côté.
+- **Taille** S · **Prio** P2 · **Dépend de** T0.19
 
 ### Lot 1 — Colonne vertébrale
 
