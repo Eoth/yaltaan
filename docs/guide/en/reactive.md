@@ -122,6 +122,21 @@ const tax = graph.derived([price, rate], (amount, share) => amount * share);
 tax.get(); // → 2
 ```
 
+## A list that changes
+
+When what a node reads changes at run time, the rows of a table for instance, `rewire(node, deps)` gives a derived node its new dependencies, as a write does: in a batch, its listeners and those of the nodes that read it are told at the end. Its compute receives the new values, so it must accept any number of them. A dependency that depends on the node throws a `TypeError`: the graph never holds a cycle. Listeners keep the order their nodes were created in, which is then not always the order of their dependencies.
+
+```ts
+import { createGraph, rewire } from '@yaltaan/core/reactive';
+
+const graph = createGraph();
+const prices = [graph.source(10), graph.source(5)];
+const total = graph.derived(prices, (...values: number[]) => values.reduce((sum, value) => sum + value, 0));
+total.get(); // → 15
+rewire(total, [...prices, graph.source(20)]);
+total.get(); // → 35
+```
+
 ## In Angular and Vue
 
 A node already has what a framework asks of an outside value: a way to read it, and a way to be told it changed. These two functions turn it into an Angular signal and into a Vue ref; copy them into your application. Both are checked against Angular 22.2.4 and Vue 3.5.44.

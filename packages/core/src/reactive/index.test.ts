@@ -3,9 +3,16 @@ import { test } from 'node:test';
 import { setFlagsFromString } from 'node:v8';
 import { runInNewContext } from 'node:vm';
 
-import { assertType, CallbackError, declareAdversarial, type Callback, type Equal } from '@yaltaan/testing';
+import {
+  assertType,
+  CallbackError,
+  declareAdversarial,
+  HostileError,
+  type Callback,
+  type Equal,
+} from '@yaltaan/testing';
 
-import { createGraph, type Graph, type NodeValues, type ReadableNode, type SourceNode } from './index.ts';
+import { createGraph, rewire, type Graph, type NodeValues, type ReadableNode, type SourceNode } from './index.ts';
 
 const SUBPATH = '@yaltaan/core/reactive';
 
@@ -643,6 +650,119 @@ test('a node no longer watched is held by none of its dependencies, and is recla
   source.set(2);
 });
 
+test('rewire: the node computes again from its new dependencies, even on the same values, as a write', () => {
+  const graph = createGraph();
+  const [a, b, c] = [graph.source(1), graph.source(1), graph.source(5)];
+  // What the compute closes over changes with the list, as the rows of a form do: the values alone would not tell.
+  let label = 'a';
+  const { calls, compute } = recorder((...values: number[]) => `${label}:${values.join(',')}`);
+  const node = graph.derived([a], compute);
+  const after = graph.derived([node], (value) => value.toUpperCase());
+  assert.equal(after.get(), 'A:1');
+  label = 'b';
+  rewire(node, [b]);
+  assert.equal(after.get(), 'B:1');
+  assert.deepEqual(calls, [[1], [1]]);
+  a.set(2);
+  assert.equal(after.get(), 'B:1', 'an old dependency no longer feeds it');
+  assert.equal(calls.length, 2);
+  rewire(node, [b, c, b]);
+  assert.equal(node.get(), 'b:1,5,1');
+  rewire(node, []);
+  assert.equal(node.get(), 'b:');
+});
+
+test('rewire: watched, its listeners and those of its dependents are told after the writes, once a batch', () => {
+  const graph = createGraph();
+  const [a, b] = [graph.source(1), graph.source(2)];
+  const node = graph.derived([a], (...values: number[]) => values.reduce((sum, value) => sum + value, 0));
+  const doubled = graph.derived([node], (value) => value * 2);
+  const seen: string[] = [];
+  node.subscribe(() => seen.push(`node ${node.get()}`));
+  doubled.subscribe(() => seen.push(`doubled ${doubled.get()}`));
+  rewire(node, [a, b]);
+  assert.deepEqual(seen, ['node 3', 'doubled 6']);
+  b.set(3);
+  assert.deepEqual(seen.splice(0), ['node 3', 'doubled 6', 'node 4', 'doubled 8'], 'a new dependency feeds it');
+  a.set(0);
+  assert.deepEqual(seen.splice(0), ['node 3', 'doubled 6']);
+  graph.batch(() => {
+    rewire(node, [b]);
+    assert.deepEqual(seen, [], 'nothing during the batch');
+    assert.equal(doubled.get(), 6, 'reads inside see the rewire');
+    rewire(node, [a, b]);
+  });
+  assert.deepEqual(seen, [], 'rewired and back within a batch: nothing changed');
+  rewire(node, [a, b]);
+  assert.deepEqual(seen, [], 'a rewire that gives the same value notifies nobody');
+});
+
+test('rewire: a cycle, a source, a foreign node, a node of another graph and a computation are refused', () => {
+  const graph = createGraph();
+  const a = graph.source(1);
+  const node = graph.derived([a], (...values: number[]) => values.length);
+  const above = graph.derived([node], (value) => value + 1);
+  const top = graph.derived([above, a], (x, y) => x + y);
+  let calls = 0;
+  top.subscribe(() => (calls += 1));
+  const refused: [string, () => void][] = [
+    ['itself', () => rewire(node, [node])],
+    ['a dependent', () => rewire(node, [a, above])],
+    ['a dependent two levels up', () => rewire(node, [top])],
+    ['a source, watched', () => rewire(a, [])],
+    ['a source no listener watches', () => rewire(graph.source(0), [a])],
+    ['a foreign node', () => rewire({ get: () => 1, subscribe: () => () => {} }, [])],
+    ['a foreign dependency', () => rewire(node, [{ get: () => 1, subscribe: () => () => {} }])],
+    ['a node of another graph', () => rewire(node, [createGraph().source(1)])],
+  ];
+  for (const [what, run] of refused) {
+    assert.throws(run, TypeError, what);
+  }
+  const inside = graph.derived([a], () => caught(() => rewire(node, [])));
+  assert.ok(inside.get() instanceof TypeError, 'a computation cannot rewire');
+  a.set(2);
+  assert.deepEqual([node.get(), top.get(), calls], [1, 4, 1], 'nothing changed by what was refused');
+});
+
+test('rewire: a watched node lets go of its old dependencies, then reclaimed, and holds its new ones', async () => {
+  setFlagsFromString('--expose-gc');
+  const collect = runInNewContext('gc') as () => void;
+  const graph = createGraph();
+  const source = graph.source(0);
+  const node = graph.derived([source], (value) => value);
+  node.subscribe(() => {});
+  const ref = ((): WeakRef<object> => {
+    const old = graph.derived([source], (value) => value * 2);
+    rewire(node, [old]);
+    source.set(1);
+    assert.equal(node.get(), 2);
+    rewire(node, [source]);
+    return new WeakRef(old);
+  })();
+  await new Promise((resolve) => setImmediate(resolve));
+  collect();
+  assert.equal(ref.deref(), undefined);
+  let calls = 0;
+  const fresh = graph.source(10);
+  rewire(node, [fresh]);
+  node.subscribe(() => (calls += 1));
+  fresh.set(11);
+  assert.deepEqual([node.get(), calls], [11, 1]);
+});
+
+test('rewire: a node given dependencies created after it keeps its values, its listeners by creation order', () => {
+  const graph = createGraph();
+  const early = graph.derived([], (...values: number[]) => values[0] ?? 0);
+  const source = graph.source(1);
+  const late = graph.derived([source], (value) => value * 10);
+  rewire(early, [late]);
+  const order: string[] = [];
+  late.subscribe(() => order.push(`late ${late.get()}`));
+  early.subscribe(() => order.push(`early ${early.get()}`));
+  source.set(2);
+  assert.deepEqual(order, ['early 20', 'late 20']);
+});
+
 /** The fastest of five runs, in nanoseconds: the least disturbed by the rest of the machine. */
 function fastest(run: () => void): number {
   let best = Number.POSITIVE_INFINITY;
@@ -665,14 +785,19 @@ function assertScales(what: string, small: () => void, large: () => void, limit:
 function ladder(rungs: number): { source: SourceNode<number>; top: ReadableNode<number> } {
   const graph = createGraph();
   const source = graph.source(0);
-  let left: ReadableNode<number> = source;
-  let right: ReadableNode<number> = source;
+  return { source, top: diamonds(graph, source, rungs) };
+}
+
+/** The top of a ladder of `rungs` diamonds over `base`, in `graph`. */
+function diamonds(graph: Graph, base: ReadableNode<number>, rungs: number): ReadableNode<number> {
+  let left = base;
+  let right = base;
   for (let rung = 0; rung < rungs; rung++) {
     const nextLeft = graph.derived([left, right], (l, r) => (l + r) % 7);
     right = graph.derived([left, right], (l, r) => (l * r) % 7);
     left = nextLeft;
   }
-  return { source, top: graph.derived([left, right], (l, r) => l + r) };
+  return graph.derived([left, right], (l, r) => l + r);
 }
 
 /** A chain of `length` derived nodes over `source`, each naming the one below `width` times. */
@@ -736,6 +861,25 @@ test('scale: subscribing and unsubscribing a chain whose nodes name their depend
     };
   };
   assertScales('doubled chain, 8 then 16 levels', steps(8), steps(16), 8);
+});
+
+test('scale: a rewire walks the new dependencies in time linear in their nodes, and refuses a cycle as fast', () => {
+  const steps = (rungs: number): (() => void) => {
+    const graph = createGraph();
+    const base = graph.source(0);
+    const bottom = graph.derived([base], (value) => value);
+    const top = diamonds(graph, bottom, rungs);
+    const node = graph.derived([base], (value) => value);
+    return () => {
+      for (let round = 0; round < 50; round++) {
+        rewire(node, [top]);
+        rewire(node, [base]);
+        assert.throws(() => rewire(bottom, [top]), TypeError);
+      }
+    };
+  };
+  // Without the nodes already walked, 2^16 paths a rewire.
+  assertScales('a ladder walked by rewire, 8 then 16 rungs', steps(8), steps(16), 8);
 });
 
 test('a chain of 1,000 nodes reads and recomputes', () => {
@@ -818,4 +962,41 @@ declareAdversarial(SUBPATH, 'createGraph', {
     survives(() => computed.get());
   },
   async: { na: 'the graph is synchronous: it runs nothing but on a call of the caller, and takes no signal' },
+});
+
+// Rewired to a source holding the value, the node gives it as it is; the value as a node or as the list is refused,
+// unless it is a list of nodes of the graph, with a `TypeError` or what a hostile value throws when looked at.
+const rewiredAsIs = (value: unknown): void => {
+  const graph = createGraph();
+  const held = graph.source<unknown>(value);
+  const node = graph.derived([], (...values: unknown[]) => values[0]);
+  rewire(node, [held]);
+  assert.ok(Object.is(node.get(), value));
+  for (const run of [() => rewire(value as never, []), () => rewire(node, value as never)]) {
+    try {
+      run();
+    } catch (error) {
+      assert.ok(error instanceof TypeError || error instanceof HostileError, String(error));
+    }
+  }
+  assert.ok(Object.is(node.get(), value) || node.get() === undefined);
+};
+
+declareAdversarial(SUBPATH, 'rewire', {
+  boundary: rewiredAsIs,
+  structures: rewiredAsIs,
+  hostile: rewiredAsIs,
+  unicode: rewiredAsIs,
+  callbacks: (callback: Callback) => {
+    const graph = createGraph();
+    const input = graph.source(1);
+    const node = graph.derived([], (...values: number[]) => callback(values[0], 0, values));
+    const seen = graph.derived([node], (value) => value);
+    seen.subscribe(() => callback(input.get(), 0, []));
+    survives(() => rewire(node, [input]));
+    survives(() => seen.get());
+    survives(() => rewire(node, []));
+    assert.equal(input.get(), 1);
+  },
+  async: { na: 'rewire is synchronous: it runs nothing but on a call of the caller, and takes no signal' },
 });

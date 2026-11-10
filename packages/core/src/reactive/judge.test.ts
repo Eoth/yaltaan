@@ -1,6 +1,7 @@
 // The reactive graph against @preact/signals-core, on the random programs of programs.test.ts (see the judge in
 // @yaltaan/testing): a source is a `signal`, a derived node a `computed` that reads its dependencies in order, a
-// subscription an `effect` that reads the node (its first run, at creation, is not a notification), a batch a `batch`.
+// subscription an `effect` that reads the node (its first run, at creation, is not a notification), a batch a `batch`,
+// and a rewire a write of the signal that holds the list of nodes the `computed` reads, a cycle left out of both.
 // Each program gives, step by step, what every read returned (the value, or the message of the error thrown) and which
 // listeners were called with what they read. Listeners are compared as a set per step: the order of preact's effects is
 // its own, and ours (creation order of the nodes, then order of subscription) is judged by the laws.
@@ -10,8 +11,8 @@ import { batch, computed, effect, signal, type ReadonlySignal, type Signal } fro
 
 import { createJudge, fc } from '@yaltaan/testing';
 
-import { createGraph, type ReadableNode, type SourceNode } from './index.ts';
-import { apply, ComputeError, programs, type Program, type Step } from './programs.test.ts';
+import { createGraph, rewire, type ReadableNode, type SourceNode } from './index.ts';
+import { apply, ComputeError, programs, reaches, type Program, type Step } from './programs.test.ts';
 
 const judge = createJudge(new URL('./index.ts', import.meta.url), '@preact/signals-core');
 
@@ -29,6 +30,7 @@ interface Engine<N> {
   write(node: N, value: number): void;
   subscribe(node: N, listener: () => void): () => void;
   batch(run: () => void): void;
+  rewire(node: N, deps: readonly N[]): void;
 }
 
 function outcomeOf(read: () => number): Outcome {
@@ -50,6 +52,7 @@ function trace<N>(program: Program, engine: Engine<N>): StepTrace[] {
       ),
     );
   }
+  const deps: (readonly number[])[] = [...program.sources.map(() => []), ...program.derived.map((spec) => spec.deps)];
   const unsubscribes: (() => void)[] = [];
   const steps: StepTrace[] = [];
   let current: StepTrace = { reads: [], notified: [] };
@@ -73,6 +76,15 @@ function trace<N>(program: Program, engine: Engine<N>): StepTrace[] {
       }
       case 'unsubscribe':
         unsubscribes[step.pick % Math.max(1, unsubscribes.length)]?.();
+        break;
+      case 'rewire':
+        if (!reaches(deps, step.deps, step.node)) {
+          deps[step.node] = step.deps;
+          engine.rewire(
+            nodes[step.node]!,
+            step.deps.map((dep) => nodes[dep]!),
+          );
+        }
         break;
       case 'batch':
         engine.batch(() => step.steps.forEach(run));
@@ -101,15 +113,26 @@ function ours(program: Program): StepTrace[] {
     write: (node, value) => (node as SourceNode<number>).set(value),
     subscribe: (node, listener) => node.subscribe(listener),
     batch: (run) => graph.batch(run),
+    rewire: (node, deps) => rewire(node, deps),
   });
 }
 
 // `repeats: false` leaves out an effect run that reads what the same effect read last, which preact allows itself
 // and our listeners never see.
 function theirs(program: Program, repeats: boolean): StepTrace[] {
+  // The signal holding the nodes each `computed` reads.
+  const lists = new Map<ReadonlySignal<number>, Signal<readonly ReadonlySignal<number>[]>>();
   return trace<ReadonlySignal<number>>(program, {
     source: (value) => signal(value),
-    derived: (deps, compute) => computed(() => compute(deps.map((dep) => dep.value))),
+    derived: (deps, compute) => {
+      const list = signal(deps);
+      const node = computed(() => compute(list.value.map((dep) => dep.value)));
+      lists.set(node, list);
+      return node;
+    },
+    rewire: (node, deps) => {
+      lists.get(node)!.value = deps;
+    },
     read: (node) => node.value,
     write: (node, value) => {
       (node as Signal<number>).value = value;

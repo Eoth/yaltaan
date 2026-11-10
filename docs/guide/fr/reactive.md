@@ -122,6 +122,21 @@ const tax = graph.derived([price, rate], (amount, share) => amount * share);
 tax.get(); // → 2
 ```
 
+## Une liste qui change
+
+Quand ce qu'un nœud lit change en cours de route, les lignes d'un tableau par exemple, `rewire(node, deps)` donne à un nœud dérivé ses nouvelles dépendances, comme le ferait une écriture : dans un lot, ses écouteurs et ceux des nœuds qui le lisent sont prévenus à la fin. Son calcul reçoit les nouvelles valeurs, il doit donc en accepter n'importe quel nombre. Une dépendance qui dépend du nœud lève une `TypeError` : le graphe ne contient jamais de cycle. Les écouteurs gardent l'ordre de création de leurs nœuds, qui n'est alors plus toujours celui de leurs dépendances.
+
+```ts
+import { createGraph, rewire } from '@yaltaan/core/reactive';
+
+const graph = createGraph();
+const prices = [graph.source(10), graph.source(5)];
+const total = graph.derived(prices, (...values: number[]) => values.reduce((sum, value) => sum + value, 0));
+total.get(); // → 15
+rewire(total, [...prices, graph.source(20)]);
+total.get(); // → 35
+```
+
 ## Dans Angular et Vue
 
 Un nœud a déjà ce qu'un framework demande à une valeur extérieure : un moyen de la lire, et un moyen d'être prévenu qu'elle a changé. Ces deux fonctions en font un signal Angular et une ref Vue ; copiez-les dans votre application. Les deux sont vérifiées avec Angular 22.2.4 et Vue 3.5.44.

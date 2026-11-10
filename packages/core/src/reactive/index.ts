@@ -18,8 +18,14 @@
 //     without calling their compute.
 //   - After the writes (the write itself, or the end of the outermost batch), the watched nodes with listeners that a
 //     write reached are refreshed in the order of their ids, given at construction, which is a topological order since
-//     a node's dependencies exist before it; each listener whose last seen value differs is called, once, in the order
-//     of subscription. What a listener writes is notified in a next pass of the same loop, up to 100 passes.
+//     a node's dependencies exist before it, unless `rewire` gave it some created after: each node refreshes its
+//     dependencies first, so the values are the same, only the order of listeners is no longer topological; each
+//     listener whose last seen value differs is called, once, in the order of subscription. What a listener writes is
+//     notified in a next pass of the same loop, up to 100 passes.
+//   - `rewire` replaces the dependencies of a derived node as a write: the node stale and computed again, whatever its
+//     arguments; its watched dependents marked; the nodes a watched node starts to hold marked too, computing nothing,
+//     since a batch may still be writing; refused when a new dependency reaches the node, so the graph stays acyclic,
+//     and the walk that checks it stops at the old dependencies, which cannot reach it.
 //   - A computation receives the values of its dependencies as arguments: while a compute, or the `equals` of a derived
 //     node, runs, a read, a subscription or a write of a node of the same graph throws, and the node computing holds
 //     that error unless its compute catches it. A read there would go unfollowed, of the node itself would see a value
@@ -431,6 +437,96 @@ function flush(graph: ReactiveGraph, errors?: unknown[]): void {
   }
   if (errors) {
     throw errors.length === 1 ? errors[0] : new AggregateError(errors, 'listeners of this graph threw');
+  }
+}
+
+/**
+ * Replaces the dependencies of `node`, a derived node, by `deps`, nodes of its graph, as a write does: from then on
+ * its own compute receives the values of `deps`, in their order, and runs again on the next read, whatever they are;
+ * the types do not check that it accepts them, so a compute meant for rewiring takes any number of values.
+ * Every dependent read after it, or watched, is told as of a write, in the same batch, and the listeners of each that
+ * changed are called after the writes. For a list that changes at run time, such as the rows of a form: each node
+ * still names what it reads, so that no computation reads the graph, and no cycle can be built: a dependency that
+ * depends on `node` is refused. A node rewired may depend on nodes created after it, so that listeners, called by
+ * creation order of their nodes, are no longer always called in a topological order.
+ * @mutates node
+ * @sharing structural
+ * @complexity O(d + r) (d = number of dependencies, old and new; r = nodes the new dependencies depend on, walked to
+ *   refuse a cycle), plus the notifications of the graph; it computes nothing itself
+ * @throws TypeError when `node` is not a derived node, a dependency is not a node of its graph, or depends on `node`
+ *   or is `node`; when called by a computation of the graph; nothing changed
+ * @throws RangeError when the new dependencies are nested deeper than the call stack allows; nothing changed, unless
+ *   only the nodes that start being watched are that deep
+ * @throws what a listener throws, as `set` throws it, `node` rewired
+ * @since 0.3
+ * @experimental
+ * @example
+ * const graph = createGraph();
+ * const [a, b] = [graph.source(1), graph.source(2)];
+ * const total = graph.derived([a], (...values: number[]) => values.reduce((sum, value) => sum + value, 0));
+ * rewire(total, [a, b]);
+ * total.get() // 3
+ */
+export function rewire(node: ReadableNode<unknown>, deps: readonly ReadableNode<unknown>[]): void {
+  const target = node as GraphNode<unknown>;
+  if (!(node instanceof GraphNode) || !target.compute) {
+    throw new TypeError('only a derived node is rewired');
+  }
+  const { graph } = target;
+  if (graph.computing) {
+    throw new TypeError('a computation reads or writes a node of this graph');
+  }
+  const next = [...deps] as GraphNode<unknown>[];
+  // The old dependencies cannot reach the node, the graph being acyclic: the walk stops there.
+  const seen = new Set(target.deps);
+  const walk = (at: GraphNode<unknown>): void => {
+    if (at === target) {
+      throw new TypeError('a dependency depends on the node it would feed');
+    }
+    if (!seen.has(at)) {
+      seen.add(at);
+      at.deps?.forEach(walk);
+    }
+  };
+  for (const dep of next) {
+    if (!(dep instanceof GraphNode) || dep.graph !== graph) {
+      throw new TypeError('a dependency is not a node of this graph');
+    }
+    walk(dep);
+  }
+  const old = target.deps!;
+  const held = watched(target);
+  Object.assign(target, { deps: next, args: undefined, epoch: STALE });
+  graph.epoch++;
+  if (held) {
+    // Held without being computed, as a batch may still be writing: a node that starts being watched is marked, so
+    // that the next read, or the notification, refreshes it.
+    const hold = (node: GraphNode<unknown>): void => {
+      if (!watched(node)) {
+        node.epoch = STALE;
+        for (const dep of node.deps ?? NONE) {
+          hold(dep);
+          (dep.observers ??= new Set()).add(node);
+        }
+      }
+    };
+    for (const dep of next) {
+      hold(dep);
+      (dep.observers ??= new Set()).add(target);
+    }
+    const kept = new Set(next);
+    for (const dep of old) {
+      if (!kept.has(dep) && dep.observers!.delete(target)) {
+        unobserve(dep);
+      }
+    }
+    if (target.listeners?.size) {
+      graph.queue.add(target);
+    }
+    mark(target);
+  }
+  if (!graph.depth) {
+    flush(graph);
   }
 }
 

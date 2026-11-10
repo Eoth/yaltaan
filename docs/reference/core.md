@@ -2313,6 +2313,37 @@ const full = graph.derived([first, last], (a, b) => `${a} ${b}`);
 full.get() // 'Ada Lovelace'
 ```
 
+### `rewire`
+
+A function.
+
+Replaces the dependencies of `node`, a derived node, by `deps`, nodes of its graph, as a write does: from then on its own compute receives the values of `deps`, in their order, and runs again on the next read, whatever they are; the types do not check that it accepts them, so a compute meant for rewiring takes any number of values. Every dependent read after it, or watched, is told as of a write, in the same batch, and the listeners of each that changed are called after the writes. For a list that changes at run time, such as the rows of a form: each node still names what it reads, so that no computation reads the graph, and no cycle can be built: a dependency that depends on `node` is refused. A node rewired may depend on nodes created after it, so that listeners, called by creation order of their nodes, are no longer always called in a topological order.
+
+```ts
+export declare function rewire(node: ReadableNode<unknown>, deps: readonly ReadableNode<unknown>[]): void;
+```
+
+| Contract | Value |
+|---|---|
+| `@mutates` | node |
+| `@sharing` | structural |
+| `@complexity` | O(d + r) (d = number of dependencies, old and new; r = nodes the new dependencies depend on, walked to refuse a cycle), plus the notifications of the graph; it computes nothing itself |
+| `@throws` | TypeError when `node` is not a derived node, a dependency is not a node of its graph, or depends on `node` or is `node`; when called by a computation of the graph; nothing changed |
+| `@throws` | RangeError when the new dependencies are nested deeper than the call stack allows; nothing changed, unless only the nodes that start being watched are that deep |
+| `@throws` | what a listener throws, as `set` throws it, `node` rewired |
+| `@since` | 0.3 |
+| `@experimental` | yes |
+
+**Example**
+
+```ts
+const graph = createGraph();
+const [a, b] = [graph.source(1), graph.source(2)];
+const total = graph.derived([a], (...values: number[]) => values.reduce((sum, value) => sum + value, 0));
+rewire(total, [a, b]);
+total.get() // 3
+```
+
 ## `@yaltaan/core/result`
 
 ### `Err`

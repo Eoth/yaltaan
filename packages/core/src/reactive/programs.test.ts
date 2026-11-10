@@ -1,8 +1,9 @@
 // Random programs over a reactive graph, shared by the laws (properties.test.ts) and the judge (judge.test.ts); this
 // file holds no test. A program builds a few sources, then derived nodes over nodes built before them, so that its
 // graph is acyclic in creation order as every graph is, and runs steps that write, read, subscribe, unsubscribe and
-// batch, nested batches included; for the laws only, its listeners may also write, throw or unsubscribe. Values are
-// small integers, so that sums meet, come back and divide by three; the judge adds `NaN` and `-0`.
+// batch, nested batches included, and that rewire a derived node to any nodes, which may close a cycle that the graph
+// must refuse; for the laws only, its listeners may also write, throw or unsubscribe. Values are small integers, so
+// that sums meet, come back and divide by three; the judge adds `NaN` and `-0`.
 import { fc } from '@yaltaan/testing';
 
 /** What a derived node computes from the values of its dependencies. */
@@ -33,6 +34,8 @@ export type Step =
   | { readonly op: 'subscribe'; readonly node: number; readonly reaction?: Reaction | undefined }
   /** Calls the unsubscribe function of subscription `pick` modulo their number, perhaps a second time. */
   | { readonly op: 'unsubscribe'; readonly pick: number }
+  /** Replaces the dependencies of derived node `node` by `deps`, any ids, refused when they reach `node`. */
+  | { readonly op: 'rewire'; readonly node: number; readonly deps: readonly number[] }
   | { readonly op: 'batch'; readonly steps: readonly Step[] };
 
 export interface Program {
@@ -48,6 +51,8 @@ export class ComputeError extends Error {
 
 /** The value a node of `kind` computes from `values`, or `error` thrown. */
 export function apply(kind: Kind, values: readonly number[], error: ComputeError): number {
+  // A node rewired to no dependency computes on none: `first` then gives `undefined`, which a sum turns to `NaN`, for
+  // the graph and its judges alike.
   const sum = values.reduce((total, value) => total + value, 0);
   switch (kind) {
     case 'sum':
@@ -107,14 +112,27 @@ export function programs(values: fc.Arbitrary<number>, reactions = false): fc.Ar
           })
         : fc.record({ op: fc.constant('subscribe' as const), node: fc.nat({ max: total - 1 }) });
       const unsubscribe = fc.record({ op: fc.constant('unsubscribe' as const), pick: fc.nat() });
+      const rewire = fc.record({
+        op: fc.constant('rewire' as const),
+        node: fc.integer({ min: sourceCount, max: total - 1 }),
+        deps: fc.array(fc.nat({ max: total - 1 }), { maxLength: 3 }),
+      });
       const nested = fc.record({
         op: fc.constant('batch' as const),
-        steps: fc.array(fc.oneof({ arbitrary: set, weight: 3 }, { arbitrary: get, weight: 1 }), { maxLength: 4 }),
+        steps: fc.array(
+          fc.oneof({ arbitrary: set, weight: 3 }, { arbitrary: get, weight: 1 }, { arbitrary: rewire, weight: 1 }),
+          { maxLength: 4 },
+        ),
       });
       const batch = fc.record({
         op: fc.constant('batch' as const),
         steps: fc.array(
-          fc.oneof({ arbitrary: set, weight: 4 }, { arbitrary: get, weight: 2 }, { arbitrary: nested, weight: 1 }),
+          fc.oneof(
+            { arbitrary: set, weight: 4 },
+            { arbitrary: get, weight: 2 },
+            { arbitrary: rewire, weight: 1 },
+            { arbitrary: nested, weight: 1 },
+          ),
           { maxLength: 6 },
         ),
       });
@@ -123,6 +141,7 @@ export function programs(values: fc.Arbitrary<number>, reactions = false): fc.Ar
         { arbitrary: get, weight: 3 },
         { arbitrary: subscribe, weight: 3 },
         { arbitrary: unsubscribe, weight: 1 },
+        { arbitrary: rewire, weight: 2 },
         { arbitrary: batch, weight: 2 },
       );
       return fc.record({
@@ -132,4 +151,20 @@ export function programs(values: fc.Arbitrary<number>, reactions = false): fc.Ar
       });
     }),
   );
+}
+
+/** Whether `node` is reached from `from` through `deps`, the dependencies by id: a rewire that would close a cycle. */
+export function reaches(deps: readonly (readonly number[])[], from: readonly number[], node: number): boolean {
+  const seen = new Set<number>();
+  const walk = (id: number): boolean => {
+    if (id === node) {
+      return true;
+    }
+    if (seen.has(id)) {
+      return false;
+    }
+    seen.add(id);
+    return deps[id]!.some(walk);
+  };
+  return from.some(walk);
 }

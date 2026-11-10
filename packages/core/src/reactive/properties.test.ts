@@ -1,7 +1,7 @@
 // The laws of the reactive graph, judged against a naive model: every node evaluated from the current values of the
-// sources, in creation order, at each look. Random programs (programs.test.ts) write, read, subscribe, unsubscribe and
-// batch, and their listeners may write, throw or unsubscribe; every compute, read and listener call is checked as it
-// happens:
+// sources, dependencies first, at each look. Random programs (programs.test.ts) write, read, subscribe, unsubscribe,
+// batch and rewire, and their listeners may write, throw or unsubscribe; every compute, read and listener call is
+// checked as it happens:
 //   - consistency: `get` returns the model's value, or throws the model's error;
 //   - no glitch: compute receives the model's values of its dependencies, never a mix of two states of the sources,
 //     and a listener reads the state the writes before it left;
@@ -16,7 +16,10 @@
 //     change; when no listener writes a change, exactly the listeners whose node differs are called, save those
 //     unsubscribed before their turn;
 //   - errors: the write throws what its listeners threw, in the order they threw it, the error itself or an
-//     `AggregateError` of all; a `RangeError` comes last only after listeners wrote at least 100 changes.
+//     `AggregateError` of all; a `RangeError` comes last only after listeners wrote at least 100 changes;
+//   - rewiring: a rewire is a write, judged by the laws above, after which the node computes again even on the same
+//     arguments; it computes nothing itself, so that a batch still writing is never read; one whose new dependencies
+//     reach the node throws a `TypeError` and changes nothing.
 // Blind spots: values are small integers, `NaN` and `-0`, compared by `Object.is`, so `equals` is left to the
 // examples of index.test.ts (with an `equals` of its own, a node's value depends on when it was last read, which no
 // naive model gives); once a listener writes a change, which listeners a pass holds is left to the examples, as the
@@ -29,8 +32,8 @@ import { test } from 'node:test';
 
 import { fc } from '@yaltaan/testing';
 
-import { createGraph, type ReadableNode, type SourceNode } from './index.ts';
-import { apply, ComputeError, programs, type Program, type Reaction, type Step } from './programs.test.ts';
+import { createGraph, rewire, type ReadableNode, type SourceNode } from './index.ts';
+import { apply, ComputeError, programs, reaches, type Program, type Reaction, type Step } from './programs.test.ts';
 
 type Outcome = { readonly failed: false; readonly value: number } | { readonly failed: true; readonly value: unknown };
 
@@ -78,6 +81,8 @@ interface Totals {
   changes: number;
   thrown: number;
   stopped: number;
+  rewired: number;
+  refused: number;
 }
 
 const before = (a: readonly [number, number], b: readonly [number, number]): boolean =>
@@ -87,25 +92,34 @@ const before = (a: readonly [number, number], b: readonly [number, number]): boo
 function checkLaws(program: Program, totals: Totals): void {
   const graph = createGraph();
   const sourceCount = program.sources.length;
+  // The dependencies of each node by id, which a rewire replaces.
   const deps: (readonly number[])[] = program.sources.map(() => []);
   const errors = program.derived.map((_, index) => new ComputeError(`node ${sourceCount + index}`));
   const values = [...program.sources];
 
+  // Evaluated dependencies first, since a rewired node may depend on nodes created after it.
   const model = (): Outcome[] => {
     const outcomes: Outcome[] = values.map((value) => ({ failed: false, value }));
-    program.derived.forEach((spec, index) => {
-      const failure = spec.deps.map((dep) => outcomes[dep]!).find((outcome) => outcome.failed);
-      if (failure !== undefined) {
-        outcomes.push(failure);
-        return;
+    const evaluate = (id: number): Outcome => {
+      const known = outcomes[id];
+      if (known !== undefined) {
+        return known;
       }
-      try {
-        const args = spec.deps.map((dep) => outcomes[dep]!.value as number);
-        outcomes.push({ failed: false, value: apply(spec.kind, args, errors[index]!) });
-      } catch (error) {
-        outcomes.push({ failed: true, value: error });
+      const index = id - sourceCount;
+      const args = deps[id]!.map(evaluate);
+      let outcome: Outcome | undefined = args.find((arg) => arg.failed);
+      if (outcome === undefined) {
+        try {
+          const numbers = args.map((arg) => arg.value as number);
+          outcome = { failed: false, value: apply(program.derived[index]!.kind, numbers, errors[index]!) };
+        } catch (error) {
+          outcome = { failed: true, value: error };
+        }
       }
-    });
+      outcomes[id] = outcome;
+      return outcome;
+    };
+    program.derived.forEach((_, index) => evaluate(sourceCount + index));
     return outcomes;
   };
 
@@ -161,7 +175,7 @@ function checkLaws(program: Program, totals: Totals): void {
         violations.push(`node ${id} computed, though nothing being read or watched depends on it`);
       }
       const outcomes = model();
-      const expected = spec.deps.map((dep) => outcomes[dep]!);
+      const expected = deps[id]!.map((dep) => outcomes[dep]!);
       if (expected.some((outcome, position) => outcome.failed || !Object.is(outcome.value, args[position]))) {
         violations.push(`node ${id} computed on ${String(args)}, values of another state of the sources`);
       }
@@ -391,6 +405,37 @@ function checkLaws(program: Program, totals: Totals): void {
       case 'unsubscribe':
         unsubscribe(step.pick);
         break;
+      case 'rewire': {
+        const call = (): void =>
+          rewire(
+            nodes[step.node]!,
+            step.deps.map((dep) => nodes[dep]!),
+          );
+        if (reaches(deps, step.deps, step.node)) {
+          assert.throws(call, TypeError, 'a rewire whose dependencies reach the node throws a TypeError');
+          totals.refused += 1;
+          break;
+        }
+        deps[step.node] = step.deps;
+        lastArgs.delete(step.node);
+        noteFailures();
+        totals.rewired += 1;
+        if (inBatch) {
+          call();
+        } else {
+          notify();
+          let thrown: unknown;
+          let threw = false;
+          try {
+            call();
+          } catch (error) {
+            thrown = error;
+            threw = true;
+          }
+          settle(thrown, threw);
+        }
+        break;
+      }
       case 'batch': {
         const outer = !inBatch;
         let thrown: unknown;
@@ -446,10 +491,11 @@ const VALUES = fc.oneof(
 
 const describe = (totals: Totals): string =>
   `${totals.computes} computes, ${totals.calls} listener calls, ${totals.changes} changes written by listeners, ` +
-  `${totals.thrown} errors thrown by listeners, ${totals.stopped} notifications stopped by the bound`;
+  `${totals.thrown} errors thrown by listeners, ${totals.stopped} notifications stopped by the bound, ` +
+  `${totals.rewired} rewires, ${totals.refused} refused`;
 
 test('the graph agrees with a naive evaluation: no glitch, nothing computed for nothing, exact notifications', (t) => {
-  const totals: Totals = { computes: 0, calls: 0, changes: 0, thrown: 0, stopped: 0 };
+  const totals: Totals = { computes: 0, calls: 0, changes: 0, thrown: 0, stopped: 0, rewired: 0, refused: 0 };
   fc.assert(
     fc.property(programs(VALUES), (program) => checkLaws(program, totals)),
     { numRuns: 1000 },
@@ -458,7 +504,7 @@ test('the graph agrees with a naive evaluation: no glitch, nothing computed for 
 });
 
 test('listeners that write, throw and unsubscribe: no glitch, no call missed or made for nothing, bounded', (t) => {
-  const totals: Totals = { computes: 0, calls: 0, changes: 0, thrown: 0, stopped: 0 };
+  const totals: Totals = { computes: 0, calls: 0, changes: 0, thrown: 0, stopped: 0, rewired: 0, refused: 0 };
   fc.assert(
     fc.property(programs(VALUES, true), (program) => checkLaws(program, totals)),
     { numRuns: 1000 },
