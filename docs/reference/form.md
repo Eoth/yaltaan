@@ -122,7 +122,7 @@ A type.
 The options of an array.
 
 ```ts
-export interface ArrayOptions<Item, Output = Item[]> extends NodeSpecOptions<Output> {
+export interface ArrayOptions<Item, Output = Item[]> extends NodeSpecOptions<Output, Item[]> {
     /** The items the array starts with, and gives back on `reset()`, each read as `set` reads one; none by default. */
     readonly initial?: readonly Item[];
     /**
@@ -203,7 +203,7 @@ A type.
 The options of a field.
 
 ```ts
-export interface FieldOptions<Raw, Output = Raw> extends NodeSpecOptions<Output> {
+export interface FieldOptions<Raw, Output = Raw> extends NodeSpecOptions<Output, Raw> {
     /**
      * Called with the initial raw value and the raw value, each time either changes while `dirty` is read or watched;
      * true when they are the same, and the field is then not dirty. `equal` of `@yaltaan/core/equal` by default; must be
@@ -513,13 +513,27 @@ A type.
 The options of a group.
 
 ```ts
-export type GroupOptions<Output> = NodeSpecOptions<Output>;
+export type GroupOptions<Output, Raw = unknown> = NodeSpecOptions<Output, Raw>;
 ```
 
 | Contract | Value |
 |---|---|
 | `@since` | 0.3 |
 | `@experimental` | yes |
+
+#### `GroupOptions.validate`
+
+A supplied member.
+
+Checks the node's raw value, as the application alone can, a server's answer for instance: returns the issues found, their paths from this node, placed as a schema's are, or a promise of them; an empty list when there is none. Called with a signal of its own when a state that needs its answer is read and no run counts, once no schema of this node, of a node below or of an ancestor has placed an issue on it or below, or has yet to answer. A run counts until the raw value, or the lives of the items that hold the node, change, a schema places such an issue, or the node leaves the form; a schema that has yet to answer neither starts nor drops one, so that a write elsewhere asks nothing again, and an item given back by `reset()` asks again. A promise that rejects places `form.validation_failed` on the node, the reason as `cause`, and so does an answer that is not a list of issues, or that throws when read, that answer or the error as `cause`; what it throws at once is thrown by every state that depends on it. Called from a computation of the graph: must not read or write the form's graph.
+
+```ts
+validate?(raw: Raw, validation: Validation): readonly Issue[] | PromiseLike<readonly Issue[]>;
+```
+
+| Contract | Value |
+|---|---|
+| `@supplied` | yes |
 
 ### `GroupSpec`
 
@@ -580,7 +594,7 @@ A type.
 The options a field, a group and an array share.
 
 ```ts
-export interface NodeSpecOptions<Output> {
+export interface NodeSpecOptions<Output, Raw = unknown> {
     /**
      * Reads the node's raw value: any Standard Schema, which may answer with a promise; its output is the node's parsed
      * value, and each of its issues goes to the node its path names below this one. A rejected promise, or a failure
@@ -594,6 +608,20 @@ export interface NodeSpecOptions<Output> {
      * (`anyElement` of `@yaltaan/rules`) names the item that holds it.
      */
     readonly disabled?: Condition;
+    /**
+     * Checks the node's raw value, as the application alone can, a server's answer for instance: returns the issues
+     * found, their paths from this node, placed as a schema's are, or a promise of them; an empty list when there is
+     * none. Called with a signal of its own when a state that needs its answer is read and no run counts, once no schema
+     * of this node, of a node below or of an ancestor has placed an issue on it or below, or has yet to answer. A run
+     * counts until the raw value, or the lives of the items that hold the node, change, a schema places such an issue, or
+     * the node leaves the form; a schema that has yet to answer neither starts nor drops one, so that a write elsewhere
+     * asks nothing again, and an item given back by `reset()` asks again. A promise that rejects places
+     * `form.validation_failed` on the node, the reason as `cause`, and so does an answer that is not a list of issues, or
+     * that throws when read, that answer or the error as `cause`; what it throws at once is thrown by every state that
+     * depends on it. Called from a computation of the graph: must not read or write the form's graph.
+     * @supplied
+     */
+    validate?(raw: Raw, validation: Validation): readonly Issue[] | PromiseLike<readonly Issue[]>;
 }
 ```
 
@@ -601,6 +629,20 @@ export interface NodeSpecOptions<Output> {
 |---|---|
 | `@since` | 0.3 |
 | `@experimental` | yes |
+
+#### `NodeSpecOptions.validate`
+
+A supplied member.
+
+Checks the node's raw value, as the application alone can, a server's answer for instance: returns the issues found, their paths from this node, placed as a schema's are, or a promise of them; an empty list when there is none. Called with a signal of its own when a state that needs its answer is read and no run counts, once no schema of this node, of a node below or of an ancestor has placed an issue on it or below, or has yet to answer. A run counts until the raw value, or the lives of the items that hold the node, change, a schema places such an issue, or the node leaves the form; a schema that has yet to answer neither starts nor drops one, so that a write elsewhere asks nothing again, and an item given back by `reset()` asks again. A promise that rejects places `form.validation_failed` on the node, the reason as `cause`, and so does an answer that is not a list of issues, or that throws when read, that answer or the error as `cause`; what it throws at once is thrown by every state that depends on it. Called from a computation of the graph: must not read or write the form's graph.
+
+```ts
+validate?(raw: Raw, validation: Validation): readonly Issue[] | PromiseLike<readonly Issue[]>;
+```
+
+| Contract | Value |
+|---|---|
+| `@supplied` | yes |
 
 ### `OutputOf`
 
@@ -653,6 +695,30 @@ export type Spec = FieldSpec<unknown, unknown> | GroupSpec<Children, unknown> | 
 | `@since` | 0.3 |
 | `@experimental` | yes |
 
+### `Validation`
+
+A type.
+
+What a validator of the application is handed beside the raw value it checks.
+
+```ts
+export interface Validation {
+    /**
+     * Aborted when this run stops counting before the form has received its answer: when its node is next read after its
+     * raw value changed, when a schema places an issue on the node or below, or when the node leaves the form, an item
+     * removed. Aborted on the next microtask, out of any computation of the graph: what listens to it may read the form.
+     */
+    readonly signal: AbortSignal;
+    /** The path of the node, from the root of the form. */
+    readonly path: Path;
+}
+```
+
+| Contract | Value |
+|---|---|
+| `@since` | 0.3 |
+| `@experimental` | yes |
+
 ### `array`
 
 A function.
@@ -668,7 +734,7 @@ export declare function array<const E extends Spec, Output = OutputOf<E>[]>(elem
 | `@pure` | yes |
 | `@sharing` | structural |
 | `@complexity` | O(1) |
-| `@throws` | TypeError when `element` is not a spec, or an option is not of its kind: `schema` a Standard Schema, `disabled` a condition, `initial` an array, `identity` a path, `maxLength` a whole number from 0 |
+| `@throws` | TypeError when `element` is not a spec, or an option is not of its kind: `schema` a Standard Schema, `disabled` a condition, `validate` a function, `initial` an array, `identity` a path, `maxLength` a whole number from 0 |
 | `@since` | 0.3 |
 | `@experimental` | yes |
 
@@ -723,7 +789,7 @@ export declare function field<Raw, Output = Raw>(initial: Raw, options?: FieldOp
 | `@pure` | yes |
 | `@sharing` | structural |
 | `@complexity` | O(1) |
-| `@throws` | TypeError when an option is not of its kind: `schema` a Standard Schema, `disabled` a condition, `equals` a function |
+| `@throws` | TypeError when an option is not of its kind: `schema` a Standard Schema, `disabled` a condition, `equals` and `validate` functions |
 | `@since` | 0.3 |
 | `@experimental` | yes |
 
@@ -740,7 +806,7 @@ A function.
 A group of `children`, by key: its raw value is the object of theirs.
 
 ```ts
-export declare function group<const C extends Children, Output = OutputOf<C>>(children: C, options?: GroupOptions<Output>): GroupSpec<C, NoInfer<Output>>;
+export declare function group<const C extends Children, Output = OutputOf<C>>(children: C, options?: GroupOptions<Output, RawOf<C>>): GroupSpec<C, NoInfer<Output>>;
 ```
 
 | Contract | Value |

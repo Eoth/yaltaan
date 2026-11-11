@@ -174,6 +174,54 @@ Une promesse rejetée, un serveur injoignable par exemple, place `form.validatio
 
 Une issue d'un autre moteur porte le code `issue.external`, son message dans `params.message` ; un schéma de `@yaltaan/schema` garde ses propres codes et données, pour votre formateur.
 
+## Une vérification que seul le serveur peut faire
+
+`validate` donne à un champ, un groupe ou une liste une vérification propre à votre application, la réponse d'un serveur par exemple. Elle reçoit la valeur brute du nœud et `{ signal, path }`, et rend les issues trouvées, leurs chemins depuis le nœud, ou une promesse de celles-ci ; une liste vide s'il n'y en a pas. Une exécution ne démarre qu'une fois que les schémas n'ont rien contre la valeur : aucun schéma du nœud, d'un nœud en dessous ou d'un ancêtre n'a encore à répondre, ni n'a placé d'issue sur le nœud ou en dessous. Le serveur n'est donc pas interrogé sur un SIREN que le schéma de l'étape refuse.
+
+```ts
+import type { Issue } from '@yaltaan/core/issue';
+import { createForm, field, group, type Validation } from '@yaltaan/form';
+import { object, string } from '@yaltaan/schema';
+
+// Tient lieu de votre serveur : chaque requête attend sa réponse. Dans une application, passez le signal à fetch.
+const requests: { readonly siren: string; readonly signal: Validation['signal']; answer(taken: boolean): void }[] = [];
+const registered = (siren: string, signal: Validation['signal']): Promise<boolean> =>
+  new Promise((answer) => requests.push({ siren, signal, answer }));
+
+const company = createForm(
+  group(
+    {
+      siren: field('', {
+        validate: async (siren, { signal }): Promise<Issue[]> =>
+          (await registered(siren, signal)) ? [{ code: 'app.siren_registered', path: [] }] : [],
+      }),
+    },
+    { schema: object({ siren: string({ pattern: /^\d{9}$/, maxLength: 9 }) }) },
+  ),
+);
+const { siren } = company.children;
+siren.set('12345');
+siren.pending.get(); // → false
+requests.length; // → 0
+siren.set('123456789');
+siren.pending.get(); // → true
+requests.map((request) => request.siren); // → ['123456789']
+requests[0]!.answer(true);
+await new Promise<void>((resolve) => {
+  const stop = siren.pending.subscribe(() => {
+    stop();
+    resolve();
+  });
+});
+siren.issues.get().map((issue) => issue.code); // → ['app.siren_registered']
+```
+
+Chaque exécution a son propre `signal`, interrompu quand l'exécution cesse de compter avant d'avoir répondu : quand le nœud est lu après un changement de sa valeur, quand un schéma place une issue sur lui, ou quand le nœud quitte le formulaire, un élément retiré de sa liste ; passez-le à `fetch` pour que la requête s'arrête. Un schéma qui n'a pas encore répondu, après un changement ailleurs, ne lance ni n'arrête une exécution : taper dans un autre champ ne réinterroge pas le serveur. Quoi que la vérification fasse de son signal, une réponse ne compte que tant que son exécution est la dernière du nœud et que le nœud est dans le formulaire. Une promesse rejetée place `form.validation_failed` sur le nœud, avec la raison dans `cause`.
+
+- **Attendre avant de demander.** Chaque nouvelle valeur interrompt l'exécution précédente : une vérification qui attend d'abord un délai respectant son signal n'interroge le serveur qu'une fois que l'utilisateur s'arrête de taper ; le nœud est `pending` pendant le délai.
+- **Un formulaire que vous abandonnez.** Combinez le signal avec le vôtre, `AbortSignal.any([signal, destroyed])`, pour arrêter ce qui est en cours quand le composant disparaît.
+- **Dans une vérification**, ne lisez que ses arguments : un calcul du formulaire l'appelle, et y lire un nœud du formulaire lève une `TypeError`. Ce qui écoute son signal s'exécute plus tard, hors de tout calcul, et peut lire le formulaire.
+
 ## Recette : montrer une erreur de façon accessible
 
 Montrez les issues d'un champ une fois qu'il a été touché ou le formulaire envoyé, par votre formateur. Le balisage vous appartient ; gardez le message lié à sa saisie et annoncé, jamais porté par la seule couleur : `aria-invalid="true"` sur la saisie tant qu'il y a une erreur, `aria-describedby` qui désigne le message, et le message dans une zone annoncée (`aria-live`).

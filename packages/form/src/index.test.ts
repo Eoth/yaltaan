@@ -783,9 +783,11 @@ declareAdversarial(SUBPATH, 'createForm', {
       group({
         a: field(1, { equals: (x, y) => callback(x, 0, [y]) === true }),
         b: field(2, { disabled: { reads: [['a']], when: (a) => callback(a, 0, []) === true } }),
+        c: field(3, { validate: (raw) => callback(raw, 0, []) as never }),
       }),
     );
-    for (const run of [() => form.dirty.get(), () => form.children.b.disabled.get(), () => form.children.a.set(3)]) {
+    const reads = [() => form.dirty.get(), () => form.children.b.disabled.get(), () => form.children.c.issues.get()];
+    for (const run of [...reads, () => form.children.a.set(3), () => form.children.c.set(4), ...reads]) {
       try {
         run();
       } catch (error) {
@@ -794,7 +796,11 @@ declareAdversarial(SUBPATH, 'createForm', {
     }
     assert.equal(form.children.a.raw.get(), 3);
   },
-  async: { na: 'createForm takes no signal: what a schema answers late is judged by the laws and the examples' },
+  async: {
+    na:
+      'createForm takes no signal: what schemas and validators answer late, and the signals it hands to ' +
+      'validators, are judged by the laws and the examples',
+  },
 });
 
 declareAdversarial(SUBPATH, 'field', {
@@ -803,7 +809,7 @@ declareAdversarial(SUBPATH, 'field', {
   hostile: (value) => ownErrorOnly(() => void field(0, value as never)),
   unicode: (text) => assert.equal(field(text).initial, text),
   callbacks: (callback: Callback) => {
-    const spec = field(1, { equals: (x, y) => callback(x, 0, [y]) === true });
+    const spec = field(1, { equals: (x, y) => callback(x, 0, [y]) === true, validate: () => callback() as never });
     assert.equal(spec.kind, 'field');
   },
   async: { na: 'field is synchronous and takes no signal' },

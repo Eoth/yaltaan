@@ -174,6 +174,54 @@ A promise that rejects, a server that cannot be reached for instance, places `fo
 
 An issue of another engine has the code `issue.external`, with its message in `params.message`; a schema of `@yaltaan/schema` keeps its own codes and data, for your formatter.
 
+## A check only the server can make
+
+`validate` gives a field, a group or an array a check of your application's own, a server's answer for instance. It receives the node's raw value and `{ signal, path }`, and returns the issues it found, their paths from the node, or a promise of them; an empty list when there is none. A run starts only once the schemas have nothing against the value: no schema of the node, of a node below it or of an ancestor is still to answer, nor has placed an issue on the node or below. So the server is not asked about a SIREN the step's schema rejects.
+
+```ts
+import type { Issue } from '@yaltaan/core/issue';
+import { createForm, field, group, type Validation } from '@yaltaan/form';
+import { object, string } from '@yaltaan/schema';
+
+// Stands for your server: each request waits for its answer. In an application, pass the signal to fetch.
+const requests: { readonly siren: string; readonly signal: Validation['signal']; answer(taken: boolean): void }[] = [];
+const registered = (siren: string, signal: Validation['signal']): Promise<boolean> =>
+  new Promise((answer) => requests.push({ siren, signal, answer }));
+
+const company = createForm(
+  group(
+    {
+      siren: field('', {
+        validate: async (siren, { signal }): Promise<Issue[]> =>
+          (await registered(siren, signal)) ? [{ code: 'app.siren_registered', path: [] }] : [],
+      }),
+    },
+    { schema: object({ siren: string({ pattern: /^\d{9}$/, maxLength: 9 }) }) },
+  ),
+);
+const { siren } = company.children;
+siren.set('12345');
+siren.pending.get(); // → false
+requests.length; // → 0
+siren.set('123456789');
+siren.pending.get(); // → true
+requests.map((request) => request.siren); // → ['123456789']
+requests[0]!.answer(true);
+await new Promise<void>((resolve) => {
+  const stop = siren.pending.subscribe(() => {
+    stop();
+    resolve();
+  });
+});
+siren.issues.get().map((issue) => issue.code); // → ['app.siren_registered']
+```
+
+Each run has its own `signal`, aborted when the run stops counting before it answered: when the node is read after its value changed, when a schema places an issue on it, or when the node leaves the form, an item removed from its list; pass it to `fetch` so that the request stops. A schema that has yet to answer, after a change elsewhere, neither starts nor stops a run: typing in another field asks the server nothing again. Whatever the validator does with its signal, an answer counts only while its run is the node's last and the node is in the form. A promise that rejects places `form.validation_failed` on the node, the reason as `cause`.
+
+- **Wait before asking.** Each new value aborts the run before it, so a validator that first awaits a delay honouring its signal asks the server only once the user stops typing; the node is `pending` during the delay.
+- **A form you discard.** Combine the signal with yours, `AbortSignal.any([signal, destroyed])`, to stop what is in flight when the component goes away.
+- **Inside a validator**, read only its arguments: a computation of the form calls it, so reading a node of the form there throws a `TypeError`. What listens to its signal runs later, out of any computation, and may read the form.
+
 ## Recipe: show an error accessibly
 
 Show a field's issues once it was touched or the form submitted, through your formatter. The markup is yours; keep the message tied to its input and announced, never carried by colour alone: `aria-invalid="true"` on the input while there is an error, `aria-describedby` pointing at the message, and the message in a live region.

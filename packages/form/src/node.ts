@@ -11,6 +11,12 @@ import { parse, type Schema, type StandardResult, type StandardSchema } from '@y
 
 import type { ArrayInternal, List } from './array.ts';
 
+declare global {
+  // The signal of the platform, which browsers and Node both give, named empty so that the declarations of the form
+  // compile in an application that reads neither the DOM's library nor Node's; either library merges in whole.
+  interface AbortSignal {}
+}
+
 /**
  * What `createForm` builds a field from: its initial raw value and its options.
  * @since 0.3
@@ -116,11 +122,27 @@ export type ItemOf<E> = NodeOf<E> & {
 };
 
 /**
+ * What a validator of the application is handed beside the raw value it checks.
+ * @since 0.3
+ * @experimental
+ */
+export interface Validation {
+  /**
+   * Aborted when this run stops counting before the form has received its answer: when its node is next read after its
+   * raw value changed, when a schema places an issue on the node or below, or when the node leaves the form, an item
+   * removed. Aborted on the next microtask, out of any computation of the graph: what listens to it may read the form.
+   */
+  readonly signal: AbortSignal;
+  /** The path of the node, from the root of the form. */
+  readonly path: Path;
+}
+
+/**
  * The options a field, a group and an array share.
  * @since 0.3
  * @experimental
  */
-export interface NodeSpecOptions<Output> {
+export interface NodeSpecOptions<Output, Raw = unknown> {
   /**
    * Reads the node's raw value: any Standard Schema, which may answer with a promise; its output is the node's parsed
    * value, and each of its issues goes to the node its path names below this one. A rejected promise, or a failure
@@ -134,6 +156,20 @@ export interface NodeSpecOptions<Output> {
    * (`anyElement` of `@yaltaan/rules`) names the item that holds it.
    */
   readonly disabled?: Condition;
+  /**
+   * Checks the node's raw value, as the application alone can, a server's answer for instance: returns the issues
+   * found, their paths from this node, placed as a schema's are, or a promise of them; an empty list when there is
+   * none. Called with a signal of its own when a state that needs its answer is read and no run counts, once no schema
+   * of this node, of a node below or of an ancestor has placed an issue on it or below, or has yet to answer. A run
+   * counts until the raw value, or the lives of the items that hold the node, change, a schema places such an issue, or
+   * the node leaves the form; a schema that has yet to answer neither starts nor drops one, so that a write elsewhere
+   * asks nothing again, and an item given back by `reset()` asks again. A promise that rejects places
+   * `form.validation_failed` on the node, the reason as `cause`, and so does an answer that is not a list of issues, or
+   * that throws when read, that answer or the error as `cause`; what it throws at once is thrown by every state that
+   * depends on it. Called from a computation of the graph: must not read or write the form's graph.
+   * @supplied
+   */
+  validate?(raw: Raw, validation: Validation): readonly Issue[] | PromiseLike<readonly Issue[]>;
 }
 
 /**
@@ -141,7 +177,7 @@ export interface NodeSpecOptions<Output> {
  * @since 0.3
  * @experimental
  */
-export interface FieldOptions<Raw, Output = Raw> extends NodeSpecOptions<Output> {
+export interface FieldOptions<Raw, Output = Raw> extends NodeSpecOptions<Output, Raw> {
   /**
    * Called with the initial raw value and the raw value, each time either changes while `dirty` is read or watched;
    * true when they are the same, and the field is then not dirty. `equal` of `@yaltaan/core/equal` by default; must be
@@ -156,14 +192,14 @@ export interface FieldOptions<Raw, Output = Raw> extends NodeSpecOptions<Output>
  * @since 0.3
  * @experimental
  */
-export type GroupOptions<Output> = NodeSpecOptions<Output>;
+export type GroupOptions<Output, Raw = unknown> = NodeSpecOptions<Output, Raw>;
 
 /**
  * The options of an array.
  * @since 0.3
  * @experimental
  */
-export interface ArrayOptions<Item, Output = Item[]> extends NodeSpecOptions<Output> {
+export interface ArrayOptions<Item, Output = Item[]> extends NodeSpecOptions<Output, Item[]> {
   /** The items the array starts with, and gives back on `reset()`, each read as `set` reads one; none by default. */
   readonly initial?: readonly Item[];
   /**
@@ -376,19 +412,21 @@ export interface FormIssue extends Issue {
   readonly code: 'form.validation_failed';
 }
 
-// What a schema answered: its value, or its issues, their paths from the root of the form, and the raw value it read,
-// through which an index names an item.
+// What a schema or a validator answered: its value, or its issues, their paths from the root of the form, and the raw
+// value it read, through which an index names an item.
 interface Answer {
   readonly value?: unknown;
   readonly issues: readonly Issue[];
   readonly read?: unknown;
 }
 
-// What a promise of a schema settled to, by promise.
+// What a promise of a schema or a validator settled to, by promise.
 type Settled = WeakMap<object, Answer>;
 
 export const NONE: readonly never[] = [];
 const PENDING: Answer = { issues: NONE };
+// What a validator that found nothing, or was not asked, answers.
+const CLEAR: Answer = { issues: NONE };
 const DANGEROUS = ['__proto__', 'constructor', 'prototype'];
 const KINDS = ['field', 'group', 'array'];
 const MAX_ITEMS = 10_000;
@@ -419,10 +457,11 @@ export const own = (value: unknown, key: PropertyKey): unknown =>
 
 export function checkOptions(options: unknown): void {
   check(isObject(options), 'options are an object');
-  const { schema, disabled, equals } = options as {
+  const { schema, disabled, equals, validate } = options as {
     readonly schema?: Partial<StandardSchema> | null;
     readonly disabled?: Partial<Condition> | null;
     readonly equals?: unknown;
+    readonly validate?: unknown;
   };
   check(schema === undefined || typeof schema?.['~standard']?.validate === 'function', 'schema is a Standard Schema');
   check(
@@ -430,6 +469,7 @@ export function checkOptions(options: unknown): void {
     'disabled is a condition: reads and when',
   );
   check(equals === undefined || typeof equals === 'function', 'equals is a function');
+  check(validate === undefined || typeof validate === 'function', 'validate is a function');
 }
 
 /**
@@ -437,8 +477,8 @@ export function checkOptions(options: unknown): void {
  * @pure
  * @sharing structural
  * @complexity O(1)
- * @throws TypeError when an option is not of its kind: `schema` a Standard Schema, `disabled` a condition, `equals` a
- *   function
+ * @throws TypeError when an option is not of its kind: `schema` a Standard Schema, `disabled` a condition, `equals`
+ *   and `validate` functions
  * @since 0.3
  * @experimental
  * @example field('', { schema: string({ minLength: 1 }) })
@@ -464,7 +504,7 @@ export function field<Raw, Output = Raw>(
  */
 export function group<const C extends Children, Output = OutputOf<C>>(
   children: C,
-  options: GroupOptions<Output> = {},
+  options: GroupOptions<Output, RawOf<C>> = {},
 ): GroupSpec<C, NoInfer<Output>> {
   check(isObject(children), 'children are an object of specs');
   for (const key of Object.keys(children)) {
@@ -474,6 +514,12 @@ export function group<const C extends Children, Output = OutputOf<C>>(
   checkOptions(options);
   return { kind: 'group', children, options };
 }
+
+// Places an issue whose path starts at the node at `path`.
+const placeAt =
+  (path: Path) =>
+  (issue: Issue): Issue =>
+    path.length ? { ...issue, path: [...path, ...issue.path] } : issue;
 
 // What a schema that gave nothing to show answers, on its node.
 const failed = (path: Path, cause?: unknown): Answer => {
@@ -485,8 +531,8 @@ const failed = (path: Path, cause?: unknown): Answer => {
 // read that asked for it, whatever kind of promise the schema gave, and never rejected: a node never stays pending for
 // an answer it cannot read. A schema of @yaltaan/schema is told by its vendor and its `~run`, which valibot's schemas
 // also have, with another meaning.
-function validate(schema: StandardSchema, value: unknown, path: Path): Answer | Promise<Answer> {
-  const place = (issue: Issue): Issue => (path.length ? { ...issue, path: [...path, ...issue.path] } : issue);
+function judge(schema: StandardSchema, value: unknown, path: Path): Answer | Promise<Answer> {
+  const place = placeAt(path);
   const answer = (result: StandardResult<unknown>): Answer =>
     !result.issues
       ? { value: result.value, issues: NONE }
@@ -505,6 +551,16 @@ function validate(schema: StandardSchema, value: unknown, path: Path): Answer | 
         .catch((reason: unknown) => failed(path, reason))
     : answer(result);
 }
+
+// What a validator's answer means, `value` the raw value it read at `path`: its issues placed from there, nothing found
+// for an empty list, or when it is not a list of issues, a failure whose cause is that answer.
+const heard = (list: unknown, value: unknown, path: Path): Answer =>
+  Array.isArray(list) &&
+  (list as Issue[]).every((issue) => typeof issue?.code === 'string' && Array.isArray(issue.path))
+    ? list.length
+      ? { issues: list.map(placeAt(path)), read: value }
+      : CLEAR
+    : failed(path, list);
 
 export const compose = (keys: readonly string[], values: readonly unknown[]): unknown =>
   Object.fromEntries(keys.map((key, index) => [key, values[index]]));
@@ -545,9 +601,24 @@ export class Node {
   /** Whether the schema of this node or of a node below has not answered. */
   declare below: ReadableNode<boolean>;
   /** What this node's schema answered for its raw value; `PENDING` while it has not. */
+  declare own: ReadableNode<Answer> | undefined;
+  /** The issues of that answer, by the node each is placed on. */
+  declare ownPlaced: ReadableNode<Map<Node, Issue[]>> | undefined;
+  /** What its schema answered, or once it found nothing, its validator: what places issues and holds pending. */
   declare answer: ReadableNode<Answer> | undefined;
   /** The issues of that answer, by the node each is placed on. */
   declare placed: ReadableNode<Map<Node, Issue[]>> | undefined;
+  /** Whether a validator sits at or above this node; absent otherwise. */
+  declare checked: true | undefined;
+  /**
+   * For such a node: 2 when a schema placed an issue on it or below, 1 when one of the node, below it or above it has
+   * not answered, 0 otherwise.
+   */
+  declare doubt: ReadableNode<number> | undefined;
+  /** Aborts the run of this node's validator in flight. */
+  declare stop: (() => void) | undefined;
+  /** An item's life while a validator sits at or below it: a new object each time it enters the form, null out. */
+  declare life: SourceNode<object | null> | undefined;
 
   /** `dirty` and `parsed`, built on their first read: few views read them on every field. */
   declare dirtyNode: ReadableNode<boolean> | undefined;
@@ -607,12 +678,15 @@ export interface Shared {
   keys: number;
 }
 
+// The children or the items of a node.
+export const under = (node: Node): readonly Node[] => node.items?.get() ?? Object.values(node.children ?? {});
+
 // Each field at or below `node`, through the items of arrays.
 function fieldsOf(node: Node, into: Field[] = []): Field[] {
   if (node.kind === 'field') {
     into.push(node as Field);
   }
-  for (const child of node.items?.get() ?? Object.values(node.children ?? {})) {
+  for (const child of under(node)) {
     fieldsOf(child, into);
   }
   return into;
@@ -787,12 +861,171 @@ function step(target: Node, segment: unknown, value: unknown): [Node, unknown] |
     : undefined;
 }
 
-// Builds the states that read other nodes than its children, from the root down, then those that follow its
-// children or items, from the leaves up: a node's dependencies always exist before it.
+// What a schema or a validator answers for the values of `deps`: what `call` gives, or once the promise it gives has
+// settled, what it settled to, as long as it is still the last one asked; a promise given again is followed once.
+function answerOf(
+  shared: Shared,
+  deps: readonly ReadableNode<unknown>[],
+  call: (...values: unknown[]) => Answer | Promise<Answer>,
+): ReadableNode<Answer> {
+  const { graph, settled } = shared;
+  const last = graph.source<unknown>(undefined);
+  let hooked: unknown;
+  const asked = graph.derived(deps, (...values) => {
+    const answer = call(...values);
+    if (isThenable(answer) && answer !== hooked) {
+      hooked = answer;
+      void answer.then((settles) => {
+        settled.set(answer, settles);
+        last.set(answer);
+      });
+    }
+    return answer;
+  });
+  return graph.derived([asked, last], (answer) => (isThenable(answer) ? (settled.get(answer) ?? PENDING) : answer));
+}
+
+// The issues of `answer`, by the node each is placed on: the deepest node its path names below `node`.
+function placedOf(node: Node, answer: ReadableNode<Answer>): ReadableNode<Map<Node, Issue[]>> {
+  const { path } = node;
+  return node.graph.derived([answer], ({ issues, read }) => {
+    const placed = new Map<Node, Issue[]>();
+    for (let issue of issues) {
+      let target = node;
+      let value = read;
+      for (let at = path.length; at < issue.path.length; at++) {
+        const next = step(target, issue.path[at], value);
+        if (!next) {
+          break;
+        }
+        if (target.items) {
+          issue = { ...issue, path: issue.path.with(at, next[0].path.at(-1)!) };
+        }
+        [target, value] = next;
+      }
+      const list = placed.get(target);
+      if (list) {
+        list.push(issue);
+      } else {
+        placed.set(target, [issue]);
+      }
+    }
+    return placed;
+  });
+}
+
+// What tells whether a schema may still place an issue on `node` or below, or has: what the schemas of the node and of
+// its ancestors answered and the issues they placed, and the same of each node below.
+export const doubtsOf = (node: Node): ReadableNode<unknown>[] => {
+  const deps: ReadableNode<unknown>[] = [];
+  for (let at: Node | undefined = node; at; at = at.parent) {
+    if (at.own) {
+      deps.push(at.own, at.ownPlaced!);
+    }
+  }
+  return [...deps, ...under(node).map((child) => child.doubt!)];
+};
+
+// A node's whole state, its own and that of every node below: what schemas and validators answer (`ask`), then what
+// follows from it (`connect`), so that a validator may wait for the schemas below it.
 export function wire(node: Node, shared: Shared): void {
+  ask(node, shared);
+  connect(node, shared);
+}
+
+// Builds what the schema of a node answers, from the root down; then, from the leaves up, for a node at or below a
+// validator, whether a schema places an issue on it or may still, and what its validator answers: a run starts once no
+// schema may, and counts until its raw value or the lives of its items change, or a schema places an issue; a schema
+// that has not answered yet neither starts nor aborts one.
+function ask(node: Node, shared: Shared): void {
   const { graph } = shared;
   const { spec, parent, path } = node;
-  const { schema, disabled } = spec.options;
+  const { schema, validate } = spec.options as NodeSpecOptions<unknown>;
+  if (schema) {
+    node.own = node.answer = answerOf(shared, [node.raw], (raw) => judge(schema, raw, path));
+    node.ownPlaced = node.placed = placedOf(node, node.own);
+  }
+  if (validate || parent?.checked) {
+    node.checked = true;
+  }
+  const children = under(node);
+  for (const child of children) {
+    ask(child, shared);
+  }
+  if (node.checked) {
+    node.doubt = graph.derived(doubtsOf(node), (...values) =>
+      Math.max(
+        0,
+        ...values.map((value) =>
+          value instanceof Map ? (value.has(node) ? 2 : 0) : value === PENDING ? 1 : Number(value) || 0,
+        ),
+      ),
+    );
+  }
+  if (validate) {
+    const own = node.own;
+    // The life of each item that holds the node, out of the form already when it is out of its array.
+    const lives: SourceNode<object | null>[] = [];
+    for (let at = node; at.parent; at = at.parent) {
+      if (at.parent.items) {
+        lives.push((at.life ??= graph.source(at.parent.items.get().includes(at) ? {} : null)));
+      }
+    }
+    // The run that counts: the raw value and the lives it was asked for, and what it answered or will.
+    let run: { readonly raw: unknown; readonly alive: readonly unknown[]; readonly answer: unknown } | undefined;
+    let flight: AbortController | undefined;
+    // Aborts the run in flight on the next microtask, out of any computation or write, so that what listens to the
+    // signal may read the form.
+    const stop = (node.stop = () => {
+      const controller = flight;
+      flight = undefined;
+      if (controller) {
+        void Promise.resolve().then(() => controller.abort());
+      }
+    });
+    const verdict = answerOf(shared, [node.raw, node.doubt!, ...lives], (raw, shut, ...alive) => {
+      if (run && (shut === 2 || !Object.is(run.raw, raw) || alive.some((life, index) => life !== run!.alive[index]))) {
+        stop();
+        run = undefined;
+      }
+      if (!run && shut === 0 && !alive.includes(null)) {
+        const controller = new AbortController();
+        const answer = validate(raw, { signal: controller.signal, path });
+        if (isThenable(answer)) {
+          flight = controller;
+          const done = (answer: Answer): Answer => {
+            if (flight === controller) {
+              flight = undefined;
+            }
+            return answer;
+          };
+          run = {
+            raw,
+            alive,
+            answer: Promise.resolve(answer)
+              .then((list) => heard(list, raw, path))
+              .catch((reason: unknown) => failed(path, reason))
+              .then(done),
+          };
+        } else {
+          run = { raw, alive, answer: heard(answer, raw, path) };
+        }
+      }
+      return (run?.answer ?? CLEAR) as Answer | Promise<Answer>;
+    });
+    node.answer = own
+      ? graph.derived([own, verdict], (first, then) => (then === PENDING || then.issues.length ? then : first))
+      : verdict;
+    node.placed = placedOf(node, node.answer);
+  }
+}
+
+// Builds the states that read other nodes than its children, from the root down, then those that follow its
+// children or items, from the leaves up: a node's dependencies always exist before it.
+function connect(node: Node, shared: Shared): void {
+  const { graph } = shared;
+  const { spec, parent } = node;
+  const { disabled } = spec.options;
   const condition =
     disabled &&
     graph.derived(
@@ -804,46 +1037,6 @@ export function wire(node: Node, shared: Shared): void {
       ? graph.derived([parent.disabled, condition], some)
       : condition
     : (parent?.disabled ?? shared.no);
-  if (schema) {
-    const last = graph.source<unknown>(undefined);
-    const asked = graph.derived([node.raw], (raw) => {
-      const answer = validate(schema, raw, path);
-      if (isThenable(answer)) {
-        void answer.then((settled) => {
-          shared.settled.set(answer, settled);
-          last.set(answer);
-        });
-      }
-      return answer;
-    });
-    node.answer = graph.derived([asked, last], (answer) =>
-      isThenable(answer) ? (shared.settled.get(answer) ?? PENDING) : answer,
-    );
-    node.placed = graph.derived([node.answer], ({ issues, read }) => {
-      const placed = new Map<Node, Issue[]>();
-      for (let issue of issues) {
-        let target = node;
-        let value = read;
-        for (let at = path.length; at < issue.path.length; at++) {
-          const next = step(target, issue.path[at], value);
-          if (!next) {
-            break;
-          }
-          if (target.items) {
-            issue = { ...issue, path: issue.path.with(at, next[0].path.at(-1)!) };
-          }
-          [target, value] = next;
-        }
-        const list = placed.get(target);
-        if (list) {
-          list.push(issue);
-        } else {
-          placed.set(target, [issue]);
-        }
-      }
-      return placed;
-    });
-  }
   node.above = parent?.answer ? graph.derived([parent.above, parent.answer], some) : (parent?.above ?? shared.no);
   const sources: ReadableNode<Map<Node, Issue[]>>[] = [];
   for (let at: Node | undefined = node; at; at = at.parent) {
@@ -856,9 +1049,9 @@ export function wire(node: Node, shared: Shared): void {
         equals: equal,
       })
     : shared.none;
-  const children = node.items?.get() ?? Object.values(node.children ?? {});
+  const children = under(node);
   for (const child of children) {
-    wire(child, shared);
+    connect(child, shared);
   }
   const below = [...(node.answer ? [node.answer] : []), ...children.map((child) => child.below)];
   node.below = below.length || node.items ? graph.derived(below, some) : shared.no;
@@ -874,8 +1067,8 @@ export function wire(node: Node, shared: Shared): void {
           equals: equal,
         })
       : node.issues;
-  node.output = node.answer
-    ? graph.derived([node.answer], (answer) => answer.value)
+  node.output = node.own
+    ? graph.derived([node.own], (answer) => answer.value)
     : node.items
       ? graph.derived(
           children.map((child) => child.output),

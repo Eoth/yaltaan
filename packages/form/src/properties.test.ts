@@ -3,16 +3,27 @@
 // from them at each look, by the rules the module's documentation states, with no graph. Random programs build a tree
 // of fields, groups and arrays up to three levels deep, arrays holding fields, groups or arrays, some kept by the key
 // their first field holds, some nodes with a schema answering at once, with a promise, or either depending on the
-// value, whose output differs from what it reads, and some with a disabled condition reading any node it can name, an
-// item through `{ key: undefined }`; then they set, touch, reset, submit, batch, insert, remove and move items, set
-// arrays to lists that reorder, keep, build and drop items, and settle or reject the promises the schemas gave, in any
-// order, the late ones included. After each step, for every node of the tree, in the order of the description:
+// value, whose output differs from what it reads, some with a validator of the application answering at once, with a
+// promise, with one that rejects as soon as its signal aborts, with a thenable that calls back twice, or either
+// depending on the value, and some with a disabled condition reading any node it can name, an item through
+// `{ key: undefined }`; then they set, touch, reset, submit, batch, insert, remove and move items, set arrays to lists
+// that reorder, keep, build and drop items, settle or reject the promises the schemas gave, in any order, the late ones
+// included, and let `fc.scheduler()` release the answer of one run of a validator, the one it picks among those in
+// flight, aborted ones included; at the end, it releases every one left, a look after each. After each step, for every
+// node of the tree, in the order of the description:
 //   - consistency: path, raw, dirty, touched, submitted, disabled, pending, issues and parsed are the model's, the keys
 //     of every object in the order of the description; an item holds the key it took when it was built, its business
 //     key or one the form gave it, never taken by another item of the form, so that an item moved keeps its states and
-//     its issues, the path of an issue naming its item by `{ key }`;
+//     its issues, the path of an issue naming its item by `{ key }`; the answer of a run of a validator counts only
+//     while that run is its node's last and the node is in the form, its first answer only when it calls back twice;
 //   - one validation per change: each schema has been asked exactly once for each value its node took between two
-//     looks, never twice for the same, and an answer settled for a value since replaced changes nothing;
+//     looks, never twice for the same, and an answer settled for a value since replaced changes nothing; a validator
+//     runs when no run of it counts, no schema of its node, below it or above it has placed an issue on the node or
+//     below or has yet to answer, and its node is in the form; the run that counts stays so, whatever schema has yet to
+//     answer, until its raw value or the lives of the items that hold the node change, a schema places such an issue,
+//     or the node leaves the form;
+//   - abort: the signal of a run is aborted exactly when the run was still in flight as it stopped counting; never the
+//     signal of a run that answered first, nor of the run that counts;
 //   - notification, when every state of every node is watched from the start, and of every item from the look after it
 //     was built: a listener is called once by a step that changes its state, never by a step that leaves it as it was.
 //     A field's raw value changes by `Object.is`, a group's when one of its fields' does, an array's when its items or
@@ -24,12 +35,14 @@
 //     and a batch keeps the writes made before it.
 // Values are small integers and, now and then, a list built anew at each write, which is never the same value as
 // another and always equal by content. Blind spots: `equals`, `NaN` and `-0` are left to the examples of
-// index.test.ts; schemas and conditions never throw, left to the examples too, with schemas of @yaltaan/schema, whose
-// issues keep their code (here every issue comes from the Standard Schema interface, `issue.external`, is the form's
-// own, or comes from a schema that names items by `{ key }`); a field inside an array has no schema, since its value
-// would not tell which item asked; the listeners of an item removed are no longer checked; a listener never reads
-// another node during a write, so what one batch holds is left to the examples; every state is read at each look, so
-// laziness is left to the examples; and so is the cost of a step.
+// index.test.ts; schemas, validators and conditions never throw, left to the examples too, with schemas of
+// @yaltaan/schema, whose issues keep their code (here every issue comes from the Standard Schema interface,
+// `issue.external`, is the form's own, comes from a schema that names items by `{ key }`, or from a validator); a field
+// inside an array has no schema, since its value would not tell which item asked (a validator is told by the path it is
+// handed); the listeners of an item removed are no longer checked; a listener never reads another node during a write,
+// so what one batch holds is left to the examples; every state is read at each look, so laziness is left to the
+// examples, and with it a run aborted only once its node is read again (validate.test.ts); so are a write into a
+// removed item, an answer that throws when read, the turn on which a signal aborts, and the cost of a step.
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { isDeepStrictEqual } from 'node:util';
@@ -40,9 +53,10 @@ import type { Result } from '@yaltaan/core/result';
 import type { StandardResult, StandardSchema } from '@yaltaan/schema';
 import { fc } from '@yaltaan/testing';
 
-import { array, createForm, field, group, type FormNode, type Spec } from './index.ts';
+import { array, createForm, field, group, type FormNode, type Spec, type Validation } from './index.ts';
 
 type SchemaKind = 'sync' | 'async' | 'mixed' | 'keyed';
+type ValidatorKind = 'sync' | 'async' | 'abortable' | 'thenable' | 'mixed';
 type Kind = 'field' | 'group' | 'array';
 
 interface Shape {
@@ -51,6 +65,7 @@ interface Shape {
   /** A group's children; an array's element, alone. */
   readonly children: readonly Shape[];
   readonly schema: SchemaKind | null;
+  readonly validator: ValidatorKind | null;
   readonly condition: { readonly reads: readonly number[]; readonly salt: number } | null;
   /** An array's: whether its items are kept by the key their first field holds, when its element allows it. */
   readonly identity: boolean;
@@ -97,6 +112,11 @@ interface Model {
   raw: unknown;
   initial: unknown;
   touched: boolean;
+  /** An item's: how many times it left or entered its array, and whether it is out of it. */
+  life: number;
+  out: boolean;
+  /** Its validator's run that counts, if any. */
+  current: Run | undefined;
 }
 
 /** A value's identity, for the notification law: `Object.is` of each leaf, through groups and the items of arrays. */
@@ -120,6 +140,33 @@ interface Keyed {
   readonly value?: unknown;
 }
 
+/** What a validator answers for a value: issues, a failure and its cause, or nothing found. */
+type Outcome =
+  | { readonly kind: 'issues'; readonly issues: readonly Raised[] }
+  | { readonly kind: 'failed'; readonly cause: string }
+  | { readonly kind: 'clear' };
+
+/** A run of a validator, as the model expects it: its value, its outcome, and whether it settled or was aborted. */
+interface Run {
+  readonly value: unknown;
+  /** What it was asked for: its node's raw value, by identity, and the lives of the items that hold the node. */
+  readonly identity: Identity;
+  readonly life: string;
+  readonly outcome: Outcome;
+  settled: boolean;
+  /** Whether the form must have aborted it: it was in flight when its node asked again or left the form. */
+  aborted: boolean;
+}
+
+/** A run as the validator recorded it: its node's path, its value and its signal; whether the scheduler released it. */
+interface Called {
+  readonly template: number;
+  readonly path: string;
+  readonly value: unknown;
+  readonly signal: AbortSignal;
+  released: boolean;
+}
+
 /** A question as the schema recorded it, with the function that settles its promise. */
 interface Asked {
   readonly template: number;
@@ -140,6 +187,7 @@ type Step =
   | Write
   | { readonly kind: 'submit' }
   | { readonly kind: 'settle'; readonly node: number; readonly which: number; readonly how: 'resolve' | 'reject' }
+  | { readonly kind: 'release' }
   | { readonly kind: 'batch'; readonly steps: readonly Write[] };
 
 /** A write with its node, the place of that node in the tree before it, and the value it gives, built once. */
@@ -155,6 +203,16 @@ const conditions = fc.option(
   },
 );
 const seeds = fc.array(fc.nat(5), { minLength: 1, maxLength: 8 });
+const validators = fc.constantFrom<ValidatorKind | null>(
+  null,
+  null,
+  null,
+  'sync',
+  'async',
+  'abortable',
+  'thenable',
+  'mixed',
+);
 
 const shapes = (depth: number, inArray: boolean): fc.Arbitrary<Shape> => {
   const leaf = fc.record({
@@ -162,6 +220,7 @@ const shapes = (depth: number, inArray: boolean): fc.Arbitrary<Shape> => {
     initial: fc.nat(3),
     children: fc.constant([]),
     schema: inArray ? fc.constant(null) : fc.constantFrom<SchemaKind | null>(null, null, 'sync', 'async', 'mixed'),
+    validator: validators,
     condition: conditions,
     identity: fc.constant(false),
     start: fc.constant([]),
@@ -174,6 +233,7 @@ const shapes = (depth: number, inArray: boolean): fc.Arbitrary<Shape> => {
     initial: fc.constant(0),
     children: fc.array(shapes(depth - 1, inArray), { minLength: 1, maxLength: 3 }),
     schema: fc.constantFrom<SchemaKind | null>(null, null, 'sync', 'async', 'mixed'),
+    validator: validators,
     condition: conditions,
     identity: fc.constant(false),
     start: fc.constant([]),
@@ -191,6 +251,7 @@ const lists = (depth: number): fc.Arbitrary<Shape> =>
     initial: fc.constant(0),
     children: shapes(depth - 1, true).map((element) => [element]),
     schema: fc.constantFrom<SchemaKind | null>(null, null, 'sync', 'async', 'mixed', 'keyed'),
+    validator: validators,
     condition: conditions,
     identity: fc.boolean(),
     start: seeds,
@@ -201,6 +262,11 @@ const writes: fc.Arbitrary<Write> = fc.oneof(
   { arbitrary: fc.record({ kind: fc.constant('touch' as const), node: fc.nat(40) }), weight: 1 },
   {
     arbitrary: fc.record({ kind: fc.constant('reset' as const), node: fc.nat(40), seed: fc.option(seeds) }),
+    weight: 2,
+  },
+  // A reset without a value, which gives each array the items of its last reset back, removed ones included.
+  {
+    arbitrary: fc.record({ kind: fc.constant('reset' as const), node: fc.nat(40), seed: fc.constant(null) }),
     weight: 2,
   },
   {
@@ -234,6 +300,7 @@ const steps: fc.Arbitrary<Step> = fc.oneof(
     }),
     weight: 4,
   },
+  { arbitrary: fc.record({ kind: fc.constant('release' as const) }), weight: 4 },
   {
     arbitrary: fc.record({ kind: fc.constant('batch' as const), steps: fc.array(writes, { maxLength: 4 }) }),
     weight: 1,
@@ -255,6 +322,7 @@ const programs: fc.Arbitrary<Program> = fc.record({
         initial: fc.constant(0),
         children: fc.array(shapes(2, false), { minLength: 1, maxLength: 3 }),
         schema: fc.constantFrom<SchemaKind | null>(null, 'sync', 'async', 'mixed'),
+        validator: validators,
         condition: fc.constant(null),
         identity: fc.constant(false),
         start: fc.constant([]),
@@ -270,6 +338,7 @@ const programs: fc.Arbitrary<Program> = fc.record({
           .tuple(lists(2), fc.array(shapes(2, false), { maxLength: 2 }))
           .map(([first, rest]) => [first, ...rest]),
         schema: fc.constantFrom<SchemaKind | null>(null, 'sync', 'async', 'mixed'),
+        validator: validators,
         condition: fc.constant(null),
         identity: fc.constant(false),
         start: fc.constant([]),
@@ -426,6 +495,49 @@ function keyedAnswer(value: unknown): Keyed {
   return issues.length ? { keyed: true, issues } : { keyed: true, issues, value: { keyed: list } };
 }
 
+const CLEAR: Outcome = { kind: 'clear' };
+const NOT_A_LIST = 'not a list';
+
+/**
+ * A validator's outcome for a value: on a field, an issue for a 1 and a failure for a 3; on a group, by the sum of its
+ * leaves, a failure, an issue on its first child or under it, or one on itself; on an array, a failure for two items,
+ * else an issue on each item whose first leaf is 1, by its index, and a `{ key }` segment for a 3, which may name
+ * another item, or none; nothing found otherwise.
+ */
+function outcomeOf(template: Template, value: unknown): Outcome {
+  const { kind } = template.shape;
+  const failed: Outcome = { kind: 'failed', cause: 'vno' };
+  if (kind === 'field') {
+    return value === 1 ? { kind: 'issues', issues: [{ message: 'v-one', path: [] }] } : value === 3 ? failed : CLEAR;
+  }
+  if (kind === 'group') {
+    const sum = leaves(value);
+    if (sum % 7 === 6) {
+      return failed;
+    }
+    const path = sum % 3 === 1 ? (sum % 2 ? ['k0'] : ['k0', 'zz']) : sum % 3 === 2 ? [] : undefined;
+    return path ? { kind: 'issues', issues: [{ message: 'v-group', path }] } : CLEAR;
+  }
+  const list = value as unknown[];
+  if (list.length === 2) {
+    return failed;
+  }
+  const issues: Raised[] = [];
+  list.forEach((item, index) => {
+    const first = isObject(item) ? own(item, 'k0') : item;
+    if (first === 1) {
+      issues.push({ message: 'v-item', path: [index] });
+    } else if (first === 3) {
+      issues.push({ message: 'v-key', path: [{ key: index }] });
+    }
+  });
+  return issues.length ? { kind: 'issues', issues } : CLEAR;
+}
+
+/** Whether a validator answers `value` with a promise; a validator answering at once fails by giving no list. */
+const later = (kind: ValidatorKind, value: unknown): boolean =>
+  kind !== 'sync' && (kind !== 'mixed' || String(JSON.stringify(value)).length % 2 === 0);
+
 function answerOf(template: Template, value: unknown): StandardResult<unknown> | Keyed {
   const { kind, schema } = template.shape;
   if (schema === 'keyed') {
@@ -512,13 +624,70 @@ function initialOf(template: Template): unknown {
     : template.start;
 }
 
-/** The description of a node, with the schema that records every question it is asked. */
-function specOf(template: Template, asked: Asked[]): Spec {
+/**
+ * The description of a node, with the schema that records every question it is asked, and the validator that records
+ * every run, its answer later ones released by `scheduler`: a promise, one that rejects as soon as its signal aborts,
+ * or a thenable that calls back twice, the second time with another answer.
+ */
+function specOf(template: Template, asked: Asked[], calls: Called[], scheduler: fc.Scheduler): Spec {
   const { shape } = template;
   const options: {
     schema?: StandardSchema;
     disabled?: { reads: Segment[][]; when: (...values: unknown[]) => boolean };
+    validate?: (value: unknown, validation: Validation) => readonly Issue[] | PromiseLike<readonly Issue[]>;
   } = {};
+  if (shape.validator) {
+    const kind = shape.validator;
+    options.validate = ((value: unknown, { signal, path }: Validation): unknown => {
+      const call: Called = { template: template.id, path: JSON.stringify(path), value, signal, released: false };
+      calls.push(call);
+      const outcome = outcomeOf(template, value);
+      const list =
+        outcome.kind === 'issues'
+          ? outcome.issues.map((issue) => ({
+              code: 'law.validator',
+              path: issue.path,
+              params: { message: issue.message },
+            }))
+          : [];
+      if (!later(kind, value)) {
+        call.released = true;
+        return outcome.kind === 'failed' ? NOT_A_LIST : list;
+      }
+      const released = scheduler.schedule(Promise.resolve(), call.path).then(() => {
+        call.released = true;
+      });
+      const failure = (): Error => new Error('vno');
+      if (kind === 'thenable') {
+        return {
+          then(resolve: (value: unknown) => void, reject: (reason: unknown) => void): void {
+            void released.then(() => {
+              if (outcome.kind === 'failed') {
+                reject(failure());
+                resolve(list);
+              } else {
+                resolve(list);
+                resolve([{ code: 'law.twice', path: [] }]);
+                reject(new Error('twice'));
+              }
+            });
+          },
+        };
+      }
+      if (kind === 'abortable') {
+        return new Promise((resolve, reject) => {
+          signal.addEventListener('abort', () => reject(new Error('aborted')), { once: true });
+          void released.then(() => (outcome.kind === 'failed' ? reject(failure()) : resolve(list)));
+        });
+      }
+      return released.then(() => {
+        if (outcome.kind === 'failed') {
+          throw failure();
+        }
+        return list;
+      });
+    }) as never;
+  }
   if (shape.schema === 'keyed') {
     options.schema = {
       '~standard': { version: 1, vendor: 'yaltaan', validate: () => ({ issues: [{ message: 'unused' }] }) },
@@ -564,9 +733,12 @@ function specOf(template: Template, asked: Asked[]): Spec {
     return field(shape.initial, options);
   }
   if (shape.kind === 'group') {
-    return group(Object.fromEntries(template.children.map((child) => [child.key!, specOf(child, asked)])), options);
+    return group(
+      Object.fromEntries(template.children.map((child) => [child.key!, specOf(child, asked, calls, scheduler)])),
+      options,
+    );
   }
-  return array(specOf(template.children[0]!, asked), {
+  return array(specOf(template.children[0]!, asked, calls, scheduler), {
     ...options,
     initial: template.start,
     maxLength: MAX_LENGTH,
@@ -602,6 +774,12 @@ function sameIdentity(a: Identity, b: Identity): boolean {
 /** The naive model: every state from the plain values, at each look. */
 class Naive {
   readonly requests = new Map<number, Request[]>();
+  /** The runs of each validator, by the node of the model. */
+  readonly runs = new Map<number, Run[]>();
+  /** How many items holding a validator came back into the form after they left it. */
+  restored = 0;
+  /** How many looks found a run kept while a schema had not answered. */
+  kept = 0;
   /** Every node ever built, by id. */
   readonly built: Model[] = [];
   readonly root: Model;
@@ -626,6 +804,9 @@ class Naive {
       raw: value,
       initial: value,
       touched: false,
+      life: 0,
+      out: false,
+      current: undefined,
     };
     this.built.push(model);
     const { kind } = template.shape;
@@ -650,11 +831,100 @@ class Naive {
     return into;
   }
 
-  /** Gives an array other items: a new raw value, even when a later write of the batch gives the old ones back. */
+  /**
+   * Gives an array other items: a new raw value, even when a later write of the batch gives the old ones back; an item
+   * that leaves, or comes back, starts another life.
+   */
   relist(model: Model, items: Model[]): void {
     if (items.length !== model.items.length || items.some((item, index) => item !== model.items[index])) {
+      for (const item of model.items) {
+        if (!items.includes(item)) {
+          item.life++;
+          item.out = true;
+        }
+      }
+      for (const item of items) {
+        if (item.out) {
+          item.life++;
+          item.out = false;
+          this.restored += this.nodes(item).some((node) => node.template.shape.validator) ? 1 : 0;
+        }
+      }
       model.items = items;
       model.revision++;
+    }
+  }
+
+  /** The lives of the items on the way to `model`, as its validator reads them. */
+  lifeOf(model: Model): string {
+    const lives: string[] = [];
+    for (let at = model; at.parent; at = at.parent) {
+      if (at.parent.template.shape.kind === 'array') {
+        lives.push(`${at.life}${at.out ? ' out' : ''}`);
+      }
+    }
+    return lives.join(',');
+  }
+
+  schemaPending(model: Model): boolean {
+    return model.template.shape.schema !== null && this.answer(model) === undefined;
+  }
+
+  /**
+   * What a validator of `model` may do: 2 while a schema has placed an issue on the node or below (it stops), 1 while a
+   * schema of the node, of a node below or of an ancestor has not answered (it waits), 0 otherwise (it runs).
+   */
+  gate(model: Model): 0 | 1 | 2 {
+    const below = this.nodes(model);
+    if (below.some((node) => this.issues(node, 'schema').length > 0)) {
+      return 2;
+    }
+    let pending = below.some((node) => this.schemaPending(node));
+    for (let at = model.parent; at; at = at.parent) {
+      pending ||= this.schemaPending(at);
+    }
+    return pending ? 1 : 0;
+  }
+
+  /**
+   * Applies the rules of a validator at each look, for the tree and for the nodes that left it since the last look: the
+   * run that counts is dropped when a schema places an issue, when its node is out of the form, or when its raw value
+   * or the lives of its items are no longer those it was asked for, and must then be aborted if still in flight; a new
+   * run starts when none counts, no schema may still place an issue and the node is in the form. A schema that has not
+   * answered keeps the run that counts as it is.
+   */
+  check(departed: readonly Model[]): void {
+    for (const model of [...this.nodes(), ...departed]) {
+      const { validator } = model.template.shape;
+      if (!validator) {
+        continue;
+      }
+      const gate = this.gate(model);
+      const attached = this.attached(model);
+      const identity = this.identity(model);
+      const life = this.lifeOf(model);
+      const run = model.current;
+      if (run && (gate === 2 || !attached || !sameIdentity(run.identity, identity) || run.life !== life)) {
+        run.aborted = !run.settled;
+        model.current = undefined;
+      }
+      if (run && model.current && gate === 1) {
+        this.kept++;
+      }
+      const runs = this.runs.get(model.id) ?? [];
+      this.runs.set(model.id, runs);
+      if (!model.current && gate === 0 && attached) {
+        const value = this.raw(model);
+        model.current = {
+          value,
+          identity,
+          life,
+          outcome: outcomeOf(model.template, value),
+          settled: !later(validator, value),
+          aborted: false,
+        };
+        runs.push(model.current);
+      }
     }
   }
 
@@ -776,8 +1046,40 @@ class Naive {
     return answer.issues ? { issues: answer.issues as Raised[] } : { issues: [], output: answer.value };
   }
 
+  /**
+   * What places issues on a node and holds it pending: its schema's answer while it has not answered or found issues,
+   * then its validator's run that counts, if any; `undefined` while pending.
+   */
+  combined(model: Model):
+    | {
+        readonly issues: readonly Raised[] | 'failed';
+        readonly cause?: unknown;
+        readonly validator?: true;
+      }
+    | undefined {
+    const { schema, validator } = model.template.shape;
+    const first = schema ? this.answer(model) : { issues: [] };
+    if (first === undefined || first.issues === 'failed' || first.issues.length || !validator || !model.current) {
+      return first;
+    }
+    const { settled, outcome } = model.current;
+    if (!settled) {
+      return undefined;
+    }
+    return outcome.kind === 'issues'
+      ? { issues: outcome.issues, validator: true }
+      : outcome.kind === 'failed'
+        ? {
+            issues: 'failed',
+            cause: later(validator, model.current.value) ? outcome.cause : NOT_A_LIST,
+            validator: true,
+          }
+        : first;
+  }
+
   ownPending(model: Model): boolean {
-    return model.template.shape.schema !== null && this.answer(model) === undefined;
+    const { schema, validator } = model.template.shape;
+    return (schema !== null || validator !== null) && this.combined(model) === undefined;
   }
 
   under(model: Model): readonly Model[] {
@@ -793,15 +1095,26 @@ class Naive {
     return above || below(model);
   }
 
-  /** The issues placed on `model`, as plain data, the outermost schema first. */
-  issues(model: Model): Plain[] {
+  /**
+   * The issues placed on `model`, as plain data, the outermost schema first: by what places them, or by the schemas
+   * alone.
+   */
+  issues(model: Model, by: 'shown' | 'schema' = 'shown'): Plain[] {
     const ancestors: Model[] = [];
     for (let at: Model | undefined = model; at; at = at.parent) {
       ancestors.unshift(at);
     }
     const placed: Plain[] = [];
     for (const owner of ancestors) {
-      const answer = owner.template.shape.schema ? this.answer(owner) : undefined;
+      const { schema, validator } = owner.template.shape;
+      const answer =
+        by === 'schema'
+          ? schema
+            ? this.answer(owner)
+            : undefined
+          : schema || validator
+            ? this.combined(owner)
+            : undefined;
       if (answer?.issues === 'failed') {
         if (owner === model) {
           placed.push({
@@ -813,7 +1126,8 @@ class Naive {
         }
         continue;
       }
-      const keyed = owner.template.shape.schema === 'keyed';
+      const own = answer !== undefined && 'validator' in answer;
+      const keyed = own || owner.template.shape.schema === 'keyed';
       for (const issue of answer?.issues ?? []) {
         // The Standard Schema interface reads a `{ key }` segment as the key it holds.
         const relative: unknown[] = (issue.path ?? []).map((segment) =>
@@ -844,7 +1158,7 @@ class Naive {
         }
         if (target === model) {
           placed.push({
-            code: keyed ? 'law.keyed' : 'issue.external',
+            code: own ? 'law.validator' : keyed ? 'law.keyed' : 'issue.external',
             path: [...this.pathOf(owner), ...relative],
             message: issue.message,
             cause: keyed ? undefined : issue,
@@ -1140,6 +1454,14 @@ const tick = (): Promise<void> => new Promise((resolve) => setImmediate(resolve)
 
 interface Counts {
   validations: number;
+  /** Runs of validators, those aborted, and those released after their abort. */
+  runs: number;
+  aborted: number;
+  abortedOut: number;
+  releasedAborted: number;
+  validatorIssues: number;
+  restored: number;
+  kept: number;
   settledLate: number;
   rejected: number;
   notifications: number;
@@ -1200,7 +1522,7 @@ function applyTo(nodes: readonly AnyNode[], write: Resolved): void {
   }
 }
 
-async function run(program: Program, counts: Counts): Promise<void> {
+async function run(program: Program, scheduler: fc.Scheduler, counts: Counts): Promise<void> {
   const templates: Template[] = [];
   const top = buildTemplates(program.root, undefined, undefined, templates);
   for (const template of templates) {
@@ -1218,7 +1540,8 @@ async function run(program: Program, counts: Counts): Promise<void> {
     }
   }
   const asked: Asked[] = [];
-  const form = createForm(specOf(top, asked)) as unknown as AnyNode & {
+  const made: Called[] = [];
+  const form = createForm(specOf(top, asked, made, scheduler)) as unknown as AnyNode & {
     readonly graph: { batch(run: () => void): void };
     submit(): unknown;
   };
@@ -1226,6 +1549,9 @@ async function run(program: Program, counts: Counts): Promise<void> {
   // What the form asked, by the node of the model that asked it.
   const askedBy = new Map<number, Asked[]>();
   let attributed = 0;
+  // The runs of the validators, by the node of the model that made them.
+  const calledBy = new Map<number, Called[]>();
+  let heard = 0;
   const calls = new Map<AnyNode, Map<State, number>>();
   // The listeners of each node watched, until a look finds it out of the tree.
   const watched = new Map<AnyNode, (() => void)[]>();
@@ -1243,10 +1569,30 @@ async function run(program: Program, counts: Counts): Promise<void> {
   const generated = new Set<unknown>();
   let previous = new Map<AnyNode, Map<State, unknown>>();
   let pairs: [AnyNode, Model][] = [];
+  // The nodes of the last look, in the tree or just out of it.
+  let looked: (readonly [AnyNode, Model])[] = [];
+  // After a look and a turn of the event loop (a signal aborts on the next microtask, out of any computation): the
+  // signal of each run is aborted exactly when the model says the form had to abort it.
+  const signals = async (label: string): Promise<void> => {
+    await tick();
+    for (const [node, model] of looked) {
+      const runs = naive.runs.get(model.id) ?? [];
+      (calledBy.get(model.id) ?? []).forEach((call, index) => {
+        assert.equal(
+          call.signal.aborted,
+          runs[index]!.aborted,
+          `${label}: run ${index} of the validator of ${JSON.stringify(node.path)} ` +
+            (runs[index]!.aborted ? 'aborted' : 'not aborted'),
+        );
+      });
+    }
+  };
   const look = (label: string): void => {
     const nodes = nodesOf(form);
     const models = naive.nodes();
     assert.equal(nodes.length, models.length, `${label}: number of nodes`);
+    // The nodes that left the tree since the last look, watched or not: their validators must have been aborted.
+    const departed = pairs.filter(([node]) => !nodes.includes(node));
     pairs = nodes.map((node, index) => [node, models[index]!]);
     const gone = [...watched.keys()]
       .filter((node) => !nodes.includes(node))
@@ -1273,6 +1619,10 @@ async function run(program: Program, counts: Counts): Promise<void> {
       }
     }
     naive.ask(gone.map(([, model]) => model));
+    for (const [id, list] of calledBy) {
+      list.forEach((call, index) => (naive.runs.get(id)![index]!.settled ||= call.released));
+    }
+    naive.check(departed.map(([, model]) => model));
     const seen = new Map<AnyNode, Map<State, unknown>>();
     for (const [node, model] of pairs) {
       const states = new Map<State, unknown>();
@@ -1289,6 +1639,7 @@ async function run(program: Program, counts: Counts): Promise<void> {
           const plainIssues = want as Plain[];
           counts.failedSeen += plainIssues.some((issue) => issue.code === 'form.validation_failed') ? 1 : 0;
           counts.keyedIssues += plainIssues.filter((issue) => issue.code === 'law.keyed').length;
+          counts.validatorIssues += plainIssues.filter((issue) => issue.code === 'law.validator').length;
         }
       }
     }
@@ -1313,6 +1664,26 @@ async function run(program: Program, counts: Counts): Promise<void> {
         assert.deepStrictEqual(made, want, `${label}: questions asked of ${JSON.stringify(node.path)}`);
       }
     }
+    // Who ran a validator: the node whose path it was handed, in the tree or just out of it.
+    const byPath = new Map([...pairs, ...departed].map(([node, model]) => [JSON.stringify(node.path), model]));
+    for (const call of made.slice(heard)) {
+      const model = byPath.get(call.path);
+      assert.ok(model?.template.id === call.template, `${label}: a run of the validator at ${call.path} has its node`);
+      calledBy.set(model.id, [...(calledBy.get(model.id) ?? []), call]);
+    }
+    heard = made.length;
+    for (const [node, model] of [...pairs, ...departed]) {
+      if (model.template.shape.validator) {
+        const list = calledBy.get(model.id) ?? [];
+        const runs = naive.runs.get(model.id)!;
+        assert.deepStrictEqual(
+          list.map((call) => call.value),
+          runs.map((expected) => expected.value),
+          `${label}: runs of the validator of ${JSON.stringify(node.path)}`,
+        );
+      }
+    }
+    looked = [...pairs, ...departed];
     for (const [node] of gone) {
       watched.get(node)!.forEach((unsubscribe) => unsubscribe());
       watched.delete(node);
@@ -1338,6 +1709,7 @@ async function run(program: Program, counts: Counts): Promise<void> {
     previous = seen;
   };
   look('built');
+  await signals('built');
   for (const [index, step] of program.steps.entries()) {
     const label = `step ${index} ${JSON.stringify(step)}`;
     let thrown: unknown;
@@ -1359,6 +1731,10 @@ async function run(program: Program, counts: Counts): Promise<void> {
     } else if (step.kind === 'submit') {
       form.submit();
       naive.submit();
+    } else if (step.kind === 'release') {
+      if (scheduler.count()) {
+        await scheduler.waitNext(1);
+      }
     } else {
       const models = pairs.map(([, model]) => model);
       const nodes = pairs.map(([node]) => node);
@@ -1403,12 +1779,38 @@ async function run(program: Program, counts: Counts): Promise<void> {
       assert.equal(thrown, undefined, `${label}: throws nothing`);
     }
     look(label);
+    await signals(label);
+  }
+  // Every run left in flight answers at last, one at a time, in an order of the scheduler's.
+  while (scheduler.count()) {
+    await scheduler.waitNext(1);
+    await tick();
+    look(`run released, ${scheduler.count()} left`);
+    await signals(`run released, ${scheduler.count()} left`);
   }
   counts.validations += asked.length;
+  counts.restored += naive.restored;
+  counts.kept += naive.kept;
+  const runs = [...naive.runs.values()].flat();
+  counts.runs += runs.length;
+  counts.aborted += runs.filter((expected) => expected.aborted).length;
+  counts.releasedAborted += made.filter((call) => call.released && call.signal.aborted).length;
+  counts.abortedOut += [...naive.runs.entries()].reduce(
+    (sum, [id, list]) =>
+      sum + (naive.attached(naive.built[id]!) ? 0 : list.filter((expected) => expected.aborted).length),
+    0,
+  );
 }
 
 const fresh = (): Counts => ({
   validations: 0,
+  runs: 0,
+  aborted: 0,
+  abortedOut: 0,
+  releasedAborted: 0,
+  validatorIssues: 0,
+  restored: 0,
+  kept: 0,
   settledLate: 0,
   rejected: 0,
   notifications: 0,
@@ -1426,10 +1828,15 @@ const fresh = (): Counts => ({
 test('every state of every node follows the naive model, through writes, moving items and late answers', async () => {
   const counts = fresh();
   await fc.assert(
-    fc.asyncProperty(programs, (program) => run(program, counts)),
+    fc.asyncProperty(programs, fc.scheduler(), (program, scheduler) => run(program, scheduler, counts)),
     { numRuns: 400 },
   );
   console.log(counts);
+  assert.ok(counts.runs > 400, `${counts.runs} runs of validators`);
+  assert.ok(counts.aborted > 40, `${counts.aborted} runs aborted`);
+  assert.ok(counts.kept > 100, `${counts.kept} looks at a run kept while a schema had not answered`);
+  assert.ok(counts.releasedAborted > 30, `${counts.releasedAborted} answers released after their abort`);
+  assert.ok(counts.validatorIssues > 200, `${counts.validatorIssues} issues of validators looked at`);
 });
 
 // An array of groups, its items with a schema and the array with one, under a group with a schema: long programs of
@@ -1451,12 +1858,14 @@ const crowded: fc.Arbitrary<Program> = fc.record({
           },
         ]),
         schema: fc.constantFrom<SchemaKind | null>('sync', 'async', 'keyed'),
+        validator: validators,
         condition: conditions,
         identity: fc.boolean(),
         start: seeds,
       })
       .map((list) => [list]),
     schema: fc.constantFrom<SchemaKind | null>(null, 'sync', 'async'),
+    validator: validators,
     condition: fc.constant(null),
     identity: fc.constant(false),
     start: fc.constant([]),
@@ -1477,9 +1886,73 @@ const crowded: fc.Arbitrary<Program> = fc.record({
 test('moving items keep their states and issues, under schemas of the item, the array and the form', async () => {
   const counts = fresh();
   await fc.assert(
-    fc.asyncProperty(crowded, (program) => run(program, counts)),
+    fc.asyncProperty(crowded, fc.scheduler(), (program, scheduler) => run(program, scheduler, counts)),
     { numRuns: 200 },
   );
   console.log(counts);
   assert.ok(counts.movedWithIssues > 200, `${counts.movedWithIssues} items moved while they held issues`);
+});
+
+// An array whose items each hold a validator, beside a field with one, with no schema to hold them back: programs of
+// writes, removals, restores and releases, so that runs are often in flight when their item leaves, or comes back.
+const validating: fc.Arbitrary<Program> = fc.record({
+  root: fc.record({
+    kind: fc.constant('group' as const),
+    initial: fc.constant(0),
+    children: fc
+      .tuple(
+        fc.record({
+          kind: fc.constant('array' as const),
+          initial: fc.constant(0),
+          children: shapes(1, true).map((element) => [
+            { ...element, schema: null, validator: element.validator ?? ('abortable' as const) },
+          ]),
+          schema: fc.constant(null),
+          validator: validators,
+          condition: fc.constant(null),
+          identity: fc.boolean(),
+          start: fc.array(fc.nat(3), { minLength: 2, maxLength: 8 }),
+        }),
+        fc.record({
+          kind: fc.constant('field' as const),
+          initial: fc.nat(3),
+          children: fc.constant([]),
+          schema: fc.constant(null),
+          validator: fc.constantFrom<ValidatorKind>('async', 'abortable', 'thenable'),
+          condition: fc.constant(null),
+          identity: fc.constant(false),
+          start: fc.constant([]),
+        }),
+      )
+      .map(([list, single]) => [list, single]),
+    schema: fc.constant(null),
+    validator: fc.constant(null),
+    condition: fc.constant(null),
+    identity: fc.constant(false),
+    start: fc.constant([]),
+  }),
+  steps: fc.array(
+    fc.oneof(
+      { arbitrary: steps, weight: 2 },
+      { arbitrary: fc.record({ kind: fc.constant('remove' as const), node: fc.nat(40), item: fc.nat(3) }), weight: 2 },
+      {
+        arbitrary: fc.record({ kind: fc.constant('reset' as const), node: fc.nat(1), seed: fc.constant(null) }),
+        weight: 1,
+      },
+      { arbitrary: fc.record({ kind: fc.constant('release' as const) }), weight: 2 },
+    ),
+    { minLength: 10, maxLength: 30 },
+  ),
+  watched: fc.boolean(),
+});
+
+test('a run in flight is aborted when its item leaves, and an item given back asks again', async () => {
+  const counts = fresh();
+  await fc.assert(
+    fc.asyncProperty(validating, fc.scheduler(), (program, scheduler) => run(program, scheduler, counts)),
+    { numRuns: 200 },
+  );
+  console.log(counts);
+  assert.ok(counts.abortedOut > 100, `${counts.abortedOut} runs aborted by a removal`);
+  assert.ok(counts.restored > 100, `${counts.restored} items holding a validator given back`);
 });

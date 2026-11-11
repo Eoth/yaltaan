@@ -20,9 +20,15 @@
 //     issue starts with the path of its node. `issues` of a node are those placed on it, from the outermost schema to
 //     its own. A schema whose promise rejects, or that fails without an issue, places `form.validation_failed` on its
 //     node: the form has nothing else to show;
-//   - pending: a node that a schema may still place issues on, its own, an ancestor's or a descendant's, because it
-//     has not yet answered for the raw value it reads. An answer is the promise that one read gave: settled, it counts
-//     only while that read is the node's last one, so that the answer for a value since replaced is never delivered;
+//   - a node with a validator of the application checks its raw value as only the application can, once no schema of
+//     the node, of a node below or of an ancestor has placed an issue on it or below, or has yet to answer; the run
+//     counts until its raw value or the lives of its items change, a schema places such an issue, or the node leaves
+//     the form, and is handed a signal of its own, aborted when it stops counting before it answered. Its issues are
+//     placed as a schema's; a node shows those of its schema while there are any, those of its validator otherwise;
+//   - pending: a node that a schema or a validator may still place issues on, its own, an ancestor's or a
+//     descendant's, because it has not yet answered for the raw value it reads. An answer is the promise that one read,
+//     or one run, gave: settled, it counts only while that read is the node's last one, and the node is in the form, so
+//     that the answer for a value since replaced, or for a removed item, is never delivered;
 //   - parsed, the read value: an error with the issues of the node and of its descendants, in that order, while there
 //     is one or the node is pending; otherwise the value its schema gave, or with none, its raw value for a field, the
 //     object of its children's parsed values for a group and the list of its items' for an array.
@@ -30,7 +36,7 @@
 // condition reads included, whatever branch its `when` takes; the states of an array that follow its items are rewired
 // to the new items each time they change (ADR 0044). A write reads its whole value, and checks it, before it writes
 // anything. An answer that settles after its read is delivered from the promise's callback, where nothing awaits what
-// the listeners throw.
+// the listeners throw. Validators are ADR 0045's.
 export {
   createForm,
   field,
@@ -55,5 +61,6 @@ export {
   type OutputOf,
   type RawOf,
   type Spec,
+  type Validation,
 } from './node.ts';
 export { array } from './array.ts';

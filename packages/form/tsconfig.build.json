@@ -7,6 +7,6 @@
     "outDir": "dist",
     "tsBuildInfoFile": "tsconfig.build.tsbuildinfo"
   },
-  "include": ["src"],
+  "include": ["src", "platform.d.ts"],
   "exclude": ["src/**/*.test.ts"]
 }

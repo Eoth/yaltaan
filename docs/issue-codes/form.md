@@ -6,4 +6,4 @@ A row is never deleted: a removed code keeps its row, with the version that remo
 
 | Code | Parameters | Meaning | Since | Removed |
 |---|---|---|---|---|
-| `form.validation_failed` | | A schema gave nothing to show for the raw value of this node: its promise rejected, the reason in `cause`, or it failed without an issue. | 0.3 | |
+| `form.validation_failed` | | A schema or a validator gave nothing to show for the raw value of this node: its promise rejected, the reason in `cause`; a schema failed without an issue; or a validator answered something else than a list of issues, that answer in `cause`. | 0.3 | |

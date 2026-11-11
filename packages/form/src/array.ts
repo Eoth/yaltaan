@@ -10,6 +10,7 @@ import {
   build,
   check,
   checkOptions,
+  doubtsOf,
   initialOf,
   isObject,
   isSpec,
@@ -18,6 +19,7 @@ import {
   own,
   plan,
   some,
+  under,
   wire,
   writesOf,
   type ArrayOptions,
@@ -49,7 +51,8 @@ const sameKey = (a: unknown, b: unknown): boolean => new Set([bounded(a)]).has(b
  * @sharing structural
  * @complexity O(1)
  * @throws TypeError when `element` is not a spec, or an option is not of its kind: `schema` a Standard Schema,
- *   `disabled` a condition, `initial` an array, `identity` a path, `maxLength` a whole number from 0
+ *   `disabled` a condition, `validate` a function, `initial` an array, `identity` a path, `maxLength` a whole number
+ *   from 0
  * @since 0.3
  * @experimental
  * @example array(group({ sku: field(''), qty: field(1) }), { identity: ['sku'], initial: [{ sku: 'A', qty: 2 }] })
@@ -257,9 +260,17 @@ function item(array: Node, value: unknown): Node {
   return build((array.spec as ArraySpec).element, [...array.path, { key }], array, array.shared, value, key);
 }
 
-// Gives an array its items, and rewires to them the states that follow them, in the batch of the caller.
+// Aborts the runs in flight of the validators at or below `node`.
+function stopAll(node: Node): void {
+  node.stop?.();
+  under(node).forEach(stopAll);
+}
+
+// Gives an array its items, and rewires to them the states that follow them, in the batch of the caller; the validators
+// of an item that leaves are aborted and stay idle until it comes back, by `reset()`, when they may ask again.
 function relist(array: Node, items: readonly Node[]): void {
   const { answer } = array;
+  const before = array.items!.get();
   array.items!.set(items);
   rewire(array.raw, [array.items!, ...items.map((item) => item.raw)]);
   rewire(
@@ -268,10 +279,25 @@ function relist(array: Node, items: readonly Node[]): void {
   );
   rewire(array.below, [...(answer ? [answer] : []), ...items.map((item) => item.below)]);
   rewire(array.all, [array.issues, ...items.map((item) => item.all)]);
-  if (!answer) {
+  if (!array.own) {
     rewire(
       array.output,
       items.map((item) => item.output),
     );
+  }
+  if (array.doubt) {
+    rewire(array.doubt, doubtsOf(array));
+  }
+  const kept = new Set(items);
+  for (const item of before) {
+    if (item.life && !kept.has(item)) {
+      item.life.set(null);
+      stopAll(item);
+    }
+  }
+  for (const item of items) {
+    if (item.life?.get() === null) {
+      item.life.set({});
+    }
   }
 }
