@@ -24,7 +24,8 @@
   },
   "files": [
     "dist/",
-    "!dist/**/*.test.*"
+    "!dist/**/*.test.*",
+    "!dist/types.js"
   ],
   "engines": {
     "node": ">=22.12"

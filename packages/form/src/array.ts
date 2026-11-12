@@ -22,15 +22,10 @@ import {
   under,
   wire,
   writesOf,
-  type ArrayOptions,
-  type ArraySpec,
-  type FieldOptions,
   type Mode,
-  type OutputOf,
-  type RawOf,
-  type Spec,
   type Writes,
 } from './node.ts';
+import type { ArrayOptions, ArraySpec, FieldOptions, OutputOf, RawOf, Spec } from './types.ts';
 
 const MAX_LENGTH = 1000;
 // V8 hashes a longer string by its length alone: keys are compared on this many code units, as @yaltaan/rules does.
