@@ -11,7 +11,8 @@ flowchart LR
   input["Ce que tiennent les saisies (brut)"] --> schema["N'importe quel Standard Schema"]
   schema -->|"Issue : code, chemin"| field["Le champ que nomme le chemin"]
   schema -->|"sa sortie"| parsed["La valeur lue"]
-  input --> states["dirty, touched, pending, submitted, disabled"]
+  rules["Rules across fields"] -->|"reads its paths only"| field
+  input --> states["dirty, touched, pending, submitted, disabled, required"]
 ```
 
 ## Ce que vous écrivez
@@ -47,8 +48,9 @@ Chaque valeur et chaque état est un nœud du graphe du formulaire, avec `get()`
 | État | D'un champ | D'un groupe |
 |---|---|---|
 | `raw` | Ce que tient sa saisie. | L'objet des valeurs brutes de ses enfants. |
-| `parsed` | La valeur lue : `{ ok: true, value }`, ou `{ ok: false, error }` avec les issues du nœud et de tout ce qui est en dessous, tant qu'il y en a une ou que le nœud est en attente. | La même chose, sur ses enfants. |
-| `issues` | Les issues placées sur lui, le schéma le plus extérieur d'abord. | Seulement celles placées sur le groupe lui-même. |
+| `parsed` | La valeur lue : `{ ok: true, value }`, ou `{ ok: false, error }` avec les issues du nœud et de tout ce qui est en dessous, tant que l'une n'est pas un avertissement ou que le nœud est en attente. | La même chose, sur ses enfants. |
+| `issues` | Les issues placées sur lui, le nœud le plus extérieur d'abord, le schéma d'un nœud avant ses règles. | Seulement celles placées sur le groupe lui-même. |
+| `required` | Une règle à lui ou d'un ancêtre l'exige. | La même chose. |
 | `dirty` | Sa valeur brute diffère de sa valeur initiale, comparée par `equal` (une liste, une date par leur contenu). | Un champ en dessous est modifié. |
 | `touched` | `touch()` a été appelé depuis sa dernière remise à zéro. | Un champ en dessous est touché. |
 | `pending` | Un schéma qui peut placer des issues sur lui, le sien, celui d'un ancêtre ou d'un descendant, n'a pas encore répondu. | La même chose. |
@@ -174,9 +176,50 @@ Une promesse rejetée, un serveur injoignable par exemple, place `form.validatio
 
 Une issue d'un autre moteur porte le code `issue.external`, son message dans `params.message` ; un schéma de `@yaltaan/schema` garde ses propres codes et données, pour votre formateur.
 
+## Des règles entre les champs
+
+`rules` donne à un champ, un groupe ou une liste les règles de [`@yaltaan/rules`](rules.md), leurs chemins depuis ce nœud. Le formulaire lit chaque règle comme un nœud à part, qui lit les valeurs des chemins que la règle déclare et rien d'autre : elle n'est vérifiée à nouveau qu'une fois l'une d'elles changée, et seulement quand un état qui en a besoin est lu. Écrire le nom d'un contact ne vérifie aucune règle qui lit les courriels. Ses issues gardent leur code et leurs données, sur le nœud que nomme leur chemin, après les issues du schéma de ce nœud ; `required` dit quels nœuds une règle exige.
+
+```ts
+import { array, createForm, field, group } from '@yaltaan/form';
+import { requiredIf, unique } from '@yaltaan/rules';
+
+const form = createForm(
+  group(
+    {
+      country: field('FR'),
+      siren: field<string | undefined>(undefined),
+      contacts: array(group({ key: field(''), name: field(''), email: field('') }), {
+        identity: ['key'],
+        initial: [
+          { key: 'c1', name: 'Claire', email: 'claire@example.org' },
+          { key: 'c2', name: 'Karim', email: 'karim@example.org' },
+        ],
+      }),
+    },
+    {
+      rules: [
+        requiredIf({ reads: [['country']], when: (country) => country === 'FR' }, [['siren']]),
+        unique(['contacts'], ['email'], { identity: ['key'] }),
+      ],
+    },
+  ),
+);
+const { siren, contacts } = form.children;
+siren.required.get(); // → true
+siren.issues.get().map((issue) => issue.code); // → ['rules.required_if']
+const [claire, karim] = contacts.items.get();
+karim!.children.email.set('claire@example.org');
+claire!.children.email.issues.get().map((issue) => issue.code); // → ['rules.unique']
+form.children.country.set('DE');
+siren.required.get(); // → false
+```
+
+Une règle lit les valeurs brutes comme `checkRules` les lirait, si bien que le formulaire et un serveur qui applique les mêmes règles sont d'accord : un sous-formulaire laissé vide est un objet, pas un blanc, et `requiredIf(…, [['billing']])` ne le marque pas ; exigez plutôt ses champs. Un élément nommé par `{ key }` dans une issue de `each` ou de `unique` est trouvé par la clé que tient sa valeur quand la liste garde ses éléments par la même `identity` ; sinon aucun élément ne tient cette clé, et l'issue reste sur la liste. Un rang dans un chemin que la règle déclare lit chaque élément, puisque l'élément qui s'y trouve change à chaque déplacement. Un avertissement d'une règle est montré et ne bloque rien : ni la valeur lue ni une vérification. Une issue d'une règle sur un nœud ou en dessous retient sa vérification, comme celle d'un schéma.
+
 ## Une vérification que seul le serveur peut faire
 
-`validate` donne à un champ, un groupe ou une liste une vérification propre à votre application, la réponse d'un serveur par exemple. Elle reçoit la valeur brute du nœud et `{ signal, path }`, et rend les issues trouvées, leurs chemins depuis le nœud, ou une promesse de celles-ci ; une liste vide s'il n'y en a pas. Une exécution ne démarre qu'une fois que les schémas n'ont rien contre la valeur : aucun schéma du nœud, d'un nœud en dessous ou d'un ancêtre n'a encore à répondre, ni n'a placé d'issue sur le nœud ou en dessous. Le serveur n'est donc pas interrogé sur un SIREN que le schéma de l'étape refuse.
+`validate` donne à un champ, un groupe ou une liste une vérification propre à votre application, la réponse d'un serveur par exemple. Elle reçoit la valeur brute du nœud et `{ signal, path }`, et rend les issues trouvées, leurs chemins depuis le nœud, ou une promesse de celles-ci ; une liste vide s'il n'y en a pas. Une exécution ne démarre qu'une fois que les schémas et les règles n'ont rien contre la valeur : aucun schéma du nœud, d'un nœud en dessous ou d'un ancêtre n'a encore à répondre, ni aucun schéma ou règle n'a placé d'issue sur le nœud ou en dessous, un avertissement mis à part. Le serveur n'est donc pas interrogé sur un SIREN que le schéma de l'étape refuse.
 
 ```ts
 import type { Issue } from '@yaltaan/core/issue';
@@ -216,7 +259,7 @@ await new Promise<void>((resolve) => {
 siren.issues.get().map((issue) => issue.code); // → ['app.siren_registered']
 ```
 
-Chaque exécution a son propre `signal`, interrompu quand l'exécution cesse de compter avant d'avoir répondu : quand le nœud est lu après un changement de sa valeur, quand un schéma place une issue sur lui, ou quand le nœud quitte le formulaire, un élément retiré de sa liste ; passez-le à `fetch` pour que la requête s'arrête. Un schéma qui n'a pas encore répondu, après un changement ailleurs, ne lance ni n'arrête une exécution : taper dans un autre champ ne réinterroge pas le serveur. Quoi que la vérification fasse de son signal, une réponse ne compte que tant que son exécution est la dernière du nœud et que le nœud est dans le formulaire. Une promesse rejetée place `form.validation_failed` sur le nœud, avec la raison dans `cause`.
+Chaque exécution a son propre `signal`, interrompu quand l'exécution cesse de compter avant d'avoir répondu : quand le nœud est lu après un changement de sa valeur, quand un schéma ou une règle place une issue sur lui, ou quand le nœud quitte le formulaire, un élément retiré de sa liste ; passez-le à `fetch` pour que la requête s'arrête. Un schéma qui n'a pas encore répondu, après un changement ailleurs, ne lance ni n'arrête une exécution : taper dans un autre champ ne réinterroge pas le serveur. Quoi que la vérification fasse de son signal, une réponse ne compte que tant que son exécution est la dernière du nœud et que le nœud est dans le formulaire. Une promesse rejetée place `form.validation_failed` sur le nœud, avec la raison dans `cause`.
 
 - **Attendre avant de demander.** Chaque nouvelle valeur interrompt l'exécution précédente : une vérification qui attend d'abord un délai respectant son signal n'interroge le serveur qu'une fois que l'utilisateur s'arrête de taper ; le nœud est `pending` pendant le délai.
 - **Un formulaire que vous abandonnez.** Combinez le signal avec le vôtre, `AbortSignal.any([signal, destroyed])`, pour arrêter ce qui est en cours quand le composant disparaît.

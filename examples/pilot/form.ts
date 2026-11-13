@@ -80,7 +80,8 @@ const key = filled(64);
 
 const address = object({ street: filled(120), postalCode: text(12), city: filled(80), country });
 
-const parent = object({
+/** A parent company: the sub-form the form version of the pilot reads field by field (live.ts). */
+export const parent = object({
   legalName: filled(120),
   country,
   siren: optional(text(20)),
@@ -248,7 +249,8 @@ const ADDRESSES: readonly (readonly string[])[] = [
   ['company', 'parent', 'address'],
 ];
 
-const postalCode: Rule = {
+/** The postal code of each address, by the format of its country; an absent address has none to check. */
+export const postalCode: Rule = {
   reads: ADDRESSES,
   targets: ADDRESSES.map((prefix) => [...prefix, 'postalCode']),
   check: (values) =>

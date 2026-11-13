@@ -18,11 +18,13 @@ import {
   Node,
   own,
   plan,
+  resolve,
   some,
   under,
   wire,
   writesOf,
   type Mode,
+  type Reads,
   type Writes,
 } from './node.ts';
 import type { ArrayOptions, ArraySpec, FieldOptions, OutputOf, RawOf, Spec } from './types.ts';
@@ -38,6 +40,10 @@ const bounded = (key: unknown): unknown => (typeof key === 'string' ? key.slice(
 
 const sameKey = (a: unknown, b: unknown): boolean => new Set([bounded(a)]).has(bounded(b));
 
+// The index of each key in a raw value of an array as a schema or a rule read it, as `named` builds it: made by the
+// first `named` that needs it, so that loading the module runs nothing.
+let indexes: WeakMap<object, Map<unknown, number>> | undefined;
+
 /**
  * An array of items, each built from `element`: its raw value is the list of theirs. Each item holds a key for as long
  * as it lives, its business key at `identity` or one the form gives it, so that its states and its issues follow it
@@ -46,8 +52,8 @@ const sameKey = (a: unknown, b: unknown): boolean => new Set([bounded(a)]).has(b
  * @sharing structural
  * @complexity O(1)
  * @throws TypeError when `element` is not a spec, or an option is not of its kind: `schema` a Standard Schema,
- *   `disabled` a condition, `validate` a function, `initial` an array, `identity` a path, `maxLength` a whole number
- *   from 0
+ *   `disabled` a condition, `validate` a function, `rules` rules, `initial` an array, `identity` a path, `maxLength` a
+ *   whole number from 0
  * @since 0.3
  * @experimental
  * @example array(group({ sku: field(''), qty: field(1) }), { identity: ['sku'], initial: [{ sku: 'A', qty: 2 }] })
@@ -77,6 +83,8 @@ export interface ArrayInternal extends ArraySpec {
 // An array node, and all that only arrays do, reached only through the spec `array` builds.
 export class List extends Node {
   declare readonly items: SourceNode<readonly Node[]>;
+  /** What rules read of every item, by what each reads, and what rewires it to the items. */
+  declare views: Map<Reads, readonly [ReadableNode<unknown>, () => void]> | undefined;
 
   override get dirty(): ReadableNode<boolean> {
     return (this.dirtyNode ??= this.graph.derived(
@@ -100,6 +108,30 @@ export class List extends Node {
         some,
       ),
     });
+  }
+
+  // What a rule reads of every item, a list, its items named in `rows`: one node for each `reads`, rewired by `relist`.
+  view(reads: Reads): ReadableNode<unknown> {
+    const views = (this.views ??= new Map());
+    let made = views.get(reads);
+    if (!made) {
+      let make: (values: unknown[]) => unknown;
+      const node = this.graph.derived(NONE, (...values) => make(values));
+      const refresh = (): void => {
+        const deps: ReadableNode<unknown>[] = [];
+        const items = this.items.get();
+        const parts = items.map((item) => resolve(item, reads, deps));
+        make = (values) => {
+          const list = parts.map((part) => part(values));
+          this.shared.rows.set(list, items);
+          return list;
+        };
+        rewire(node, deps);
+      };
+      views.set(reads, (made = [node, refresh]));
+      refresh();
+    }
+    return made[0];
   }
 
   insert(index: number, raw?: unknown): Node {
@@ -167,19 +199,27 @@ export class List extends Node {
     }
   }
 
-  // The item `segment` names in `value`, a raw value of this array as a schema read it, by its index or its
-  // `{ key }`: the key that value holds at `identity`, or the key the form gave the item; and its raw value there.
+  // The item `segment` names in `value`, a raw value of this array as a schema or a rule read it, by its index or its
+  // `{ key }`: the key that value holds at `identity`, or the key the form gave the item; and its raw value there. A
+  // value that is no list the form composed names none.
   named(segment: unknown, value: unknown): [Node, unknown] | undefined {
     const items = (isObject(value) && this.shared.rows.get(value)) || NONE;
     const { identity } = (this.spec as ArraySpec).options;
-    const index =
-      typeof segment === 'number'
-        ? segment
-        : isObject(segment)
-          ? identity
-            ? (value as unknown[]).findIndex((inner) => sameKey(keyAt(inner, identity), segment['key']))
-            : items.findIndex((node) => sameKey(node.key, segment['key']))
-          : -1;
+    let index = typeof segment === 'number' ? segment : -1;
+    if (isObject(segment) && items.length) {
+      // The index of each key in this value, its first item holding it, built once: an answer may name every item.
+      let keys = (indexes ??= new WeakMap()).get(value as object);
+      if (!keys) {
+        indexes.set(value as object, (keys = new Map()));
+        items.forEach((node, at) => {
+          const key = bounded(identity ? keyAt((value as unknown[])[at], identity) : node.key);
+          if (!keys!.has(key)) {
+            keys!.set(key, at);
+          }
+        });
+      }
+      index = keys.get(bounded(segment['key'])) ?? -1;
+    }
     const found = items[index];
     return found && [found, (value as unknown[])[index]];
   }
@@ -283,6 +323,7 @@ function relist(array: Node, items: readonly Node[]): void {
   if (array.doubt) {
     rewire(array.doubt, doubtsOf(array));
   }
+  (array as List).views?.forEach(([, refresh]) => refresh());
   const kept = new Set(items);
   for (const item of before) {
     if (item.life && !kept.has(item)) {

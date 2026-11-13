@@ -5,23 +5,31 @@
 // their first field holds, some nodes with a schema answering at once, with a promise, or either depending on the
 // value, whose output differs from what it reads, some with a validator of the application answering at once, with a
 // promise, with one that rejects as soon as its signal aborts, with a thenable that calls back twice, or either
-// depending on the value, and some with a disabled condition reading any node it can name, an item through
-// `{ key: undefined }`; then they set, touch, reset, submit, batch, insert, remove and move items, set arrays to lists
-// that reorder, keep, build and drop items, settle or reject the promises the schemas gave, in any order, the late ones
-// included, and let `fc.scheduler()` release the answer of one run of a validator, the one it picks among those in
-// flight, aborted ones included; at the end, it releases every one left, a look after each. After each step, for every
-// node of the tree, in the order of the description:
-//   - consistency: path, raw, dirty, touched, submitted, disabled, pending, issues and parsed are the model's, the keys
-//     of every object in the order of the description; an item holds the key it took when it was built, its business
-//     key or one the form gave it, never taken by another item of the form, so that an item moved keeps its states and
-//     its issues, the path of an issue naming its item by `{ key }`; the answer of a run of a validator counts only
-//     while that run is its node's last and the node is in the form, its first answer only when it calls back twice;
+// depending on the value, some with a disabled condition reading any node it can name, an item through
+// `{ key: undefined }`, and some with rules of the application that read nodes at or below theirs, every item of an
+// array, the item of an index, a place in a field's list, and say issues, warnings among them, and what they require,
+// by a hash of what they read; then they set, touch, reset, submit, batch, insert, remove and move items, set arrays to
+// lists that reorder, keep, build and drop items, settle or reject the promises the schemas gave, in any order, the
+// late ones included, and let `fc.scheduler()` release the answer of one run of a validator, the one it picks among
+// those in flight, aborted ones included; at the end, it releases every one left, a look after each. After each step,
+// for every node of the tree, in the order of the description:
+//   - consistency: path, raw, dirty, touched, submitted, disabled, pending, issues, required and parsed are the
+//     model's, the keys of every object in the order of the description; a rule reads the raw value of its node through
+//     the paths it declares, its issues placed after those of its node's schema or validator, an item named by its
+//     index in the list it read or by the key it read at `k0`; a warning blocks neither the parsed value nor a
+//     validator; an item holds the key it took when it was built, its business key or one the form gave it, never
+//     taken by another item of the form, so that an item moved keeps its states and its issues, the path of an issue
+//     naming its item by `{ key }`; the answer of a run of a validator counts only while that run is its node's last
+//     and the node is in the form, its first answer only when it calls back twice;
 //   - one validation per change: each schema has been asked exactly once for each value its node took between two
-//     looks, never twice for the same, and an answer settled for a value since replaced changes nothing; a validator
-//     runs when no run of it counts, no schema of its node, below it or above it has placed an issue on the node or
-//     below or has yet to answer, and its node is in the form; the run that counts stays so, whatever schema has yet to
+//     looks, never twice for the same, and an answer settled for a value since replaced changes nothing; each rule of a
+//     node in the tree, or out of it but still watched, is checked, and asked what it requires, once by a look when a
+//     field at the end of one of its paths or the items of an array on its way are not those of its last call, and
+//     never otherwise; a validator runs when no run of it counts, no schema or rule of its node, below it or above it
+//     has placed an issue that is not a warning on the node or below, no schema has yet to answer, and its node is in
+//     the form; the run that counts stays so, whatever schema has yet to
 //     answer, until its raw value or the lives of the items that hold the node change, a schema places such an issue,
-//     or the node leaves the form;
+//     or a rule places such an issue, or the node leaves the form;
 //   - abort: the signal of a run is aborted exactly when the run was still in flight as it stopped counting; never the
 //     signal of a run that answered first, nor of the run that counts;
 //   - notification, when every state of every node is watched from the start, and of every item from the look after it
@@ -41,15 +49,19 @@
 // inside an array has no schema, since its value would not tell which item asked (a validator is told by the path it is
 // handed); the listeners of an item removed are no longer checked; a listener never reads another node during a write,
 // so what one batch holds is left to the examples; every state is read at each look, so laziness is left to the
-// examples, and with it a run aborted only once its node is read again (validate.test.ts); so are a write into a
-// removed item, an answer that throws when read, the turn on which a signal aborts, and the cost of a step.
+// examples, and with it a run aborted only once its node is read again (validate.test.ts), and a rule checked only once
+// a state that needs it is read (rules.test.ts); so are a write into a removed item, an answer that throws when read,
+// the turn on which a signal aborts, rules that throw, blank values other than `undefined`, the options a rule is
+// checked against, and the cost of a step.
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { isDeepStrictEqual } from 'node:util';
 
 import type { Issue } from '@yaltaan/core/issue';
+import type { Path } from '@yaltaan/core/path';
 import type { ReadableNode } from '@yaltaan/core/reactive';
 import type { Result } from '@yaltaan/core/result';
+import type { Rule } from '@yaltaan/rules';
 import type { StandardResult, StandardSchema } from '@yaltaan/schema';
 import { fc } from '@yaltaan/testing';
 
@@ -71,10 +83,28 @@ interface Shape {
   readonly identity: boolean;
   /** An array's: the seed of its initial items. */
   readonly start: readonly number[];
+  /** Its rules: the nodes each reads, among those at or below it, and the salt of what it says. */
+  readonly rules: readonly RuleShape[];
+}
+
+interface RuleShape {
+  readonly reads: readonly number[];
+  readonly salt: number;
+  /** Whether it says which nodes it requires. */
+  readonly required: boolean;
 }
 
 const ANY = { key: undefined };
 type Segment = string | { readonly key: undefined };
+/** A segment a rule declares: a child's key, every item (`ANY`), an item by its index, or a place in a field's list. */
+type Declared = string | number | { readonly key: undefined };
+
+/** A rule of a node, its paths resolved from it. */
+interface LawRule {
+  readonly declared: readonly (readonly Declared[])[];
+  readonly salt: number;
+  readonly required: boolean;
+}
 
 /** A node of the description: its shape, its place, and what its condition reads. */
 interface Template {
@@ -92,6 +122,7 @@ interface Template {
   reads: readonly Template[];
   /** An array's initial raw value, as the form holds it. */
   start: unknown[];
+  rules: readonly LawRule[];
 }
 
 const UNSET = Symbol('unset');
@@ -117,6 +148,9 @@ interface Model {
   out: boolean;
   /** Its validator's run that counts, if any. */
   current: Run | undefined;
+  /** What each of its rules read at its last check, and at its last `required`, by the rule's index. */
+  checked: (Identity | undefined)[];
+  needed: (Identity | undefined)[];
 }
 
 /** A value's identity, for the notification law: `Object.is` of each leaf, through groups and the items of arrays. */
@@ -167,6 +201,14 @@ interface Called {
   released: boolean;
 }
 
+/** A call of a rule's `check` or `required`, as the rule recorded it: its node of the description, and what it read. */
+interface RuleCall {
+  readonly template: number;
+  readonly rule: number;
+  readonly kind: 'check' | 'required';
+  readonly seen: string;
+}
+
 /** A question as the schema recorded it, with the function that settles its promise. */
 interface Asked {
   readonly template: number;
@@ -203,6 +245,20 @@ const conditions = fc.option(
   },
 );
 const seeds = fc.array(fc.nat(5), { minLength: 1, maxLength: 8 });
+const ruleShapes = fc.oneof(
+  { arbitrary: fc.constant([]), weight: 3 },
+  {
+    arbitrary: fc.array(
+      fc.record({
+        reads: fc.array(fc.nat(60), { minLength: 1, maxLength: 3 }),
+        salt: fc.nat(23),
+        required: fc.boolean(),
+      }),
+      { minLength: 1, maxLength: 2 },
+    ),
+    weight: 1,
+  },
+);
 const validators = fc.constantFrom<ValidatorKind | null>(
   null,
   null,
@@ -224,6 +280,7 @@ const shapes = (depth: number, inArray: boolean): fc.Arbitrary<Shape> => {
     condition: conditions,
     identity: fc.constant(false),
     start: fc.constant([]),
+    rules: ruleShapes,
   });
   if (depth === 0) {
     return leaf;
@@ -237,6 +294,7 @@ const shapes = (depth: number, inArray: boolean): fc.Arbitrary<Shape> => {
     condition: conditions,
     identity: fc.constant(false),
     start: fc.constant([]),
+    rules: ruleShapes,
   });
   return fc.oneof(
     { arbitrary: leaf, weight: 2 },
@@ -255,6 +313,7 @@ const lists = (depth: number): fc.Arbitrary<Shape> =>
     condition: conditions,
     identity: fc.boolean(),
     start: seeds,
+    rules: ruleShapes,
   });
 
 const writes: fc.Arbitrary<Write> = fc.oneof(
@@ -326,6 +385,7 @@ const programs: fc.Arbitrary<Program> = fc.record({
         condition: fc.constant(null),
         identity: fc.constant(false),
         start: fc.constant([]),
+        rules: ruleShapes,
       }),
       weight: 3,
     },
@@ -342,6 +402,7 @@ const programs: fc.Arbitrary<Program> = fc.record({
         condition: fc.constant(null),
         identity: fc.constant(false),
         start: fc.constant([]),
+        rules: ruleShapes,
       }),
       weight: 4,
     },
@@ -495,6 +556,114 @@ function keyedAnswer(value: unknown): Keyed {
   return issues.length ? { keyed: true, issues } : { keyed: true, issues, value: { keyed: list } };
 }
 
+/** The values at `path` in what a rule read, each with its path: every item for `ANY`, the item of an index. */
+function leavesAt(values: unknown, path: readonly Declared[]): (readonly [Path, unknown])[] {
+  let found: (readonly [Path, unknown])[] = [[[], values]];
+  for (const segment of path) {
+    found = found.flatMap(([at, value]): (readonly [Path, unknown])[] => {
+      if (typeof segment === 'string') {
+        return [[[...at, segment], own(value, segment)]];
+      }
+      if (!Array.isArray(value)) {
+        return [];
+      }
+      return typeof segment === 'number'
+        ? segment < value.length
+          ? [[[...at, segment], value[segment]]]
+          : []
+        : value.map((item: unknown, index) => [[...at, index], item] as const);
+    });
+  }
+  return found;
+}
+
+/** What a rule read, at the paths it declares: what tells two calls apart. */
+const seenOf = (values: unknown, declared: readonly (readonly Declared[])[]): string =>
+  JSON.stringify(declared.map((path) => leavesAt(values, path)));
+
+function digest(text: string): number {
+  let hash = 7;
+  for (const character of text) {
+    hash = (hash * 31 + character.charCodeAt(0)) % 10_007;
+  }
+  return hash;
+}
+
+/** Whether a declared path reads `target` whole: it stands at it or above it, every item for any index. */
+const covers = (declared: readonly (readonly Declared[])[], target: readonly unknown[]): boolean =>
+  declared.some(
+    (path) =>
+      path.length <= target.length &&
+      path.every((segment, index) =>
+        typeof segment === 'string' ? segment === target[index] : typeof target[index] === 'number',
+      ),
+  );
+
+/**
+ * `at`, a path in what a rule read, with an item named now and then by a `{ key }`: the key its value holds at `k0`,
+ * when the rule declares it reads that field, or a number, which names an item by the form's key, another one or none.
+ */
+function named(values: unknown, at: Path, { declared, salt }: LawRule): Path {
+  let value = values;
+  return at.map((segment, index) => {
+    const list = value;
+    value = typeof segment === 'number' && Array.isArray(list) ? list[segment] : own(list, segment as PropertyKey);
+    if (typeof segment !== 'number' || !Array.isArray(list)) {
+      return segment;
+    }
+    const key = covers(declared, [...at.slice(0, index + 1), 'k0']) ? own(value, 'k0') : undefined;
+    return salt % 3 === 1 && key !== undefined ? { key } : salt % 3 === 2 ? { key: segment } : segment;
+  });
+}
+
+/**
+ * What a rule says of what it read, by a hash of each value at each place, of its salt and of all it read: issues on
+ * values, some of them warnings, now and then one on its node and one on a path that names no node.
+ */
+function ruleSays(values: unknown, rule: LawRule): Issue[] {
+  const { declared, salt } = rule;
+  const issues: Issue[] = [];
+  declared.forEach((path, index) => {
+    for (const [at, value] of leavesAt(values, path)) {
+      const hash = digest(`${salt} ${index} ${JSON.stringify(at)} ${JSON.stringify(value) ?? '-'}`);
+      if (hash % 3 === 0) {
+        const warning = hash % 4 === 0;
+        issues.push({
+          code: warning ? 'law.warning' : 'law.rule',
+          path: named(values, at, rule),
+          params: { message: `r${salt}.${index}` },
+          ...(warning ? { severity: 'warning' as const } : {}),
+        });
+      }
+    }
+  });
+  const whole = digest(`${salt} ${seenOf(values, declared)}`);
+  if (whole % 5 === 0) {
+    issues.push({ code: 'law.rule', path: [], params: { message: 'whole' } });
+  }
+  if (whole % 7 === 1) {
+    issues.push({ code: 'law.rule', path: ['zz', 'k0'], params: { message: 'ghost' } });
+  }
+  return issues;
+}
+
+/** What a rule requires of what it read: some of the places it read, and now and then its node. */
+function ruleNeeds(values: unknown, rule: LawRule): Path[] {
+  const { declared, salt } = rule;
+  const paths: Path[] = [];
+  declared.forEach((path, index) => {
+    for (const [at, value] of leavesAt(values, path)) {
+      if (digest(`need ${salt} ${index} ${JSON.stringify(at)} ${JSON.stringify(value) ?? '-'}`) % 4 === 1) {
+        paths.push(named(values, at, rule));
+      }
+    }
+  });
+  if (digest(`need ${salt} ${seenOf(values, declared)}`) % 3 === 0) {
+    paths.push([]);
+  }
+  return paths;
+}
+
 const CLEAR: Outcome = { kind: 'clear' };
 const NOT_A_LIST = 'not a list';
 
@@ -567,6 +736,7 @@ function buildTemplates(
     identity: shape.identity && keyed && shape.children[0]!.children[0]!.kind === 'field',
     reads: [],
     start: [],
+    rules: [],
   };
   all.push(template);
   (template as unknown as { children: Template[] }).children = shape.children.map((child, index) =>
@@ -629,9 +799,16 @@ function initialOf(template: Template): unknown {
  * every run, its answer later ones released by `scheduler`: a promise, one that rejects as soon as its signal aborts,
  * or a thenable that calls back twice, the second time with another answer.
  */
-function specOf(template: Template, asked: Asked[], calls: Called[], scheduler: fc.Scheduler): Spec {
+function specOf(
+  template: Template,
+  asked: Asked[],
+  calls: Called[],
+  scheduler: fc.Scheduler,
+  ruleCalls: RuleCall[],
+): Spec {
   const { shape } = template;
   const options: {
+    rules?: Rule[];
     schema?: StandardSchema;
     disabled?: { reads: Segment[][]; when: (...values: unknown[]) => boolean };
     validate?: (value: unknown, validation: Validation) => readonly Issue[] | PromiseLike<readonly Issue[]>;
@@ -729,16 +906,39 @@ function specOf(template: Template, asked: Asked[], calls: Called[], scheduler: 
       when: (...values) => holds(values, salt),
     };
   }
+  if (template.rules.length) {
+    const record = (rule: number, kind: RuleCall['kind'], values: unknown): void => {
+      ruleCalls.push({ template: template.id, rule, kind, seen: seenOf(values, template.rules[rule]!.declared) });
+    };
+    options.rules = template.rules.map((rule, index): Rule => ({
+      reads: rule.declared as Path[],
+      targets: [],
+      check: (values) => {
+        record(index, 'check', values);
+        return ruleSays(values, rule);
+      },
+      ...(rule.required
+        ? {
+            required: (values: unknown) => {
+              record(index, 'required', values);
+              return ruleNeeds(values, rule);
+            },
+          }
+        : {}),
+    }));
+  }
   if (shape.kind === 'field') {
     return field(shape.initial, options);
   }
   if (shape.kind === 'group') {
     return group(
-      Object.fromEntries(template.children.map((child) => [child.key!, specOf(child, asked, calls, scheduler)])),
+      Object.fromEntries(
+        template.children.map((child) => [child.key!, specOf(child, asked, calls, scheduler, ruleCalls)]),
+      ),
       options,
     );
   }
-  return array(specOf(template.children[0]!, asked, calls, scheduler), {
+  return array(specOf(template.children[0]!, asked, calls, scheduler, ruleCalls), {
     ...options,
     initial: template.start,
     maxLength: MAX_LENGTH,
@@ -780,6 +980,8 @@ class Naive {
   restored = 0;
   /** How many looks found a run kept while a schema had not answered. */
   kept = 0;
+  /** How many looks found a validator held back by the issues of rules alone. */
+  heldByRules = 0;
   /** Every node ever built, by id. */
   readonly built: Model[] = [];
   readonly root: Model;
@@ -807,6 +1009,8 @@ class Naive {
       life: 0,
       out: false,
       current: undefined,
+      checked: [],
+      needed: [],
     };
     this.built.push(model);
     const { kind } = template.shape;
@@ -871,12 +1075,14 @@ class Naive {
   }
 
   /**
-   * What a validator of `model` may do: 2 while a schema has placed an issue on the node or below (it stops), 1 while a
-   * schema of the node, of a node below or of an ancestor has not answered (it waits), 0 otherwise (it runs).
+   * What a validator of `model` may do: 2 while a schema or a rule has placed an issue that is not a warning on the
+   * node or below (it stops), 1 while a schema of the node, of a node below or of an ancestor has not answered (it
+   * waits), 0 otherwise (it runs).
    */
   gate(model: Model): 0 | 1 | 2 {
     const below = this.nodes(model);
-    if (below.some((node) => this.issues(node, 'schema').length > 0)) {
+    if (below.some((node) => this.issues(node, 'gate').length > 0)) {
+      this.heldByRules += below.every((node) => this.answered(node, node, 'gate').length === 0) ? 1 : 0;
       return 2;
     }
     let pending = below.some((node) => this.schemaPending(node));
@@ -1096,77 +1302,203 @@ class Naive {
   }
 
   /**
-   * The issues placed on `model`, as plain data, the outermost schema first: by what places them, or by the schemas
-   * alone.
+   * The issues placed on `model`, as plain data, the outermost node first, its schema or validator before its rules:
+   * all of them, or only what holds a validator back, the schemas' issues and the rules' that are not warnings.
    */
-  issues(model: Model, by: 'shown' | 'schema' = 'shown'): Plain[] {
+  issues(model: Model, by: 'shown' | 'gate' = 'shown'): Plain[] {
     const ancestors: Model[] = [];
     for (let at: Model | undefined = model; at; at = at.parent) {
       ancestors.unshift(at);
     }
     const placed: Plain[] = [];
     for (const owner of ancestors) {
-      const { schema, validator } = owner.template.shape;
-      const answer =
-        by === 'schema'
-          ? schema
-            ? this.answer(owner)
-            : undefined
-          : schema || validator
-            ? this.combined(owner)
-            : undefined;
-      if (answer?.issues === 'failed') {
-        if (owner === model) {
-          placed.push({
-            code: 'form.validation_failed',
-            path: this.pathOf(owner),
-            message: undefined,
-            cause: answer.cause,
-          });
-        }
-        continue;
-      }
-      const own = answer !== undefined && 'validator' in answer;
-      const keyed = own || owner.template.shape.schema === 'keyed';
-      for (const issue of answer?.issues ?? []) {
-        // The Standard Schema interface reads a `{ key }` segment as the key it holds.
-        const relative: unknown[] = (issue.path ?? []).map((segment) =>
-          !keyed && typeof segment === 'object' ? (segment as { key: PropertyKey }).key : segment,
-        );
-        let target = owner;
-        for (const [at, segment] of relative.entries()) {
-          let next: Model | undefined;
-          if (target.template.shape.kind === 'array') {
-            next =
-              typeof segment === 'number'
-                ? target.items[segment]
-                : isObject(segment)
-                  ? target.items.find((item) =>
-                      new Set([target.template.identity ? keyOf(this.raw(item)) : item.key]).has(segment['key']),
-                    )
-                  : undefined;
-            if (next) {
-              relative[at] = { key: next.key };
-            }
-          } else if (target.template.shape.kind === 'group') {
-            next = target.children.find((child) => child.template.key === segment);
+      placed.push(...this.answered(owner, model, by));
+      for (const rule of owner.template.rules) {
+        const read = this.view(owner);
+        for (const issue of ruleSays(read, rule)) {
+          const [target, path] = this.place(owner, read, issue.path, rule);
+          if (target === model && (by === 'shown' || issue.code !== 'law.warning')) {
+            placed.push({ code: issue.code, path, message: issue.params?.['message'], cause: undefined });
           }
-          if (next === undefined) {
-            break;
-          }
-          target = next;
-        }
-        if (target === model) {
-          placed.push({
-            code: own ? 'law.validator' : keyed ? 'law.keyed' : 'issue.external',
-            path: [...this.pathOf(owner), ...relative],
-            message: issue.message,
-            cause: keyed ? undefined : issue,
-          });
         }
       }
     }
     return placed;
+  }
+
+  /** The issues the schema or the validator of `owner` places on `model`. */
+  answered(owner: Model, model: Model, by: 'shown' | 'gate'): Plain[] {
+    const { schema, validator } = owner.template.shape;
+    const answer =
+      by === 'gate'
+        ? schema
+          ? this.answer(owner)
+          : undefined
+        : schema || validator
+          ? this.combined(owner)
+          : undefined;
+    const placed: Plain[] = [];
+    if (answer?.issues === 'failed') {
+      if (owner === model) {
+        placed.push({
+          code: 'form.validation_failed',
+          path: this.pathOf(owner),
+          message: undefined,
+          cause: answer.cause,
+        });
+      }
+      return placed;
+    }
+    const own = answer !== undefined && 'validator' in answer;
+    const keyed = own || owner.template.shape.schema === 'keyed';
+    for (const issue of answer?.issues ?? []) {
+      // The Standard Schema interface reads a `{ key }` segment as the key it holds.
+      const relative: unknown[] = (issue.path ?? []).map((segment) =>
+        !keyed && typeof segment === 'object' ? (segment as { key: PropertyKey }).key : segment,
+      );
+      let target = owner;
+      for (const [at, segment] of relative.entries()) {
+        let next: Model | undefined;
+        if (target.template.shape.kind === 'array') {
+          next =
+            typeof segment === 'number'
+              ? target.items[segment]
+              : isObject(segment)
+                ? target.items.find((item) =>
+                    new Set([target.template.identity ? keyOf(this.raw(item)) : item.key]).has(segment['key']),
+                  )
+                : undefined;
+          if (next) {
+            relative[at] = { key: next.key };
+          }
+        } else if (target.template.shape.kind === 'group') {
+          next = target.children.find((child) => child.template.key === segment);
+        }
+        if (next === undefined) {
+          break;
+        }
+        target = next;
+      }
+      if (target === model) {
+        placed.push({
+          code: own ? 'law.validator' : keyed ? 'law.keyed' : 'issue.external',
+          path: [...this.pathOf(owner), ...relative],
+          message: issue.message,
+          cause: keyed ? undefined : issue,
+        });
+      }
+    }
+    return placed;
+  }
+
+  /** What a rule of `model` reads: the raw value of its node, through the paths it declares only. */
+  view(model: Model): unknown {
+    return this.raw(model);
+  }
+
+  /** What a path of a rule reaches, by identity: each field at its end, and the items of every array on its way. */
+  reached(model: Model, path: readonly Declared[], at = 0): Identity {
+    const { kind } = model.template.shape;
+    if (at === path.length || kind === 'field') {
+      return this.identity(model);
+    }
+    if (kind === 'group') {
+      return this.reached(
+        model.children.find((child) => child.template.key === path[at])!,
+        path,
+        at + 1,
+      );
+    }
+    return {
+      list: model.items.map((item) => [item.id, this.reached(item, path, at + 1)] as const),
+      revision: model.revision,
+    };
+  }
+
+  /**
+   * The node a path a rule of `owner` gives names, from what the rule read, and the path from the root with each item
+   * by its key: a child by its key, an item by its index or `{ key }` in the list the rule read, the key its value
+   * holds at `k0` as the rule read it, or without `identity`, the form's key.
+   */
+  place(owner: Model, read: unknown, path: Path, rule: LawRule): [Model, unknown[]] {
+    const relative: unknown[] = [...path];
+    // The places walked, an item by its index in what the rule read.
+    const walked: unknown[] = [];
+    let target = owner;
+    let value = read;
+    for (const [at, segment] of relative.entries()) {
+      let next: Model | undefined;
+      const { kind } = target.template.shape;
+      if (kind === 'array' && Array.isArray(value)) {
+        const list: unknown[] = value;
+        const index =
+          typeof segment === 'number'
+            ? segment
+            : isObject(segment)
+              ? target.template.identity
+                ? list.findIndex(
+                    (item, place) =>
+                      covers(rule.declared, [...walked, place, 'k0']) && new Set([own(item, 'k0')]).has(segment['key']),
+                  )
+                : target.items.findIndex((item) => new Set([item.key]).has(segment['key']))
+              : -1;
+        next = target.items[index];
+        if (next) {
+          relative[at] = { key: next.key };
+          value = list[index];
+          walked.push(index);
+        }
+      } else if (kind === 'group' && typeof segment === 'string') {
+        next = target.children.find((child) => child.template.key === segment);
+        value = own(value, segment);
+        walked.push(segment);
+      }
+      if (next === undefined) {
+        break;
+      }
+      target = next;
+    }
+    return [target, [...this.pathOf(owner), ...relative]];
+  }
+
+  /** Whether a rule of the node or of an ancestor requires `model`, by what it requires of what it read. */
+  required(model: Model): boolean {
+    for (let owner: Model | undefined = model; owner; owner = owner.parent) {
+      for (const rule of owner.template.rules) {
+        if (rule.required) {
+          const read = this.view(owner);
+          if (ruleNeeds(read, rule).some((path) => this.place(owner!, read, path, rule)[0] === model)) {
+            return true;
+          }
+        }
+      }
+    }
+    return false;
+  }
+
+  /**
+   * The calls of the rules a look must have made, each as its node of the description, its rule, `check` or
+   * `required`, and what it read: one for each rule of a node in the tree whose fields at the end of its paths, or
+   * the items of an array on its way, are not those of its last call, every state being read at each look; the same
+   * for the nodes `gone` from the tree since the last look, whose listeners kept them up to date until then.
+   */
+  calls(gone: readonly Model[]): string[] {
+    const due: string[] = [];
+    for (const model of [...this.nodes(), ...gone]) {
+      model.template.rules.forEach((rule, index) => {
+        const print: Identity = { group: rule.declared.map((path) => this.reached(model, path)) };
+        for (const [kind, last] of [
+          ['check', model.checked],
+          ...(rule.required ? [['required', model.needed] as const] : []),
+        ] as const) {
+          if (last[index] === undefined || !sameIdentity(last[index], print)) {
+            last[index] = print;
+            due.push(`${model.template.id}:${index}:${kind} ${seenOf(this.view(model), rule.declared)}`);
+          }
+        }
+      });
+    }
+    return due;
   }
 
   allIssues(model: Model): Plain[] {
@@ -1205,7 +1537,7 @@ class Naive {
 
   parsed(model: Model): PlainResult {
     const errors = this.allIssues(model);
-    return errors.length || this.pending(model)
+    return errors.some((issue) => issue.code !== 'law.warning') || this.pending(model)
       ? { ok: false, error: errors }
       : { ok: true, value: this.output(model) };
   }
@@ -1376,7 +1708,7 @@ function order(value: unknown): unknown {
   return Array.isArray(value) ? value.map(order) : Object.entries(value).map(([key, inner]) => [key, order(inner)]);
 }
 
-const STATES = ['raw', 'dirty', 'touched', 'submitted', 'disabled', 'pending', 'issues', 'parsed'] as const;
+const STATES = ['raw', 'dirty', 'touched', 'submitted', 'disabled', 'pending', 'issues', 'required', 'parsed'] as const;
 type State = (typeof STATES)[number];
 
 type AnyNode = FormNode<unknown, unknown> & {
@@ -1414,6 +1746,8 @@ function expected(naive: Naive, model: Model, state: State): unknown {
       return naive.pending(model);
     case 'issues':
       return naive.issues(model);
+    case 'required':
+      return naive.required(model);
     case 'parsed':
       return naive.parsed(model);
   }
@@ -1474,6 +1808,11 @@ interface Counts {
   movedWithIssues: number;
   keyedIssues: number;
   mostItems: number;
+  ruleCalls: number;
+  ruleIssues: number;
+  warnings: number;
+  requiredSeen: number;
+  heldByRules: number;
 }
 
 function resolveWrite(write: Write, nodes: readonly Model[]): Resolved {
@@ -1528,6 +1867,27 @@ async function run(program: Program, scheduler: fc.Scheduler, counts: Counts): P
   for (const template of templates) {
     const candidates = templates.filter((other) => other.arrays.every((outer) => template.arrays.includes(outer)));
     template.reads = (template.shape.condition?.reads ?? []).map((read) => candidates[read % candidates.length]!);
+    // A rule reads nodes at or below its own: every item of an array, or the item of an index, which the form reads
+    // as every item; now and then a place in the list a field may hold.
+    const below = templates.filter((other) => {
+      for (let at: Template | undefined = other; at; at = at.parent) {
+        if (at === template) {
+          return true;
+        }
+      }
+      return false;
+    });
+    template.rules = template.shape.rules.map(({ reads, salt, required }) => ({
+      salt,
+      required,
+      declared: reads.map((read) => {
+        const target = below[read % below.length]!;
+        const relative = target.path
+          .slice(template.path.length)
+          .map((segment): Declared => (typeof segment === 'string' ? segment : read % 3 === 1 ? 0 : ANY));
+        return target.shape.kind === 'field' && read % 5 === 4 ? [...relative, 0] : relative;
+      }),
+    }));
   }
   // Initial lists from the innermost arrays out, each read as the form reads it, or none when the seed gives none.
   for (const template of [...templates].reverse()) {
@@ -1541,7 +1901,9 @@ async function run(program: Program, scheduler: fc.Scheduler, counts: Counts): P
   }
   const asked: Asked[] = [];
   const made: Called[] = [];
-  const form = createForm(specOf(top, asked, made, scheduler)) as unknown as AnyNode & {
+  const ruled: RuleCall[] = [];
+  let ruledHeard = 0;
+  const form = createForm(specOf(top, asked, made, scheduler, ruled)) as unknown as AnyNode & {
     readonly graph: { batch(run: () => void): void };
     submit(): unknown;
   };
@@ -1635,14 +1997,23 @@ async function run(program: Program, scheduler: fc.Scheduler, counts: Counts): P
         assert.deepStrictEqual(order(got), order(want), `${at}, keys in order`);
         states.set(state, seenBy(naive, model, state, want));
         counts.pendingSeen += state === 'pending' && want === true ? 1 : 0;
+        counts.requiredSeen += state === 'required' && want === true ? 1 : 0;
         if (state === 'issues') {
           const plainIssues = want as Plain[];
+          counts.ruleIssues += plainIssues.filter((issue) => issue.code === 'law.rule').length;
+          counts.warnings += plainIssues.filter((issue) => issue.code === 'law.warning').length;
           counts.failedSeen += plainIssues.some((issue) => issue.code === 'form.validation_failed') ? 1 : 0;
           counts.keyedIssues += plainIssues.filter((issue) => issue.code === 'law.keyed').length;
           counts.validatorIssues += plainIssues.filter((issue) => issue.code === 'law.validator').length;
         }
       }
     }
+    // The calls of the rules: exactly those the model says are due, each with what it read, and no other.
+    const due = naive.calls(gone.map(([, model]) => model));
+    const heardRules = ruled.slice(ruledHeard).map((call) => `${call.template}:${call.rule}:${call.kind} ${call.seen}`);
+    ruledHeard = ruled.length;
+    assert.deepStrictEqual(heardRules.sort(), due.sort(), `${label}: calls of the rules`);
+    counts.ruleCalls += due.length;
     // Who asked: the only node of a description outside arrays, or the node whose raw value is the value asked.
     const byRaw = new Map<unknown, Model>();
     for (const [node, model] of [...pairs, ...gone]) {
@@ -1789,6 +2160,7 @@ async function run(program: Program, scheduler: fc.Scheduler, counts: Counts): P
     await signals(`run released, ${scheduler.count()} left`);
   }
   counts.validations += asked.length;
+  counts.heldByRules += naive.heldByRules;
   counts.restored += naive.restored;
   counts.kept += naive.kept;
   const runs = [...naive.runs.values()].flat();
@@ -1823,6 +2195,11 @@ const fresh = (): Counts => ({
   movedWithIssues: 0,
   keyedIssues: 0,
   mostItems: 0,
+  ruleCalls: 0,
+  ruleIssues: 0,
+  warnings: 0,
+  requiredSeen: 0,
+  heldByRules: 0,
 });
 
 test('every state of every node follows the naive model, through writes, moving items and late answers', async () => {
@@ -1862,6 +2239,7 @@ const crowded: fc.Arbitrary<Program> = fc.record({
         condition: conditions,
         identity: fc.boolean(),
         start: seeds,
+        rules: ruleShapes,
       })
       .map((list) => [list]),
     schema: fc.constantFrom<SchemaKind | null>(null, 'sync', 'async'),
@@ -1869,6 +2247,7 @@ const crowded: fc.Arbitrary<Program> = fc.record({
     condition: fc.constant(null),
     identity: fc.constant(false),
     start: fc.constant([]),
+    rules: ruleShapes,
   }),
   steps: fc.array(
     fc.oneof(
@@ -1912,6 +2291,7 @@ const validating: fc.Arbitrary<Program> = fc.record({
           condition: fc.constant(null),
           identity: fc.boolean(),
           start: fc.array(fc.nat(3), { minLength: 2, maxLength: 8 }),
+          rules: ruleShapes,
         }),
         fc.record({
           kind: fc.constant('field' as const),
@@ -1922,6 +2302,7 @@ const validating: fc.Arbitrary<Program> = fc.record({
           condition: fc.constant(null),
           identity: fc.constant(false),
           start: fc.constant([]),
+          rules: fc.constant([]),
         }),
       )
       .map(([list, single]) => [list, single]),
@@ -1930,6 +2311,7 @@ const validating: fc.Arbitrary<Program> = fc.record({
     condition: fc.constant(null),
     identity: fc.constant(false),
     start: fc.constant([]),
+    rules: ruleShapes,
   }),
   steps: fc.array(
     fc.oneof(
@@ -1955,4 +2337,71 @@ test('a run in flight is aborted when its item leaves, and an item given back as
   console.log(counts);
   assert.ok(counts.abortedOut > 100, `${counts.abortedOut} runs aborted by a removal`);
   assert.ok(counts.restored > 100, `${counts.restored} items holding a validator given back`);
+});
+
+// Rules on every level: at the root, on an array kept or not by a key, on its items, beside a group of fields and a
+// field whose validator a rule may hold back: programs of writes, moves and releases, so that rules read through items
+// that move and say what they require.
+const rules = fc.array(
+  fc.record({ reads: fc.array(fc.nat(60), { minLength: 1, maxLength: 3 }), salt: fc.nat(23), required: fc.boolean() }),
+  { minLength: 1, maxLength: 3 },
+);
+const ruling: fc.Arbitrary<Program> = fc.record({
+  root: fc.record({
+    kind: fc.constant('group' as const),
+    initial: fc.constant(0),
+    children: fc
+      .tuple(
+        fc.tuple(lists(2), rules, rules).map(([list, own, inner]) => ({
+          ...list,
+          rules: own,
+          children: [{ ...list.children[0]!, rules: inner }],
+        })),
+        fc.record({
+          kind: fc.constant('group' as const),
+          initial: fc.constant(0),
+          children: fc.array(shapes(1, false), { minLength: 1, maxLength: 2 }),
+          schema: fc.constant(null),
+          validator: fc.constant(null),
+          condition: fc.constant(null),
+          identity: fc.constant(false),
+          start: fc.constant([]),
+          rules,
+        }),
+        fc.record({
+          kind: fc.constant('field' as const),
+          initial: fc.nat(3),
+          children: fc.constant([]),
+          schema: fc.constant(null),
+          validator: fc.constantFrom<ValidatorKind>('sync', 'async', 'abortable'),
+          condition: fc.constant(null),
+          identity: fc.constant(false),
+          start: fc.constant([]),
+          rules: fc.constant([]),
+        }),
+      )
+      .map((children) => [...children]),
+    schema: fc.constantFrom<SchemaKind | null>(null, null, 'sync'),
+    validator: fc.constant(null),
+    condition: fc.constant(null),
+    identity: fc.constant(false),
+    start: fc.constant([]),
+    rules,
+  }),
+  steps: fc.array(steps, { minLength: 10, maxLength: 30 }),
+  watched: fc.boolean(),
+});
+
+test('rules are checked again exactly when what they read changes, through moved items and empty groups', async () => {
+  const counts = fresh();
+  await fc.assert(
+    fc.asyncProperty(ruling, fc.scheduler(), (program, scheduler) => run(program, scheduler, counts)),
+    { numRuns: 150 },
+  );
+  console.log(counts);
+  assert.ok(counts.ruleCalls > 3000, `${counts.ruleCalls} calls of rules`);
+  assert.ok(counts.requiredSeen > 1000, `${counts.requiredSeen} nodes required`);
+  assert.ok(counts.warnings > 300, `${counts.warnings} warnings looked at`);
+  assert.ok(counts.heldByRules > 100, `${counts.heldByRules} looks at a validator held back by rules alone`);
+  assert.ok(counts.moved > 40, `${counts.moved} moves`);
 });

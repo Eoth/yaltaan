@@ -11,7 +11,8 @@ flowchart LR
   input["What the inputs hold (raw)"] --> schema["Any Standard Schema"]
   schema -->|"Issue: code, path"| field["The field the path names"]
   schema -->|"its output"| parsed["The parsed value"]
-  input --> states["dirty, touched, pending, submitted, disabled"]
+  rules["Rules across fields"] -->|"reads its paths only"| field
+  input --> states["dirty, touched, pending, submitted, disabled, required"]
 ```
 
 ## What you write
@@ -47,8 +48,9 @@ Every value and state is a node of the form's graph, with `get()` and `subscribe
 | State | Of a field | Of a group |
 |---|---|---|
 | `raw` | What its input holds. | The object of its children's raw values. |
-| `parsed` | The read value: `{ ok: true, value }`, or `{ ok: false, error }` with the issues of the node and of everything below, while there is one or the node is pending. | The same, over its children. |
-| `issues` | The issues placed on it, the outermost schema first. | Only those placed on the group itself. |
+| `parsed` | The read value: `{ ok: true, value }`, or `{ ok: false, error }` with the issues of the node and of everything below, while one is not a warning or the node is pending. | The same, over its children. |
+| `issues` | The issues placed on it, the outermost node first, a node's schema before its rules. | Only those placed on the group itself. |
+| `required` | A rule of its own or of an ancestor requires it. | The same. |
 | `dirty` | Its raw value differs from its initial value, compared by `equal` (a list, a date by content). | A field below is dirty. |
 | `touched` | `touch()` was called since its last reset. | A field below is touched. |
 | `pending` | A schema that may place issues on it, its own, an ancestor's or a descendant's, has not answered yet. | The same. |
@@ -174,9 +176,50 @@ A promise that rejects, a server that cannot be reached for instance, places `fo
 
 An issue of another engine has the code `issue.external`, with its message in `params.message`; a schema of `@yaltaan/schema` keeps its own codes and data, for your formatter.
 
+## Rules across fields
+
+`rules` gives a field, a group or an array the rules of [`@yaltaan/rules`](rules.md), their paths from that node. The form reads each rule as a node of its own, which reads the values of the paths the rule declares and nothing else: it is checked again only once one of them changes, and only when a state that needs it is read. Writing a contact's name checks no rule that reads emails. Its issues keep their code and their data, on the node their path names, after the issues of that node's schema; `required` says which nodes a rule requires.
+
+```ts
+import { array, createForm, field, group } from '@yaltaan/form';
+import { requiredIf, unique } from '@yaltaan/rules';
+
+const form = createForm(
+  group(
+    {
+      country: field('FR'),
+      siren: field<string | undefined>(undefined),
+      contacts: array(group({ key: field(''), name: field(''), email: field('') }), {
+        identity: ['key'],
+        initial: [
+          { key: 'c1', name: 'Claire', email: 'claire@example.org' },
+          { key: 'c2', name: 'Karim', email: 'karim@example.org' },
+        ],
+      }),
+    },
+    {
+      rules: [
+        requiredIf({ reads: [['country']], when: (country) => country === 'FR' }, [['siren']]),
+        unique(['contacts'], ['email'], { identity: ['key'] }),
+      ],
+    },
+  ),
+);
+const { siren, contacts } = form.children;
+siren.required.get(); // → true
+siren.issues.get().map((issue) => issue.code); // → ['rules.required_if']
+const [claire, karim] = contacts.items.get();
+karim!.children.email.set('claire@example.org');
+claire!.children.email.issues.get().map((issue) => issue.code); // → ['rules.unique']
+form.children.country.set('DE');
+siren.required.get(); // → false
+```
+
+A rule reads the raw values as `checkRules` would, so that the form and a server running the same rules agree: a sub-form left empty is an object, not a blank, and `requiredIf(…, [['billing']])` does not mark it; require its fields instead. An item named by `{ key }` in an issue of `each` or `unique` is found by the key its value holds when the array keeps its items by the same `identity`; otherwise no item holds that key, and the issue stays on the list. An index in a path the rule declares reads every item, since which item stands there changes with each move. A warning of a rule is shown, and blocks nothing: neither the parsed value nor a validator. An issue of a rule on a node or below it holds its validator back, as a schema's does.
+
 ## A check only the server can make
 
-`validate` gives a field, a group or an array a check of your application's own, a server's answer for instance. It receives the node's raw value and `{ signal, path }`, and returns the issues it found, their paths from the node, or a promise of them; an empty list when there is none. A run starts only once the schemas have nothing against the value: no schema of the node, of a node below it or of an ancestor is still to answer, nor has placed an issue on the node or below. So the server is not asked about a SIREN the step's schema rejects.
+`validate` gives a field, a group or an array a check of your application's own, a server's answer for instance. It receives the node's raw value and `{ signal, path }`, and returns the issues it found, their paths from the node, or a promise of them; an empty list when there is none. A run starts only once the schemas and the rules have nothing against the value: no schema of the node, of a node below it or of an ancestor is still to answer, nor has a schema or a rule placed an issue on the node or below, a warning aside. So the server is not asked about a SIREN the step's schema rejects.
 
 ```ts
 import type { Issue } from '@yaltaan/core/issue';
@@ -216,7 +259,7 @@ await new Promise<void>((resolve) => {
 siren.issues.get().map((issue) => issue.code); // → ['app.siren_registered']
 ```
 
-Each run has its own `signal`, aborted when the run stops counting before it answered: when the node is read after its value changed, when a schema places an issue on it, or when the node leaves the form, an item removed from its list; pass it to `fetch` so that the request stops. A schema that has yet to answer, after a change elsewhere, neither starts nor stops a run: typing in another field asks the server nothing again. Whatever the validator does with its signal, an answer counts only while its run is the node's last and the node is in the form. A promise that rejects places `form.validation_failed` on the node, the reason as `cause`.
+Each run has its own `signal`, aborted when the run stops counting before it answered: when the node is read after its value changed, when a schema or a rule places an issue on it, or when the node leaves the form, an item removed from its list; pass it to `fetch` so that the request stops. A schema that has yet to answer, after a change elsewhere, neither starts nor stops a run: typing in another field asks the server nothing again. Whatever the validator does with its signal, an answer counts only while its run is the node's last and the node is in the form. A promise that rejects places `form.validation_failed` on the node, the reason as `cause`.
 
 - **Wait before asking.** Each new value aborts the run before it, so a validator that first awaits a delay honouring its signal asks the server only once the user stops typing; the node is `pending` during the delay.
 - **A form you discard.** Combine the signal with yours, `AbortSignal.any([signal, destroyed])`, to stop what is in flight when the component goes away.

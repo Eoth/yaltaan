@@ -6,7 +6,7 @@ import { fromStandardIssue, type Issue } from '@yaltaan/core/issue';
 import type { Path } from '@yaltaan/core/path';
 import { createGraph, type Graph, type ReadableNode, type SourceNode } from '@yaltaan/core/reactive';
 import { err, ok, type Result } from '@yaltaan/core/result';
-import type { Condition } from '@yaltaan/rules';
+import type { Condition, Rule } from '@yaltaan/rules';
 import { parse, type Schema, type StandardResult, type StandardSchema } from '@yaltaan/schema';
 
 import type { ArrayInternal, List } from './array.ts';
@@ -69,11 +69,12 @@ export const own = (value: unknown, key: PropertyKey): unknown =>
 
 export function checkOptions(options: unknown): void {
   check(isObject(options), 'options are an object');
-  const { schema, disabled, equals, validate } = options as {
+  const { schema, disabled, equals, validate, rules } = options as {
     readonly schema?: Partial<StandardSchema> | null;
     readonly disabled?: Partial<Condition> | null;
     readonly equals?: unknown;
     readonly validate?: unknown;
+    readonly rules?: readonly Partial<Rule>[];
   };
   check(schema === undefined || typeof schema?.['~standard']?.validate === 'function', 'schema is a Standard Schema');
   check(
@@ -82,6 +83,17 @@ export function checkOptions(options: unknown): void {
   );
   check(equals === undefined || typeof equals === 'function', 'equals is a function');
   check(validate === undefined || typeof validate === 'function', 'validate is a function');
+  check(
+    rules === undefined ||
+      (Array.isArray(rules) &&
+        rules.every(
+          (rule) =>
+            Array.isArray(rule?.reads) &&
+            typeof rule.check === 'function' &&
+            (rule.required === undefined || typeof rule.required === 'function'),
+        )),
+    'rules are rules: reads, check and required',
+  );
 }
 
 /**
@@ -90,7 +102,7 @@ export function checkOptions(options: unknown): void {
  * @sharing structural
  * @complexity O(1)
  * @throws TypeError when an option is not of its kind: `schema` a Standard Schema, `disabled` a condition, `equals`
- *   and `validate` functions
+ *   and `validate` functions, `rules` rules
  * @since 0.3
  * @experimental
  * @example field('', { schema: string({ minLength: 1 }) })
@@ -181,6 +193,9 @@ export const some = (...values: unknown[]): boolean => values.some((value) => va
 
 const list = (...values: unknown[]): unknown[] => values;
 
+// Whether an issue blocks: any but a warning, which is shown and holds nothing back.
+const blocks = (issue: Issue): boolean => issue.severity !== 'warning';
+
 // The same read value: issues are kept by `equal` upstream, so an error compares by identity, as a value does.
 const sameParsed = (a: Result<unknown, readonly Issue[]>, b: Result<unknown, readonly Issue[]>): boolean =>
   a.ok ? b.ok && Object.is(a.value, b.value) : !b.ok && a.error === b.error;
@@ -220,6 +235,10 @@ export class Node {
   declare answer: ReadableNode<Answer> | undefined;
   /** The issues of that answer, by the node each is placed on. */
   declare placed: ReadableNode<Map<Node, Issue[]>> | undefined;
+  /** The issues of its rules, by the node each is placed on. */
+  declare ruled: ReadableNode<Map<Node, Issue[]>> | undefined;
+  /** The paths its rules require, by the node each names. */
+  declare mandated: ReadableNode<Map<Node, Issue[]>> | undefined;
   /** Whether a validator sits at or above this node; absent otherwise. */
   declare checked: true | undefined;
   /**
@@ -232,12 +251,17 @@ export class Node {
   /** An item's life while a validator sits at or below it: a new object each time it enters the form, null out. */
   declare life: SourceNode<object | null> | undefined;
 
-  /** `dirty` and `parsed`, built on their first read: few views read them on every field. */
+  /** `dirty`, `parsed` and `required`, built on their first read: few views read them on every field. */
   declare dirtyNode: ReadableNode<boolean> | undefined;
+  declare requiredNode: ReadableNode<boolean> | undefined;
   declare parsedNode: ReadableNode<Result<unknown, readonly Issue[]>> | undefined;
 
   get graph(): Graph {
     return this.shared.graph;
+  }
+
+  get required(): ReadableNode<boolean> {
+    return (this.requiredNode ??= requiredOf(this));
   }
 
   get dirty(): ReadableNode<boolean> {
@@ -247,7 +271,7 @@ export class Node {
   get parsed(): ReadableNode<Result<unknown, readonly Issue[]>> {
     return (this.parsedNode ??= this.graph.derived(
       [this.all, this.pending, this.output],
-      (all, pending, output) => (all.length || pending ? err(all) : ok(output)),
+      (all, pending, output) => (all.some(blocks) || pending ? err(all) : ok(output)),
       { equals: sameParsed },
     ));
   }
@@ -419,9 +443,10 @@ export function build(
   return node;
 }
 
-// Checks every condition of `spec` and below against the description, `root` the spec of the form and `arrays` those
-// that hold `spec`: a path names a node through group keys and, for an array that holds the condition, a `{ key }`
-// segment without a key, so that a condition of an item fails when the form is built, not when an item is.
+// Checks every condition and rule of `spec` and below against the description, `root` the spec of the form and
+// `arrays` those that hold `spec`: a path of a condition names a node through group keys and, for an array that holds
+// the condition, a `{ key }` segment without a key; a rule's, as `readsOf` reads it; so that a condition or a rule of
+// an item fails when the form is built, not when an item is.
 function checkReads(spec: Spec, root: Spec, arrays: readonly Spec[]): void {
   for (const read of spec.options.disabled?.reads ?? NONE) {
     check(Array.isArray(read), 'a condition reads paths');
@@ -438,10 +463,73 @@ function checkReads(spec: Spec, root: Spec, arrays: readonly Spec[]): void {
     }
     check(at, 'a condition reads a path that names no node of this form');
   }
+  for (const rule of spec.options.rules ?? NONE) {
+    readsOf(spec, rule.reads);
+  }
   const inner = spec.kind === 'group' ? Object.values(spec.children) : spec.kind === 'array' ? [spec.element] : NONE;
   for (const child of inner) {
     checkReads(child, root, spec.kind === 'array' ? [...arrays, spec] : arrays);
   }
+}
+
+/**
+ * What a rule reads below a node: all of it (`true`), or by the key of each child it reads below, an array by `0` for
+ * every item.
+ */
+export type Reads = true | Map<unknown, Reads>;
+
+// What `paths` read below a node of `spec`, checked against the description: a group's segment names a child, any
+// segment of an array stands for every item, and a path that reaches a field reads it whole.
+function readsOf(spec: Spec, paths: readonly Path[]): Reads {
+  const top = new Map<unknown, Reads>();
+  for (const path of paths) {
+    check(Array.isArray(path), 'a rule reads paths');
+    let at = spec;
+    let map = top;
+    let key: unknown = '';
+    for (const segment of path) {
+      let reads = map.get(key);
+      if (reads === true || at.kind === 'field') {
+        break;
+      }
+      map.set(key, (reads ??= new Map()));
+      map = reads;
+      if (at.kind === 'array') {
+        key = 0;
+        at = at.element;
+      } else {
+        check(
+          typeof segment === 'string' && Object.hasOwn(at.children, segment),
+          'a rule reads a path that names no node of this form',
+        );
+        at = at.children[(key = segment)]!;
+      }
+    }
+    map.set(key, true);
+  }
+  return top.get('') ?? new Map();
+}
+
+/**
+ * Notes in `deps` the nodes whose raw values `reads` names at and below `node`, and returns what builds, from their
+ * values, the values a rule reads: what it does not read left out, through an array the list of what it reads of each
+ * item, a node the array rewires with its items, and nothing for a rule that reads nothing.
+ */
+export function resolve(node: Node, reads: Reads, deps: ReadableNode<unknown>[]): (values: unknown[]) => unknown {
+  if (reads !== true && !reads.size) {
+    return () => undefined;
+  }
+  if (reads === true || !node.children) {
+    const at = deps.push(node.items && reads !== true ? (node as List).view(reads.get(0)!) : node.raw) - 1;
+    return (values) => values[at];
+  }
+  const keys = [...reads.keys()] as string[];
+  const parts = keys.map((key) => resolve(node.children![key]!, reads.get(key)!, deps));
+  return (values) =>
+    compose(
+      keys,
+      parts.map((part) => part(values)),
+    );
 }
 
 // The node `path` names from the root, as `checkReads` checked it: through group keys and, for an array, the item
@@ -497,42 +585,48 @@ function answerOf(
   return graph.derived([asked, last], (answer) => (isThenable(answer) ? (settled.get(answer) ?? PENDING) : answer));
 }
 
-// The issues of `answer`, by the node each is placed on: the deepest node its path names below `node`.
-function placedOf(node: Node, answer: ReadableNode<Answer>): ReadableNode<Map<Node, Issue[]>> {
+// The issues of `answers`, by the node each is placed on: the deepest node its path names below `node`.
+function placedOf(node: Node, answers: readonly ReadableNode<Answer>[]): ReadableNode<Map<Node, Issue[]>> {
   const { path } = node;
-  return node.graph.derived([answer], ({ issues, read }) => {
+  return node.graph.derived(answers, (...list) => {
     const placed = new Map<Node, Issue[]>();
-    for (let issue of issues) {
-      let target = node;
-      let value = read;
-      for (let at = path.length; at < issue.path.length; at++) {
-        const next = step(target, issue.path[at], value);
-        if (!next) {
-          break;
+    for (const { issues, read } of list) {
+      for (let issue of issues) {
+        let target = node;
+        let value = read;
+        for (let at = path.length; at < issue.path.length; at++) {
+          const next = step(target, issue.path[at], value);
+          if (!next) {
+            break;
+          }
+          if (target.items) {
+            issue = { ...issue, path: issue.path.with(at, next[0].path.at(-1)!) };
+          }
+          [target, value] = next;
         }
-        if (target.items) {
-          issue = { ...issue, path: issue.path.with(at, next[0].path.at(-1)!) };
+        const here = placed.get(target);
+        if (here) {
+          here.push(issue);
+        } else {
+          placed.set(target, [issue]);
         }
-        [target, value] = next;
-      }
-      const list = placed.get(target);
-      if (list) {
-        list.push(issue);
-      } else {
-        placed.set(target, [issue]);
       }
     }
     return placed;
   });
 }
 
-// What tells whether a schema may still place an issue on `node` or below, or has: what the schemas of the node and of
-// its ancestors answered and the issues they placed, and the same of each node below.
+// What tells whether a schema may still place an issue on `node` or below, or a schema or a rule has: what the
+// schemas of the node and of its ancestors answered and the issues they and their rules placed, and the same of each
+// node below.
 export const doubtsOf = (node: Node): ReadableNode<unknown>[] => {
   const deps: ReadableNode<unknown>[] = [];
   for (let at: Node | undefined = node; at; at = at.parent) {
     if (at.own) {
       deps.push(at.own, at.ownPlaced!);
+    }
+    if (at.ruled) {
+      deps.push(at.ruled);
     }
   }
   return [...deps, ...under(node).map((child) => child.doubt!)];
@@ -552,10 +646,36 @@ export function wire(node: Node, shared: Shared): void {
 function ask(node: Node, shared: Shared): void {
   const { graph } = shared;
   const { spec, parent, path } = node;
-  const { schema, validate } = spec.options as NodeSpecOptions<unknown>;
+  const { schema, validate, rules } = spec.options as NodeSpecOptions<unknown>;
   if (schema) {
     node.own = node.answer = answerOf(shared, [node.raw], (raw) => judge(schema, raw, path));
-    node.ownPlaced = node.placed = placedOf(node, node.own);
+    node.ownPlaced = node.placed = placedOf(node, [node.own]);
+  }
+  if (rules?.length) {
+    // Each rule is a node that reads the values of its paths: what it says, and what it requires, are computed again
+    // only once one of them changes, each when a state that needs it is read.
+    const said: ReadableNode<Answer>[] = [];
+    const needed: ReadableNode<Answer>[] = [];
+    for (const { reads, check, required } of rules) {
+      const deps: ReadableNode<unknown>[] = [];
+      const make = resolve(node, readsOf(spec, reads), deps);
+      said.push(
+        graph.derived(deps, (...values) => {
+          const read = make(values);
+          return { issues: check(read).map(placeAt(path)), read };
+        }),
+      );
+      if (required) {
+        needed.push(
+          graph.derived(deps, (...values) => {
+            const read = make(values);
+            return { issues: required(read).map((at) => ({ code: '', path: [...path, ...at] })), read };
+          }),
+        );
+      }
+    }
+    node.ruled = placedOf(node, said);
+    node.mandated = placedOf(node, needed);
   }
   if (validate || parent?.checked) {
     node.checked = true;
@@ -569,7 +689,7 @@ function ask(node: Node, shared: Shared): void {
       Math.max(
         0,
         ...values.map((value) =>
-          value instanceof Map ? (value.has(node) ? 2 : 0) : value === PENDING ? 1 : Number(value) || 0,
+          value instanceof Map ? (value.get(node)?.some(blocks) ? 2 : 0) : value === PENDING ? 1 : Number(value) || 0,
         ),
       ),
     );
@@ -628,7 +748,7 @@ function ask(node: Node, shared: Shared): void {
     node.answer = own
       ? graph.derived([own, verdict], (first, then) => (then === PENDING || then.issues.length ? then : first))
       : verdict;
-    node.placed = placedOf(node, node.answer);
+    node.placed = placedOf(node, [node.answer]);
   }
 }
 
@@ -652,6 +772,9 @@ function connect(node: Node, shared: Shared): void {
   node.above = parent?.answer ? graph.derived([parent.above, parent.answer], some) : (parent?.above ?? shared.no);
   const sources: ReadableNode<Map<Node, Issue[]>>[] = [];
   for (let at: Node | undefined = node; at; at = at.parent) {
+    if (at.ruled) {
+      sources.unshift(at.ruled);
+    }
     if (at.placed) {
       sources.unshift(at.placed);
     }
@@ -692,6 +815,17 @@ function connect(node: Node, shared: Shared): void {
             (...values) => compose(Object.keys(node.children!), values),
           )
         : node.raw;
+}
+
+// A node's `required`: whether what a rule of the node or of an ancestor requires names it.
+function requiredOf(node: Node): ReadableNode<boolean> {
+  const needs: ReadableNode<Map<Node, Issue[]>>[] = [];
+  for (let at: Node | undefined = node; at; at = at.parent) {
+    if (at.mandated) {
+      needs.push(at.mandated);
+    }
+  }
+  return needs.length ? node.graph.derived(needs, (...maps) => maps.some((map) => map.has(node))) : node.shared.no;
 }
 
 // A node's `dirty`: a field's raw value against its initial one, a group's children; an array's is its own.

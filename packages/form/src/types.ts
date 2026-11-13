@@ -4,7 +4,7 @@ import type { Issue } from '@yaltaan/core/issue';
 import type { Path } from '@yaltaan/core/path';
 import type { Graph, ReadableNode } from '@yaltaan/core/reactive';
 import type { Result } from '@yaltaan/core/result';
-import type { Condition } from '@yaltaan/rules';
+import type { Condition, Rule } from '@yaltaan/rules';
 import type { StandardSchema } from '@yaltaan/schema';
 
 declare global {
@@ -125,8 +125,9 @@ export type ItemOf<E> = NodeOf<E> & {
 export interface Validation {
   /**
    * Aborted when this run stops counting before the form has received its answer: when its node is next read after its
-   * raw value changed, when a schema places an issue on the node or below, or when the node leaves the form, an item
-   * removed. Aborted on the next microtask, out of any computation of the graph: what listens to it may read the form.
+   * raw value changed, when a schema or a rule places an issue on the node or below, or when the node leaves the form,
+   * an item removed. Aborted on the next microtask, out of any computation of the graph: what listens to it may read
+   * the form.
    */
   readonly signal: AbortSignal;
   /** The path of the node, from the root of the form. */
@@ -156,16 +157,28 @@ export interface NodeSpecOptions<Output, Raw = unknown> {
    * Checks the node's raw value, as the application alone can, a server's answer for instance: returns the issues
    * found, their paths from this node, placed as a schema's are, or a promise of them; an empty list when there is
    * none. Called with a signal of its own when a state that needs its answer is read and no run counts, once no schema
-   * of this node, of a node below or of an ancestor has placed an issue on it or below, or has yet to answer. A run
-   * counts until the raw value, or the lives of the items that hold the node, change, a schema places such an issue, or
-   * the node leaves the form; a schema that has yet to answer neither starts nor drops one, so that a write elsewhere
-   * asks nothing again, and an item given back by `reset()` asks again. A promise that rejects places
+   * or rule of this node, of a node below or of an ancestor has placed an issue that is not a warning on it or below,
+   * nor a schema has yet to answer. A run counts until the raw value, or the lives of the items that hold the node,
+   * change, a schema or a rule places such an issue, or the node leaves the form; a schema that has yet to answer
+   * neither starts nor drops one, so that a write elsewhere asks nothing again, and an item given back by `reset()`
+   * asks again. A promise that rejects places
    * `form.validation_failed` on the node, the reason as `cause`, and so does an answer that is not a list of issues, or
    * that throws when read, that answer or the error as `cause`; what it throws at once is thrown by every state that
    * depends on it. Called from a computation of the graph: must not read or write the form's graph.
    * @supplied
    */
   validate?(raw: Raw, validation: Validation): readonly Issue[] | PromiseLike<readonly Issue[]>;
+  /**
+   * Rules across the fields of the node, as `@yaltaan/rules` writes them, their paths from this node, each checked
+   * against the description when the form is built: a group's segment names a child, any segment of an array stands
+   * for every item, and a path into a field reads the field. Each rule is a node of the graph that reads the raw values
+   * of the paths it declares and nothing else, as `checkRules` would read the raw value of the node, so that a sub-form
+   * left empty is an object, not a blank; it is checked again only once one of them changes, or the items of an array
+   * on its way do, and only when a state that needs it is read. Its issues keep
+   * their code, placed as a schema's are, after the schema's of the same node; what `required` gives makes those nodes
+   * required. What a rule throws is thrown by every state that depends on it.
+   */
+  readonly rules?: readonly Rule[];
 }
 
 /**
@@ -226,12 +239,17 @@ export interface FormNode<Raw, Output> {
    */
   readonly raw: ReadableNode<Raw>;
   /**
-   * The read value: the issues of this node and of its descendants while there is one or the node is pending (with
-   * the issues known so far), the parsed value otherwise.
+   * The read value: the issues of this node and of its descendants while one of them is not a warning or the node is
+   * pending (with the issues known so far), the parsed value otherwise.
    */
   readonly parsed: ReadableNode<Result<Output, readonly Issue[]>>;
-  /** The issues placed on this node by the schemas of the node and of its ancestors, the outermost first. */
+  /**
+   * The issues placed on this node by the schemas, validators and rules of the node and of its ancestors, the
+   * outermost first, a node's schema or validator before its rules.
+   */
   readonly issues: ReadableNode<readonly Issue[]>;
+  /** Whether a rule of the node or of an ancestor requires this node, by its `required` on the values it reads. */
+  readonly required: ReadableNode<boolean>;
   /**
    * Whether a field's raw value differs from its initial value; whether a group holds a dirty child; whether an
    * array's raw value differs from its initial list, by its length or an item.
