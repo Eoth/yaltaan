@@ -162,7 +162,7 @@ contacts.raw.get(); // → [{ email: '' }, { email: 'grace@example.org' }]
 - `set(list)` garde les éléments par position, ou avec `identity` l'élément qui porte la clé de chaque valeur ; une valeur de reste construit un élément, un élément de reste est retiré. `reset()` rend les éléments de la dernière remise à zéro, dans leur ordre.
 - `dirty` compare la valeur brute de la liste à sa valeur initiale : une ligne déplacée la rend modifiée, remise en place elle ne l'est plus.
 - Un schéma de la liste nomme un élément par son index dans la valeur qu'il a lue : l'issue va à cet élément, son index remplacé par la `{ key }` de l'élément. Le schéma de l'élément, sur chaque élément, n'est pas interrogé de nouveau quand l'élément bouge.
-- Une condition dans un élément lit un champ du même élément par `{ key: undefined }`, que `@yaltaan/rules` appelle `anyElement` : `{ reads: [['contacts', { key: undefined }, 'primary']], when: (primary) => primary === true }`.
+- Une condition dans un élément lit un champ du même élément par `anyElement` de `@yaltaan/rules`, le segment `{ key: undefined }` : `{ reads: [['contacts', anyElement, 'primary']], when: (primary) => primary === true }`. TypeScript vérifie la constante plus vite que le segment écrit en ligne.
 - Une liste tient au plus `maxLength` éléments, 1 000 par défaut, et une écriture lit au plus `maxItems` éléments de tout le formulaire, 10 000 par défaut (une option de `createForm`) : au-delà de l'une ou l'autre, l'écriture lève une `RangeError` et n'écrit rien.
 
 ## Un schéma qui répond plus tard

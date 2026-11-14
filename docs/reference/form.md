@@ -145,6 +145,26 @@ export interface ArrayOptions<Item, Output = Item[]> extends NodeSpecOptions<Out
 | `@since` | 0.3 |
 | `@experimental` | yes |
 
+### `ArrayOptionsGiven`
+
+A type.
+
+The options of an array as `array` reads them when it infers its type arguments: `Disabled` and `Hidden` are the types of the `when` of the conditions given, `unknown` for none.
+
+```ts
+export interface ArrayOptionsGiven<Item, Output, Disabled, Hidden> extends ArrayOptions<Item, Output> {
+    /** As `disabled` of `NodeSpecOptions`. */
+    readonly disabled?: Condition | ConditionGiven<Disabled>;
+    /** As `hidden` of `NodeSpecOptions`. */
+    readonly hidden?: Condition | ConditionGiven<Hidden>;
+}
+```
+
+| Contract | Value |
+|---|---|
+| `@since` | 0.3 |
+| `@experimental` | yes |
+
 ### `ArraySpec`
 
 A type.
@@ -178,6 +198,43 @@ export type Children = Readonly<Record<string, Spec>>;
 |---|---|
 | `@since` | 0.3 |
 | `@experimental` | yes |
+
+### `ConditionGiven`
+
+A type.
+
+A condition as `field`, `group` and `array` read it when they infer their type arguments: `When`, the type of its `when`, tells them that it was given, so that the node, which may be left out of the submission, reads `Output | undefined` in its group's.
+
+```ts
+export interface ConditionGiven<When> {
+    /** The paths whose values `when` is given. */
+    readonly reads: readonly Path[];
+    /**
+     * Given the value of each path of `reads`, in order, and `undefined` for an absent one.
+     * @supplied
+     */
+    readonly when: When extends Condition['when'] ? When : Condition['when'];
+}
+```
+
+| Contract | Value |
+|---|---|
+| `@since` | 0.3 |
+| `@experimental` | yes |
+
+#### `ConditionGiven.when`
+
+A supplied member.
+
+Given the value of each path of `reads`, in order, and `undefined` for an absent one.
+
+```ts
+readonly when: When extends Condition['when'] ? When : Condition['when'];
+```
+
+| Contract | Value |
+|---|---|
+| `@supplied` | yes |
 
 ### `FieldNode`
 
@@ -232,6 +289,26 @@ equals?(initial: Raw, raw: Raw): boolean;
 | Contract | Value |
 |---|---|
 | `@supplied` | yes |
+
+### `FieldOptionsGiven`
+
+A type.
+
+The options of a field as `field` reads them when it infers its type arguments: `Disabled` and `Hidden` are the types of the `when` of the conditions given, `unknown` for none.
+
+```ts
+export interface FieldOptionsGiven<Raw, Output, Disabled, Hidden> extends FieldOptions<Raw, Output> {
+    /** As `disabled` of `NodeSpecOptions`. */
+    readonly disabled?: Condition | ConditionGiven<Disabled>;
+    /** As `hidden` of `NodeSpecOptions`. */
+    readonly hidden?: Condition | ConditionGiven<Hidden>;
+}
+```
+
+| Contract | Value |
+|---|---|
+| `@since` | 0.3 |
+| `@experimental` | yes |
 
 ### `FieldSpec`
 
@@ -544,6 +621,28 @@ export interface GroupOptions<Output, Raw = unknown> extends NodeSpecOptions<Out
 | `@since` | 0.3 |
 | `@experimental` | yes |
 
+### `GroupOptionsGiven`
+
+A type.
+
+The options of a group as `group` reads them when it infers its type arguments: `Disabled` and `Hidden` are the types of the `when` of the conditions given, `unknown` for none; `Optional` the type of `optional`, `unknown` when absent.
+
+```ts
+export interface GroupOptionsGiven<Output, Raw, Disabled, Hidden, Optional> extends GroupOptions<Output, Raw> {
+    /** As `disabled` of `NodeSpecOptions`. */
+    readonly disabled?: Condition | ConditionGiven<Disabled>;
+    /** As `hidden` of `NodeSpecOptions`. */
+    readonly hidden?: Condition | ConditionGiven<Hidden>;
+    /** As `optional` of `GroupOptions`. */
+    readonly optional?: Optional extends boolean ? Optional : boolean;
+}
+```
+
+| Contract | Value |
+|---|---|
+| `@since` | 0.3 |
+| `@experimental` | yes |
+
 ### `GroupSpec`
 
 A type.
@@ -738,7 +837,7 @@ export type Spec = FieldSpec<unknown, unknown> | GroupSpec<Children, unknown> | 
 
 A type.
 
-Options that leave a node in the submission whatever its fields hold: neither `disabled` nor `hidden` (nor, for a group, `optional`). Any other options, those holding one of them or a variable of a wider type, make the node's read value `Output | undefined` in its group's.
+Options that leave a node in the submission whatever its fields hold: neither `disabled` nor `hidden` (nor, for a group, `optional`). Read by `field`, `group` and `array` when their type arguments are written out: these options make the node's read value `Output` in its group's, and any other options, those holding one of them or a variable of a wider type, `Output | undefined`.
 
 ```ts
 export interface Staying {
@@ -784,6 +883,7 @@ A function.
 An array of items, each built from `element`: its raw value is the list of theirs. Each item holds a key for as long as it lives, its business key at `identity` or one the form gives it, so that its states and its issues follow it when it moves; `initial` items are read and checked when a form is built. With a `disabled` or a `hidden` condition, or options of a wider type, its read value may be `undefined` in its group's.
 
 ```ts
+export declare function array<const E extends Spec, Disabled, Hidden, Output = OutputOf<E>[]>(element: E, options: ArrayOptionsGiven<RawOf<NoInfer<E>>, Output, Disabled, Hidden>): ArraySpec<E, NoInfer<Output> | (unknown extends Disabled & Hidden ? never : undefined)>;
 export declare function array<const E extends Spec, Output = OutputOf<E>[]>(element: E, options?: ArrayOptions<RawOf<NoInfer<E>>, Output> & Staying): ArraySpec<E, NoInfer<Output>>;
 export declare function array<const E extends Spec, Output = OutputOf<E>[]>(element: E, options?: ArrayOptions<RawOf<NoInfer<E>>, Output>): ArraySpec<E, NoInfer<Output> | undefined>;
 ```
@@ -840,6 +940,7 @@ A function.
 A field holding `initial` until it is set; with a `disabled` or a `hidden` condition, or options of a wider type, its read value may be `undefined` in its group's.
 
 ```ts
+export declare function field<Raw, Disabled, Hidden, Output = Raw>(initial: Raw, options: FieldOptionsGiven<NoInfer<Raw>, Output, Disabled, Hidden>): FieldSpec<Raw, NoInfer<Output> | (unknown extends Disabled & Hidden ? never : undefined)>;
 export declare function field<Raw, Output = Raw>(initial: Raw, options?: FieldOptions<NoInfer<Raw>, Output> & Staying): FieldSpec<Raw, NoInfer<Output>>;
 export declare function field<Raw, Output = Raw>(initial: Raw, options?: FieldOptions<NoInfer<Raw>, Output>): FieldSpec<Raw, NoInfer<Output> | undefined>;
 ```
@@ -866,6 +967,7 @@ A function.
 A group of `children`, by key: its raw value is the object of theirs; with a `disabled` or a `hidden` condition, or `optional`, or options of a wider type, its read value may be `undefined` in its parent's.
 
 ```ts
+export declare function group<const C extends Children, Disabled, Hidden, Optional, Output = OutputOf<C>>(children: C, options: GroupOptionsGiven<Output, RawOf<C>, Disabled, Hidden, Optional>): GroupSpec<C, NoInfer<Output> | (unknown extends Disabled & Hidden ? unknown extends Optional ? never : true extends Optional ? undefined : never : undefined)>;
 export declare function group<const C extends Children, Output = OutputOf<C>>(children: C, options?: GroupOptions<Output, RawOf<C>> & Staying & {
     readonly optional?: false;
 }): GroupSpec<C, NoInfer<Output>>;

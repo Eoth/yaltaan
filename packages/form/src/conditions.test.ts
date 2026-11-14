@@ -6,7 +6,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import { atLeast, mutuallyExclusive, requiredIf } from '@yaltaan/rules';
+import { atLeast, mutuallyExclusive, requiredIf, type Condition } from '@yaltaan/rules';
 import { number, object, optional, string } from '@yaltaan/schema';
 
 import {
@@ -15,7 +15,9 @@ import {
   field,
   group,
   type FieldOptions,
+  type FieldSpec,
   type FormNode,
+  type GroupOptions,
   type OutputOf,
   type RawOf,
 } from './index.ts';
@@ -370,4 +372,47 @@ test('the types: a node that may be left out reads undefined in its group, exact
   const raw: Same<RawOf<typeof spec>['parent'], { name: string }> = true;
   const hidden: boolean = createForm(spec).children.parent.hidden.get();
   void [read, raw, hidden];
+});
+
+test('the types: a condition typed or inlined, a wider group, and type arguments written out, exactly', () => {
+  const typed: Condition = { reads: [], when: () => false };
+  const wideGroup: GroupOptions<{ name: string }> = {};
+  const spec = group({
+    typed: field('', { hidden: typed }),
+    inline: field(1, { disabled: { reads: [['typed']], when: (value) => value === '' } }),
+    notOptional: group({ name: field('') }, { optional: false }),
+    wideGroup: group({ name: field('') }, wideGroup),
+    list: array(group({ sku: field('') }), { identity: ['sku'], initial: [{ sku: 'a' }] }),
+    nullable: field<string | null>(null),
+    nullableHidden: field<string | null>(null, { hidden: typed }),
+    listDisabled: field<string[]>([], { disabled: typed }),
+    parsed: field<string, number>('', { schema: number() }),
+    parsedHidden: field<string, number>('', { schema: number(), hidden: typed }),
+    explicitGroup: group<{ name: FieldSpec<string> }>({ name: field('') }, { optional: true }),
+  });
+  const read: Same<
+    OutputOf<typeof spec>,
+    {
+      typed: string | undefined;
+      inline: number | undefined;
+      notOptional: { name: string };
+      wideGroup: { name: string } | undefined;
+      list: { sku: string }[];
+      nullable: string | null;
+      nullableHidden: string | null | undefined;
+      listDisabled: string[] | undefined;
+      parsed: number;
+      parsedHidden: number | undefined;
+      explicitGroup: { name: string } | undefined;
+    }
+  > = true;
+  void read;
+  // @ts-expect-error a condition has its paths
+  assert.throws(() => field('', { hidden: { when: () => true } }), TypeError);
+  // @ts-expect-error when is a function
+  assert.throws(() => field('', { disabled: { reads: [], when: 5 } }), TypeError);
+  // @ts-expect-error optional is a group's
+  assert.throws(() => array(field(0), { optional: true }), TypeError);
+  // @ts-expect-error optional is a boolean
+  assert.throws(() => group({ a: field('') }, { optional: 'yes' }), TypeError);
 });

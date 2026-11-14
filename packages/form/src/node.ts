@@ -13,11 +13,13 @@ import type { ArrayInternal, List } from './array.ts';
 import type {
   Children,
   FieldOptions,
+  FieldOptionsGiven,
   FieldSpec,
   Form,
   FormIssue,
   FormOptions,
   GroupOptions,
+  GroupOptionsGiven,
   GroupSpec,
   NodeSpecOptions,
   Staying,
@@ -135,6 +137,10 @@ export function checkOptions(options: unknown, kind?: Spec['kind']): void {
  * @experimental
  * @example field('', { schema: string({ minLength: 1 }) })
  */
+export function field<Raw, Disabled, Hidden, Output = Raw>(
+  initial: Raw,
+  options: FieldOptionsGiven<NoInfer<Raw>, Output, Disabled, Hidden>,
+): FieldSpec<Raw, NoInfer<Output> | (unknown extends Disabled & Hidden ? never : undefined)>;
 export function field<Raw, Output = Raw>(
   initial: Raw,
   options?: FieldOptions<NoInfer<Raw>, Output> & Staying,
@@ -163,6 +169,20 @@ export function field<Raw, Output = Raw>(
  * @experimental
  * @example group({ email: field(''), password: field('') })
  */
+export function group<const C extends Children, Disabled, Hidden, Optional, Output = OutputOf<C>>(
+  children: C,
+  options: GroupOptionsGiven<Output, RawOf<C>, Disabled, Hidden, Optional>,
+): GroupSpec<
+  C,
+  | NoInfer<Output>
+  | (unknown extends Disabled & Hidden
+      ? unknown extends Optional
+        ? never
+        : true extends Optional
+          ? undefined
+          : never
+      : undefined)
+>;
 export function group<const C extends Children, Output = OutputOf<C>>(
   children: C,
   options?: GroupOptions<Output, RawOf<C>> & Staying & { readonly optional?: false },

@@ -28,7 +28,16 @@ import {
   type Reads,
   type Writes,
 } from './node.ts';
-import type { ArrayOptions, ArraySpec, FieldOptions, OutputOf, RawOf, Spec, Staying } from './types.ts';
+import type {
+  ArrayOptions,
+  ArrayOptionsGiven,
+  ArraySpec,
+  FieldOptions,
+  OutputOf,
+  RawOf,
+  Spec,
+  Staying,
+} from './types.ts';
 
 const MAX_LENGTH = 1000;
 // V8 hashes a longer string by its length alone: keys are compared on this many code units, as @yaltaan/rules does.
@@ -58,6 +67,10 @@ let indexes: WeakMap<object, Map<unknown, number>> | undefined;
  * @experimental
  * @example array(group({ sku: field(''), qty: field(1) }), { identity: ['sku'], initial: [{ sku: 'A', qty: 2 }] })
  */
+export function array<const E extends Spec, Disabled, Hidden, Output = OutputOf<E>[]>(
+  element: E,
+  options: ArrayOptionsGiven<RawOf<NoInfer<E>>, Output, Disabled, Hidden>,
+): ArraySpec<E, NoInfer<Output> | (unknown extends Disabled & Hidden ? never : undefined)>;
 export function array<const E extends Spec, Output = OutputOf<E>[]>(
   element: E,
   options?: ArrayOptions<RawOf<NoInfer<E>>, Output> & Staying,

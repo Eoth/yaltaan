@@ -232,14 +232,61 @@ export interface GroupOptions<Output, Raw = unknown> extends NodeSpecOptions<Out
 
 /**
  * Options that leave a node in the submission whatever its fields hold: neither `disabled` nor `hidden` (nor, for a
- * group, `optional`). Any other options, those holding one of them or a variable of a wider type, make the node's read
- * value `Output | undefined` in its group's.
+ * group, `optional`). Read by `field`, `group` and `array` when their type arguments are written out: these options
+ * make the node's read value `Output` in its group's, and any other options, those holding one of them or a variable
+ * of a wider type, `Output | undefined`.
  * @since 0.3
  * @experimental
  */
 export interface Staying {
   readonly disabled?: undefined;
   readonly hidden?: undefined;
+}
+
+/**
+ * A condition as `field`, `group` and `array` read it when they infer their type arguments: `When`, the type of its
+ * `when`, tells them that it was given, so that the node, which may be left out of the submission, reads
+ * `Output | undefined` in its group's.
+ * @since 0.3
+ * @experimental
+ */
+export interface ConditionGiven<When> {
+  /** The paths whose values `when` is given. */
+  readonly reads: readonly Path[];
+  /**
+   * Given the value of each path of `reads`, in order, and `undefined` for an absent one.
+   * @supplied
+   */
+  readonly when: When extends Condition['when'] ? When : Condition['when'];
+}
+
+/**
+ * The options of a field as `field` reads them when it infers its type arguments: `Disabled` and `Hidden` are the
+ * types of the `when` of the conditions given, `unknown` for none.
+ * @since 0.3
+ * @experimental
+ */
+export interface FieldOptionsGiven<Raw, Output, Disabled, Hidden> extends FieldOptions<Raw, Output> {
+  /** As `disabled` of `NodeSpecOptions`. */
+  readonly disabled?: Condition | ConditionGiven<Disabled>;
+  /** As `hidden` of `NodeSpecOptions`. */
+  readonly hidden?: Condition | ConditionGiven<Hidden>;
+}
+
+/**
+ * The options of a group as `group` reads them when it infers its type arguments: `Disabled` and `Hidden` are the
+ * types of the `when` of the conditions given, `unknown` for none; `Optional` the type of `optional`, `unknown` when
+ * absent.
+ * @since 0.3
+ * @experimental
+ */
+export interface GroupOptionsGiven<Output, Raw, Disabled, Hidden, Optional> extends GroupOptions<Output, Raw> {
+  /** As `disabled` of `NodeSpecOptions`. */
+  readonly disabled?: Condition | ConditionGiven<Disabled>;
+  /** As `hidden` of `NodeSpecOptions`. */
+  readonly hidden?: Condition | ConditionGiven<Hidden>;
+  /** As `optional` of `GroupOptions`. */
+  readonly optional?: Optional extends boolean ? Optional : boolean;
 }
 
 /**
@@ -262,6 +309,19 @@ export interface ArrayOptions<Item, Output = Item[]> extends NodeSpecOptions<Out
   readonly identity?: Path;
   /** The most items the array may hold, 1,000 by default: a write that would hold more throws a `RangeError`. */
   readonly maxLength?: number;
+}
+
+/**
+ * The options of an array as `array` reads them when it infers its type arguments: `Disabled` and `Hidden` are the
+ * types of the `when` of the conditions given, `unknown` for none.
+ * @since 0.3
+ * @experimental
+ */
+export interface ArrayOptionsGiven<Item, Output, Disabled, Hidden> extends ArrayOptions<Item, Output> {
+  /** As `disabled` of `NodeSpecOptions`. */
+  readonly disabled?: Condition | ConditionGiven<Disabled>;
+  /** As `hidden` of `NodeSpecOptions`. */
+  readonly hidden?: Condition | ConditionGiven<Hidden>;
 }
 
 /**

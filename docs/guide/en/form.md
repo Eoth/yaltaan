@@ -162,7 +162,7 @@ contacts.raw.get(); // → [{ email: '' }, { email: 'grace@example.org' }]
 - `set(list)` keeps the items by position, or with `identity` the item that holds the key of each value; a value left builds an item, an item left is removed. `reset()` gives back the items of the last reset, in their order.
 - `dirty` compares the raw value of the list with its initial one: a row moved makes it dirty, moved back it is not.
 - A schema of the list names an item by its index in the value it read: the issue goes to that item, its index replaced by the item's `{ key }`. A schema of the element, on each item, is not asked again when the item moves.
-- A condition inside an item reads a field of the same item through `{ key: undefined }`, which `@yaltaan/rules` names `anyElement`: `{ reads: [['contacts', { key: undefined }, 'primary']], when: (primary) => primary === true }`.
+- A condition inside an item reads a field of the same item through `anyElement` of `@yaltaan/rules`, the segment `{ key: undefined }`: `{ reads: [['contacts', anyElement, 'primary']], when: (primary) => primary === true }`. TypeScript checks the constant faster than the segment written inline.
 - An array holds at most `maxLength` items, 1,000 by default, and one write reads at most `maxItems` items of the whole form, 10,000 by default (an option of `createForm`): past either, the write throws a `RangeError` and writes nothing.
 
 ## A schema that answers later
