@@ -71,14 +71,22 @@ type SchemaKind = 'sync' | 'async' | 'mixed' | 'keyed';
 type ValidatorKind = 'sync' | 'async' | 'abortable' | 'thenable' | 'mixed';
 type Kind = 'field' | 'group' | 'array';
 
+type ConditionShape = { readonly reads: readonly number[]; readonly salt: number } | null;
+type ConditionName = 'disabled' | 'hidden' | 'readonly';
+
 interface Shape {
   readonly kind: Kind;
-  readonly initial: number;
+  readonly initial: number | undefined;
   /** A group's children; an array's element, alone. */
   readonly children: readonly Shape[];
   readonly schema: SchemaKind | null;
   readonly validator: ValidatorKind | null;
-  readonly condition: { readonly reads: readonly number[]; readonly salt: number } | null;
+  /** Its `disabled` condition. */
+  readonly condition: ConditionShape;
+  readonly hidden?: ConditionShape;
+  readonly readonly?: ConditionShape;
+  /** A group's: whether it is left out of the submission while it holds nothing. */
+  readonly optional?: boolean;
   /** An array's: whether its items are kept by the key their first field holds, when its element allows it. */
   readonly identity: boolean;
   /** An array's: the seed of its initial items. */
@@ -104,6 +112,8 @@ interface LawRule {
   readonly declared: readonly (readonly Declared[])[];
   readonly salt: number;
   readonly required: boolean;
+  /** The node of the description that holds it. */
+  readonly owner: Template;
 }
 
 /** A node of the description: its shape, its place, and what its condition reads. */
@@ -119,7 +129,8 @@ interface Template {
   /** The arrays that hold it, outermost first. */
   readonly arrays: readonly Template[];
   readonly identity: boolean;
-  reads: readonly Template[];
+  /** What each of its conditions reads. */
+  reads: Readonly<Record<ConditionName, readonly Template[]>>;
   /** An array's initial raw value, as the form holds it. */
   start: unknown[];
   rules: readonly LawRule[];
@@ -151,6 +162,8 @@ interface Model {
   /** What each of its rules read at its last check, and at its last `required`, by the rule's index. */
   checked: (Identity | undefined)[];
   needed: (Identity | undefined)[];
+  /** What its schema read at the last look, by identity: what it submits, or `OUT` while it is left out. */
+  judgedSeen: Identity | undefined;
 }
 
 /** A value's identity, for the notification law: `Object.is` of each leaf, through groups and the items of arrays. */
@@ -236,14 +249,19 @@ type Step =
 type Resolved = Write & { readonly target: number; readonly value?: unknown };
 
 const ABSENT = Symbol('absent');
+/** What a node left out of the submission submits, in the model. */
+const OUT = Symbol('out');
 const MAX_LENGTH = 3;
 
-const conditions = fc.option(
-  fc.record({ reads: fc.array(fc.nat(40), { minLength: 1, maxLength: 2 }), salt: fc.nat(3) }),
-  {
-    freq: 3,
-  },
-);
+const conditionRecord = fc.record({ reads: fc.array(fc.nat(40), { minLength: 1, maxLength: 2 }), salt: fc.nat(3) });
+/** A condition on one node in `rare`. */
+const rarely = (rare: number): fc.Arbitrary<ConditionShape> =>
+  fc.oneof({ arbitrary: fc.constant(null), weight: rare - 1 }, { arbitrary: conditionRecord, weight: 1 });
+// One node in four disabled now and then: a disabled node is left out of the submission, and checks nothing.
+const conditions = rarely(4);
+const hiddens = rarely(6);
+const readonlys = rarely(8);
+const initials = fc.oneof({ arbitrary: fc.nat(3), weight: 4 }, { arbitrary: fc.constant(undefined), weight: 1 });
 const seeds = fc.array(fc.nat(5), { minLength: 1, maxLength: 8 });
 const ruleShapes = fc.oneof(
   { arbitrary: fc.constant([]), weight: 3 },
@@ -273,11 +291,13 @@ const validators = fc.constantFrom<ValidatorKind | null>(
 const shapes = (depth: number, inArray: boolean): fc.Arbitrary<Shape> => {
   const leaf = fc.record({
     kind: fc.constant('field' as const),
-    initial: fc.nat(3),
+    initial: initials,
     children: fc.constant([]),
     schema: inArray ? fc.constant(null) : fc.constantFrom<SchemaKind | null>(null, null, 'sync', 'async', 'mixed'),
     validator: validators,
     condition: conditions,
+    hidden: hiddens,
+    readonly: readonlys,
     identity: fc.constant(false),
     start: fc.constant([]),
     rules: ruleShapes,
@@ -292,6 +312,9 @@ const shapes = (depth: number, inArray: boolean): fc.Arbitrary<Shape> => {
     schema: fc.constantFrom<SchemaKind | null>(null, null, 'sync', 'async', 'mixed'),
     validator: validators,
     condition: conditions,
+    hidden: hiddens,
+    readonly: readonlys,
+    optional: fc.constantFrom(false, false, true),
     identity: fc.constant(false),
     start: fc.constant([]),
     rules: ruleShapes,
@@ -311,6 +334,8 @@ const lists = (depth: number): fc.Arbitrary<Shape> =>
     schema: fc.constantFrom<SchemaKind | null>(null, null, 'sync', 'async', 'mixed', 'keyed'),
     validator: validators,
     condition: conditions,
+    hidden: hiddens,
+    readonly: readonlys,
     identity: fc.boolean(),
     start: seeds,
     rules: ruleShapes,
@@ -447,6 +472,9 @@ function valueOf(template: Template, seed: readonly number[], cursor = { at: 0 }
 }
 
 const given = (value: unknown): unknown => (value === ABSENT ? undefined : value);
+
+/** What a group holds for a child left out of the submission: `undefined`. */
+const plainOf = (value: unknown): unknown => (value === OUT ? undefined : value);
 
 /** What a condition says of the raw values it reads: a hash of all of them, so that every value and its place count. */
 function holds(values: readonly unknown[], salt: number): boolean {
@@ -589,21 +617,41 @@ function digest(text: string): number {
   return hash;
 }
 
-/** Whether a declared path reads `target` whole: it stands at it or above it, every item for any index. */
-const covers = (declared: readonly (readonly Declared[])[], target: readonly unknown[]): boolean =>
+/** The node of the description at `path` below `template`: a child by its key, an array's element for an index. */
+function templateAt(template: Template, path: readonly unknown[]): Template | undefined {
+  let at: Template | undefined = template;
+  for (const segment of path) {
+    at =
+      typeof segment === 'string'
+        ? at?.children.find((child) => child.key === segment)
+        : at?.shape.kind === 'array'
+          ? at.children[0]
+          : undefined;
+  }
+  return at;
+}
+
+/**
+ * Whether a rule reads the node at `target` whole: a declared path stands at it or above it, every item for any index,
+ * or goes into it when it is a field, since a path into a field reads the field.
+ */
+const covers = ({ declared, owner }: LawRule, target: readonly unknown[]): boolean =>
   declared.some(
     (path) =>
-      path.length <= target.length &&
-      path.every((segment, index) =>
-        typeof segment === 'string' ? segment === target[index] : typeof target[index] === 'number',
-      ),
+      (path.length <= target.length || templateAt(owner, target)?.shape.kind === 'field') &&
+      path
+        .slice(0, target.length)
+        .every((segment, index) =>
+          typeof segment === 'string' ? segment === target[index] : typeof target[index] === 'number',
+        ),
   );
 
 /**
  * `at`, a path in what a rule read, with an item named now and then by a `{ key }`: the key its value holds at `k0`,
  * when the rule declares it reads that field, or a number, which names an item by the form's key, another one or none.
  */
-function named(values: unknown, at: Path, { declared, salt }: LawRule): Path {
+function named(values: unknown, at: Path, rule: LawRule): Path {
+  const { salt } = rule;
   let value = values;
   return at.map((segment, index) => {
     const list = value;
@@ -611,7 +659,7 @@ function named(values: unknown, at: Path, { declared, salt }: LawRule): Path {
     if (typeof segment !== 'number' || !Array.isArray(list)) {
       return segment;
     }
-    const key = covers(declared, [...at.slice(0, index + 1), 'k0']) ? own(value, 'k0') : undefined;
+    const key = covers(rule, [...at.slice(0, index + 1), 'k0']) ? own(value, 'k0') : undefined;
     return salt % 3 === 1 && key !== undefined ? { key } : salt % 3 === 2 ? { key: segment } : segment;
   });
 }
@@ -734,7 +782,7 @@ function buildTemplates(
     path: parent ? [...parent.path, key ?? ANY] : [],
     arrays: parent ? (parent.shape.kind === 'array' ? [...parent.arrays, parent] : parent.arrays) : [],
     identity: shape.identity && keyed && shape.children[0]!.children[0]!.kind === 'field',
-    reads: [],
+    reads: { disabled: [], hidden: [], readonly: [] },
     start: [],
     rules: [],
   };
@@ -744,6 +792,12 @@ function buildTemplates(
   );
   return template;
 }
+
+const CONDITION_NAMES: readonly ConditionName[] = ['disabled', 'hidden', 'readonly'];
+
+/** A condition of a shape, by its name: `disabled` is `condition`. */
+const conditionOf = (shape: Shape, name: ConditionName): ConditionShape =>
+  (name === 'disabled' ? shape.condition : shape[name]) ?? null;
 
 /** The key of an item's raw value: its first field. */
 const keyOf = (value: unknown): unknown => own(value, 'k0');
@@ -811,6 +865,9 @@ function specOf(
     rules?: Rule[];
     schema?: StandardSchema;
     disabled?: { reads: Segment[][]; when: (...values: unknown[]) => boolean };
+    hidden?: { reads: Segment[][]; when: (...values: unknown[]) => boolean };
+    readonly?: { reads: Segment[][]; when: (...values: unknown[]) => boolean };
+    optional?: boolean;
     validate?: (value: unknown, validation: Validation) => readonly Issue[] | PromiseLike<readonly Issue[]>;
   } = {};
   if (shape.validator) {
@@ -899,12 +956,17 @@ function specOf(
       },
     };
   }
-  if (shape.condition) {
-    const { salt } = shape.condition;
-    options.disabled = {
-      reads: template.reads.map((read) => [...read.path]),
-      when: (...values) => holds(values, salt),
-    };
+  for (const name of CONDITION_NAMES) {
+    const condition = conditionOf(shape, name);
+    if (condition) {
+      options[name] = {
+        reads: template.reads[name].map((read) => [...read.path]),
+        when: (...values) => holds(values, condition.salt + CONDITION_NAMES.indexOf(name) * 4),
+      };
+    }
+  }
+  if (shape.optional) {
+    options.optional = true;
   }
   if (template.rules.length) {
     const record = (rule: number, kind: RuleCall['kind'], values: unknown): void => {
@@ -986,6 +1048,16 @@ class Naive {
   readonly built: Model[] = [];
   readonly root: Model;
   submitted = false;
+  /** What a node submits and whether it is left out, by node, until the next write changes a value or the items. */
+  readonly memo = new Map<string, unknown>();
+
+  /** `compute()`, kept for `key` until the next write. */
+  remember<T>(key: string, compute: () => T): T {
+    if (!this.memo.has(key)) {
+      this.memo.set(key, compute());
+    }
+    return this.memo.get(key) as T;
+  }
 
   constructor(template: Template) {
     this.root = this.instantiate(template, initialOf(template), undefined);
@@ -1011,6 +1083,7 @@ class Naive {
       current: undefined,
       checked: [],
       needed: [],
+      judgedSeen: undefined,
     };
     this.built.push(model);
     const { kind } = template.shape;
@@ -1094,10 +1167,10 @@ class Naive {
 
   /**
    * Applies the rules of a validator at each look, for the tree and for the nodes that left it since the last look: the
-   * run that counts is dropped when a schema places an issue, when its node is out of the form, or when its raw value
-   * or the lives of its items are no longer those it was asked for, and must then be aborted if still in flight; a new
-   * run starts when none counts, no schema may still place an issue and the node is in the form. A schema that has not
-   * answered keeps the run that counts as it is.
+   * run that counts is dropped when a schema places an issue, when its node is out of the form or of the submission,
+   * or when what it submits or the lives of its items are no longer those it was asked for, and must then be aborted
+   * if still in flight; a new run starts when none counts, no schema may still place an issue and the node is in the
+   * form and submitted. A schema that has not answered keeps the run that counts as it is.
    */
   check(departed: readonly Model[]): void {
     for (const model of [...this.nodes(), ...departed]) {
@@ -1107,10 +1180,11 @@ class Naive {
       }
       const gate = this.gate(model);
       const attached = this.attached(model);
-      const identity = this.identity(model);
+      const away = this.gone(model);
+      const identity = this.judgedIdentity(model);
       const life = this.lifeOf(model);
       const run = model.current;
-      if (run && (gate === 2 || !attached || !sameIdentity(run.identity, identity) || run.life !== life)) {
+      if (run && (gate === 2 || !attached || away || !sameIdentity(run.identity, identity) || run.life !== life)) {
         run.aborted = !run.settled;
         model.current = undefined;
       }
@@ -1119,8 +1193,8 @@ class Naive {
       }
       const runs = this.runs.get(model.id) ?? [];
       this.runs.set(model.id, runs);
-      if (!model.current && gate === 0 && attached) {
-        const value = this.raw(model);
+      if (!model.current && gate === 0 && attached && !away) {
+        const value = this.sent(model);
         model.current = {
           value,
           identity,
@@ -1171,20 +1245,22 @@ class Naive {
       : { list: model.items.map((item) => [item.id, this.identity(item)] as const), revision: model.revision };
   }
 
+  /** Dirty holds on what is submitted: never on a node disabled or hidden; a read-only one is submitted. */
   dirty(model: Model): boolean {
     const { kind } = model.template.shape;
     if (kind === 'field') {
-      return !isDeepStrictEqual(model.raw, model.initial);
+      return !this.off(model) && !isDeepStrictEqual(model.raw, model.initial);
     }
     return kind === 'group'
       ? model.children.some((child) => this.dirty(child))
-      : !isDeepStrictEqual(model.start, this.raw(model));
+      : !this.off(model) && !isDeepStrictEqual(model.start, this.raw(model));
   }
 
+  /** Touched holds on what the user can act on: never on a node disabled, hidden or read only. */
   touched(model: Model): boolean {
     const { kind } = model.template.shape;
     if (kind === 'field') {
-      return model.touched;
+      return model.touched && !this.idle(model);
     }
     return (kind === 'group' ? model.children : model.items).some((child) => this.touched(child));
   }
@@ -1206,28 +1282,122 @@ class Naive {
     return model;
   }
 
-  disabled(model: Model): boolean {
-    const { condition } = model.template.shape;
-    const values = model.template.reads.map((read) => this.raw(this.resolve(read, model)));
-    return (condition !== null && holds(values, condition.salt)) || (!!model.parent && this.disabled(model.parent));
+  /** Whether the condition `name` of `model` or of an ancestor holds, on the raw values it reads. */
+  flag(model: Model, name: ConditionName): boolean {
+    return this.remember(`${name} ${model.id}`, () => this.holdsOn(model, name));
+  }
+
+  holdsOn(model: Model, name: ConditionName): boolean {
+    const condition = conditionOf(model.template.shape, name);
+    const values = model.template.reads[name].map((read) => this.raw(this.resolve(read, model)));
+    return (
+      (condition !== null && holds(values, condition.salt + CONDITION_NAMES.indexOf(name) * 4)) ||
+      (!!model.parent && this.flag(model.parent, name))
+    );
+  }
+
+  /** Whether `model` is left out of the submission whatever it holds: disabled or hidden. */
+  off(model: Model): boolean {
+    return this.flag(model, 'disabled') || this.flag(model, 'hidden');
+  }
+
+  /** Whether the user cannot act on `model`: disabled, hidden or read only. */
+  idle(model: Model): boolean {
+    return this.off(model) || this.flag(model, 'readonly');
   }
 
   /**
-   * Records the question a schema is asked when its node's value changed since the last one: called at each look, for
-   * the tree and for the nodes `gone` from it since the last look, whose listeners read them until then.
+   * What `model` submits when its parent is submitted: `OUT` while it is disabled or hidden, or for an optional group
+   * while nothing below it submits anything but a blank; otherwise a field's raw value, a group's object of what its
+   * children submit, `undefined` for a child left out, an array's list of what its items submit, those left out
+   * dropped.
+   */
+  sent(model: Model): unknown {
+    return this.remember(`sent ${model.id}`, () => this.submits(model));
+  }
+
+  submits(model: Model): unknown {
+    if (this.off(model)) {
+      return OUT;
+    }
+    const { kind, optional } = model.template.shape;
+    if (kind === 'field') {
+      return model.raw;
+    }
+    if (kind === 'array') {
+      return this.itemsSent(model).map((item) => this.sent(item));
+    }
+    if (optional && !model.children.some((child) => this.holdsValue(child))) {
+      return OUT;
+    }
+    return Object.fromEntries(model.children.map((child) => [child.template.key!, plainOf(this.sent(child))]));
+  }
+
+  /** Whether `model` submits something: a field a value not blank, an array an item, a group a child that does. */
+  holdsValue(model: Model): boolean {
+    const sent = this.sent(model);
+    const { kind } = model.template.shape;
+    return (
+      sent !== OUT &&
+      (kind === 'field'
+        ? !isBlank(sent)
+        : kind === 'array'
+          ? (sent as unknown[]).length > 0
+          : model.children.some((child) => this.holdsValue(child)))
+    );
+  }
+
+  /** The items of an array it submits. */
+  itemsSent(model: Model): Model[] {
+    return model.items.filter((item) => this.sent(item) !== OUT);
+  }
+
+  /** Whether `model` or an ancestor is left out of the submission. */
+  gone(model: Model): boolean {
+    return this.sent(model) === OUT || (!!model.parent && this.gone(model.parent));
+  }
+
+  /** What `model` submits, by identity: `OUT` while it is left out, each field's raw value, the items it keeps. */
+  sentIdentity(model: Model): Identity {
+    if (this.sent(model) === OUT) {
+      return { leaf: OUT };
+    }
+    const { kind } = model.template.shape;
+    if (kind === 'field') {
+      return { leaf: model.raw };
+    }
+    return kind === 'group'
+      ? { group: model.children.map((child) => this.sentIdentity(child)) }
+      : {
+          list: this.itemsSent(model).map((item) => [item.id, this.sentIdentity(item)] as const),
+          revision: model.revision,
+        };
+  }
+
+  /** What the schema, the validator and the rules of `model` read, by identity: `OUT` once it or an ancestor is out. */
+  judgedIdentity(model: Model): Identity {
+    return this.gone(model) ? { leaf: OUT } : this.sentIdentity(model);
+  }
+
+  /**
+   * Records the question a schema is asked when what its node submits changed since the last look, coming back into
+   * the submission included, never while it or an ancestor is left out: called at each look, for the tree and for the
+   * nodes `gone` from it since the last look, whose listeners read them until then.
    */
   ask(gone: readonly Model[]): void {
     for (const model of [...this.nodes(), ...gone]) {
       const { schema } = model.template.shape;
       if (schema) {
-        const value = this.raw(model);
-        const identity = this.identity(model);
+        const identity = this.judgedIdentity(model);
         const requests = this.requests.get(model.id) ?? [];
         this.requests.set(model.id, requests);
-        const last = requests.at(-1);
-        if (last === undefined || !sameIdentity(last.identity, identity)) {
-          const settled = schema !== 'keyed' && isAsync(schema, value) ? undefined : 'resolved';
-          requests.push({ value, identity, answer: answerOf(model.template, value), settled });
+        if (model.judgedSeen === undefined || !sameIdentity(model.judgedSeen, identity)) {
+          model.judgedSeen = identity;
+          if (!this.gone(model)) {
+            const value = this.sent(model);
+            const settled = schema !== 'keyed' && isAsync(schema, value) ? undefined : 'resolved';
+            requests.push({ value, identity, answer: answerOf(model.template, value), settled });
+          }
         }
       }
     }
@@ -1238,7 +1408,14 @@ class Naive {
     model: Model,
   ):
     { readonly issues: readonly Raised[] | 'failed'; readonly output?: unknown; readonly cause?: unknown } | undefined {
-    const request = this.requests.get(model.id)!.at(-1)!;
+    if (this.gone(model)) {
+      return { issues: [], output: OUT };
+    }
+    // None for an item removed while it was left out, whose schema was never asked: its validator stops all the same.
+    const request = this.requests.get(model.id)?.at(-1);
+    if (request === undefined) {
+      return undefined;
+    }
     if (request.settled === undefined) {
       return undefined;
     }
@@ -1265,7 +1442,14 @@ class Naive {
     | undefined {
     const { schema, validator } = model.template.shape;
     const first = schema ? this.answer(model) : { issues: [] };
-    if (first === undefined || first.issues === 'failed' || first.issues.length || !validator || !model.current) {
+    if (
+      first === undefined ||
+      first.issues === 'failed' ||
+      first.issues.length ||
+      !validator ||
+      !model.current ||
+      this.gone(model)
+    ) {
       return first;
     }
     const { settled, outcome } = model.current;
@@ -1303,7 +1487,8 @@ class Naive {
 
   /**
    * The issues placed on `model`, as plain data, the outermost node first, its schema or validator before its rules:
-   * all of them, or only what holds a validator back, the schemas' issues and the rules' that are not warnings.
+   * all of them, or only what holds a validator back, the schemas' issues and the rules' that are not warnings. A node
+   * left out of the submission, or below one, asks nothing; what the others place on it is shown all the same.
    */
   issues(model: Model, by: 'shown' | 'gate' = 'shown'): Plain[] {
     const ancestors: Model[] = [];
@@ -1312,6 +1497,9 @@ class Naive {
     }
     const placed: Plain[] = [];
     for (const owner of ancestors) {
+      if (this.gone(owner)) {
+        continue;
+      }
       placed.push(...this.answered(owner, model, by));
       for (const rule of owner.template.rules) {
         const read = this.view(owner);
@@ -1360,12 +1548,14 @@ class Naive {
       for (const [at, segment] of relative.entries()) {
         let next: Model | undefined;
         if (target.template.shape.kind === 'array') {
+          // The items in the list the schema read: those the array submits, a key read in what each submits.
+          const items = this.itemsSent(target);
           next =
             typeof segment === 'number'
-              ? target.items[segment]
+              ? items[segment]
               : isObject(segment)
-                ? target.items.find((item) =>
-                    new Set([target.template.identity ? keyOf(this.raw(item)) : item.key]).has(segment['key']),
+                ? items.find((item) =>
+                    new Set([target.template.identity ? keyOf(this.sent(item)) : item.key]).has(segment['key']),
                   )
                 : undefined;
           if (next) {
@@ -1391,26 +1581,38 @@ class Naive {
     return placed;
   }
 
-  /** What a rule of `model` reads: the raw value of its node, through the paths it declares only. */
+  /** What a rule of `model` reads: what its node submits, through the paths it declares only. */
   view(model: Model): unknown {
-    return this.raw(model);
+    return this.sent(model);
   }
 
-  /** What a path of a rule reaches, by identity: each field at its end, and the items of every array on its way. */
+  /**
+   * What a path of a rule reaches, by identity: what each node at its end submits, the items of every array on its
+   * way that it submits, and `OUT` for a node on the way left out.
+   */
   reached(model: Model, path: readonly Declared[], at = 0): Identity {
     const { kind } = model.template.shape;
+    if (this.sent(model) === OUT) {
+      return { leaf: OUT };
+    }
     if (at === path.length || kind === 'field') {
-      return this.identity(model);
+      return this.sentIdentity(model);
     }
     if (kind === 'group') {
-      return this.reached(
-        model.children.find((child) => child.template.key === path[at])!,
-        path,
-        at + 1,
-      );
+      // A level of its own: a group left out is not its child left out, since the rule reads `undefined` at another
+      // place.
+      return {
+        group: [
+          this.reached(
+            model.children.find((child) => child.template.key === path[at])!,
+            path,
+            at + 1,
+          ),
+        ],
+      };
     }
     return {
-      list: model.items.map((item) => [item.id, this.reached(item, path, at + 1)] as const),
+      list: this.itemsSent(model).map((item) => [item.id, this.reached(item, path, at + 1)] as const),
       revision: model.revision,
     };
   }
@@ -1431,6 +1633,8 @@ class Naive {
       const { kind } = target.template.shape;
       if (kind === 'array' && Array.isArray(value)) {
         const list: unknown[] = value;
+        // The items in the list the rule read: those the array submits.
+        const items = this.itemsSent(target);
         const index =
           typeof segment === 'number'
             ? segment
@@ -1438,11 +1642,11 @@ class Naive {
               ? target.template.identity
                 ? list.findIndex(
                     (item, place) =>
-                      covers(rule.declared, [...walked, place, 'k0']) && new Set([own(item, 'k0')]).has(segment['key']),
+                      covers(rule, [...walked, place, 'k0']) && new Set([own(item, 'k0')]).has(segment['key']),
                   )
-                : target.items.findIndex((item) => new Set([item.key]).has(segment['key']))
+                : items.findIndex((item) => new Set([item.key]).has(segment['key']))
               : -1;
-        next = target.items[index];
+        next = items[index];
         if (next) {
           relative[at] = { key: next.key };
           value = list[index];
@@ -1464,7 +1668,7 @@ class Naive {
   /** Whether a rule of the node or of an ancestor requires `model`, by what it requires of what it read. */
   required(model: Model): boolean {
     for (let owner: Model | undefined = model; owner; owner = owner.parent) {
-      for (const rule of owner.template.rules) {
+      for (const rule of this.gone(owner) ? [] : owner.template.rules) {
         if (rule.required) {
           const read = this.view(owner);
           if (ruleNeeds(read, rule).some((path) => this.place(owner!, read, path, rule)[0] === model)) {
@@ -1478,22 +1682,29 @@ class Naive {
 
   /**
    * The calls of the rules a look must have made, each as its node of the description, its rule, `check` or
-   * `required`, and what it read: one for each rule of a node in the tree whose fields at the end of its paths, or
-   * the items of an array on its way, are not those of its last call, every state being read at each look; the same
-   * for the nodes `gone` from the tree since the last look, whose listeners kept them up to date until then.
+   * `required`, and what it read: one for each rule of a node in the tree and submitted whose paths reach other values
+   * than at its last look (what the nodes at their end submit, a node left out on the way, the items of an array on
+   * the way), every state being read at each look; none for a rule whose node or an ancestor is left out, which is
+   * called again once it comes back; the same for the nodes `gone` from the tree since the last look, whose listeners
+   * kept them up to date until then.
    */
   calls(gone: readonly Model[]): string[] {
     const due: string[] = [];
     for (const model of [...this.nodes(), ...gone]) {
+      const away = this.gone(model);
       model.template.rules.forEach((rule, index) => {
-        const print: Identity = { group: rule.declared.map((path) => this.reached(model, path)) };
+        const print: Identity = away
+          ? { leaf: OUT }
+          : { group: rule.declared.map((path) => this.reached(model, path)) };
         for (const [kind, last] of [
           ['check', model.checked],
           ...(rule.required ? [['required', model.needed] as const] : []),
         ] as const) {
           if (last[index] === undefined || !sameIdentity(last[index], print)) {
             last[index] = print;
-            due.push(`${model.template.id}:${index}:${kind} ${seenOf(this.view(model), rule.declared)}`);
+            if (!away) {
+              due.push(`${model.template.id}:${index}:${kind} ${seenOf(this.view(model), rule.declared)}`);
+            }
           }
         }
       });
@@ -1505,7 +1716,11 @@ class Naive {
     return [...this.issues(model), ...this.under(model).flatMap((child) => this.allIssues(child))];
   }
 
+  /** What `model` gives as read value: `OUT` once it or an ancestor is left out, a child left out `undefined`. */
   output(model: Model): unknown {
+    if (this.gone(model)) {
+      return OUT;
+    }
     const { kind, schema } = model.template.shape;
     if (schema) {
       return this.answer(model)?.output;
@@ -1514,12 +1729,15 @@ class Naive {
       return model.raw;
     }
     return kind === 'group'
-      ? Object.fromEntries(model.children.map((child) => [child.template.key!, this.output(child)]))
-      : model.items.map((item) => this.output(item));
+      ? Object.fromEntries(model.children.map((child) => [child.template.key!, plainOf(this.output(child))]))
+      : this.itemsSent(model).map((item) => this.output(item));
   }
 
   /** The identity of the read value: a schema's output is the one recorded with its question. */
   outputIdentity(model: Model): Identity {
+    if (this.gone(model)) {
+      return { leaf: OUT };
+    }
     const { kind, schema } = model.template.shape;
     if (schema) {
       return { leaf: this.answer(model)?.output };
@@ -1530,14 +1748,15 @@ class Naive {
     return kind === 'group'
       ? { group: model.children.map((child) => this.outputIdentity(child)) }
       : {
-          list: model.items.map((item) => [item.id, this.outputIdentity(item)] as const),
+          list: this.itemsSent(model).map((item) => [item.id, this.outputIdentity(item)] as const),
           revision: model.revision,
         };
   }
 
+  /** An error while a blocking issue is shown, the node is pending or it is left out; its read value otherwise. */
   parsed(model: Model): PlainResult {
     const errors = this.allIssues(model);
-    return errors.some((issue) => issue.code !== 'law.warning') || this.pending(model)
+    return this.gone(model) || errors.some((issue) => issue.code !== 'law.warning') || this.pending(model)
       ? { ok: false, error: errors }
       : { ok: true, value: this.output(model) };
   }
@@ -1623,6 +1842,7 @@ class Naive {
 
   /** Applies a write to the node it was resolved to, or returns the error it throws, nothing written. */
   apply(write: Resolved, nodes: readonly Model[]): Error | undefined {
+    this.memo.clear();
     const model = nodes[write.target]!;
     try {
       switch (write.kind) {
@@ -1708,7 +1928,19 @@ function order(value: unknown): unknown {
   return Array.isArray(value) ? value.map(order) : Object.entries(value).map(([key, inner]) => [key, order(inner)]);
 }
 
-const STATES = ['raw', 'dirty', 'touched', 'submitted', 'disabled', 'pending', 'issues', 'required', 'parsed'] as const;
+const STATES = [
+  'raw',
+  'dirty',
+  'touched',
+  'submitted',
+  'disabled',
+  'hidden',
+  'readonly',
+  'pending',
+  'issues',
+  'required',
+  'parsed',
+] as const;
 type State = (typeof STATES)[number];
 
 type AnyNode = FormNode<unknown, unknown> & {
@@ -1741,7 +1973,9 @@ function expected(naive: Naive, model: Model, state: State): unknown {
     case 'submitted':
       return naive.submitted;
     case 'disabled':
-      return naive.disabled(model);
+    case 'hidden':
+    case 'readonly':
+      return naive.flag(model, state);
     case 'pending':
       return naive.pending(model);
     case 'issues':
@@ -1813,6 +2047,12 @@ interface Counts {
   warnings: number;
   requiredSeen: number;
   heldByRules: number;
+  /** Looks at a node left out of the submission, those holding issues, and at an optional group absent while shown. */
+  leftOut: number;
+  leftOutIssues: number;
+  absentOptional: number;
+  /** Looks at a field left out whose raw value differs from its initial one: `dirty` hides it. */
+  masked: number;
 }
 
 function resolveWrite(write: Write, nodes: readonly Model[]): Resolved {
@@ -1866,7 +2106,17 @@ async function run(program: Program, scheduler: fc.Scheduler, counts: Counts): P
   const top = buildTemplates(program.root, undefined, undefined, templates);
   for (const template of templates) {
     const candidates = templates.filter((other) => other.arrays.every((outer) => template.arrays.includes(outer)));
-    template.reads = (template.shape.condition?.reads ?? []).map((read) => candidates[read % candidates.length]!);
+    template.reads = {
+      disabled: [],
+      hidden: [],
+      readonly: [],
+      ...Object.fromEntries(
+        CONDITION_NAMES.map((name) => [
+          name,
+          (conditionOf(template.shape, name)?.reads ?? []).map((read) => candidates[read % candidates.length]!),
+        ]),
+      ),
+    };
     // A rule reads nodes at or below its own: every item of an array, or the item of an index, which the form reads
     // as every item; now and then a place in the list a field may hold.
     const below = templates.filter((other) => {
@@ -1878,6 +2128,7 @@ async function run(program: Program, scheduler: fc.Scheduler, counts: Counts): P
       return false;
     });
     template.rules = template.shape.rules.map(({ reads, salt, required }) => ({
+      owner: template,
       salt,
       required,
       declared: reads.map((read) => {
@@ -1980,13 +2231,24 @@ async function run(program: Program, scheduler: fc.Scheduler, counts: Counts): P
         }
       }
     }
-    naive.ask(gone.map(([, model]) => model));
+    // What the listeners of a node out of the tree keep up to date: it and its items now, an item built in the same
+    // batch included, which no look saw.
+    const kept = [...new Set(gone.flatMap(([, model]) => naive.nodes(model)))];
+    naive.ask(kept);
     for (const [id, list] of calledBy) {
       list.forEach((call, index) => (naive.runs.get(id)![index]!.settled ||= call.released));
     }
     naive.check(departed.map(([, model]) => model));
     const seen = new Map<AnyNode, Map<State, unknown>>();
     for (const [node, model] of pairs) {
+      const away = naive.gone(model);
+      counts.leftOut += away ? 1 : 0;
+      counts.leftOutIssues += away && naive.issues(model).length > 0 ? 1 : 0;
+      counts.absentOptional += model.template.shape.optional && !naive.off(model) && naive.sent(model) === OUT ? 1 : 0;
+      counts.masked +=
+        model.template.shape.kind === 'field' && naive.off(model) && !isDeepStrictEqual(model.raw, model.initial)
+          ? 1
+          : 0;
       const states = new Map<State, unknown>();
       seen.set(node, states);
       for (const state of STATES) {
@@ -2009,16 +2271,23 @@ async function run(program: Program, scheduler: fc.Scheduler, counts: Counts): P
       }
     }
     // The calls of the rules: exactly those the model says are due, each with what it read, and no other.
-    const due = naive.calls(gone.map(([, model]) => model));
+    const due = naive.calls(kept);
     const heardRules = ruled.slice(ruledHeard).map((call) => `${call.template}:${call.rule}:${call.kind} ${call.seen}`);
     ruledHeard = ruled.length;
     assert.deepStrictEqual(heardRules.sort(), due.sort(), `${label}: calls of the rules`);
     counts.ruleCalls += due.length;
     // Who asked: the only node of a description outside arrays, or the node whose raw value is the value asked.
     const byRaw = new Map<unknown, Model>();
+    // In an array, the value a schema was asked: what its node submits, an internal of the form, read here only to
+    // tell who asked.
     for (const [node, model] of [...pairs, ...gone]) {
       if (model.template.shape.schema) {
-        byRaw.set(model.template.arrays.length ? node.raw.get() : model.template.id, model);
+        byRaw.set(
+          model.template.arrays.length
+            ? (node as unknown as { judged: ReadableNode<unknown> }).judged.get()
+            : model.template.id,
+          model,
+        );
       }
     }
     for (const request of asked.slice(attributed)) {
@@ -2031,7 +2300,7 @@ async function run(program: Program, scheduler: fc.Scheduler, counts: Counts): P
     for (const [node, model] of [...pairs, ...gone]) {
       if (model.template.shape.schema) {
         const made = (askedBy.get(model.id) ?? []).map((request) => request.value);
-        const want = naive.requests.get(model.id)!.map((request) => request.value);
+        const want = (naive.requests.get(model.id) ?? []).map((request) => request.value);
         assert.deepStrictEqual(made, want, `${label}: questions asked of ${JSON.stringify(node.path)}`);
       }
     }
@@ -2200,6 +2469,10 @@ const fresh = (): Counts => ({
   warnings: 0,
   requiredSeen: 0,
   heldByRules: 0,
+  leftOut: 0,
+  leftOutIssues: 0,
+  absentOptional: 0,
+  masked: 0,
 });
 
 test('every state of every node follows the naive model, through writes, moving items and late answers', async () => {
@@ -2209,11 +2482,13 @@ test('every state of every node follows the naive model, through writes, moving 
     { numRuns: 400 },
   );
   console.log(counts);
-  assert.ok(counts.runs > 400, `${counts.runs} runs of validators`);
+  // A node disabled or hidden runs no validator, nor shows its issues: from 415 to 561 runs on twelve draws, 87 to 244
+  // runs kept, 198 to 615 issues looked at.
+  assert.ok(counts.runs > 300, `${counts.runs} runs of validators`);
   assert.ok(counts.aborted > 40, `${counts.aborted} runs aborted`);
-  assert.ok(counts.kept > 100, `${counts.kept} looks at a run kept while a schema had not answered`);
+  assert.ok(counts.kept > 60, `${counts.kept} looks at a run kept while a schema had not answered`);
   assert.ok(counts.releasedAborted > 30, `${counts.releasedAborted} answers released after their abort`);
-  assert.ok(counts.validatorIssues > 200, `${counts.validatorIssues} issues of validators looked at`);
+  assert.ok(counts.validatorIssues > 120, `${counts.validatorIssues} issues of validators looked at`);
 });
 
 // An array of groups, its items with a schema and the array with one, under a group with a schema: long programs of
@@ -2232,6 +2507,8 @@ const crowded: fc.Arbitrary<Program> = fc.record({
             kind: 'group' as const,
             children: element.children.length ? element.children : [element],
             schema: 'mixed' as const,
+            hidden: null,
+            readonly: null,
           },
         ]),
         schema: fc.constantFrom<SchemaKind | null>('sync', 'async', 'keyed'),
@@ -2404,4 +2681,76 @@ test('rules are checked again exactly when what they read changes, through moved
   assert.ok(counts.warnings > 300, `${counts.warnings} warnings looked at`);
   assert.ok(counts.heldByRules > 100, `${counts.heldByRules} looks at a validator held back by rules alone`);
   assert.ok(counts.moved > 40, `${counts.moved} moves`);
+});
+
+// A sub-form the user may leave empty, its fields starting blank and hidden now and then, beside an array whose items
+// may be hidden and a field with a validator that may be disabled or read only, under rules that read them all:
+// programs of writes, moves and releases, so that nodes leave the submission and come back, with rules and schemas
+// reading what is submitted.
+const blankFields = fc.array(
+  shapes(0, false).map((leaf) => ({ ...leaf, initial: undefined })),
+  { minLength: 1, maxLength: 3 },
+);
+const hiding: fc.Arbitrary<Program> = fc.record({
+  root: fc.record({
+    kind: fc.constant('group' as const),
+    initial: fc.constant(0),
+    children: fc
+      .tuple(
+        fc.record({
+          kind: fc.constant('group' as const),
+          initial: fc.constant(0),
+          children: blankFields,
+          schema: fc.constantFrom<SchemaKind | null>(null, 'sync', 'async'),
+          validator: validators,
+          condition: fc.constant(null),
+          hidden: rarely(2),
+          readonly: fc.constant(null),
+          optional: fc.constant(true),
+          identity: fc.constant(false),
+          start: fc.constant([]),
+          rules: ruleShapes,
+        }),
+        fc.tuple(lists(2), rarely(2)).map(([list, hidden]) => ({
+          ...list,
+          children: [{ ...list.children[0]!, hidden }],
+        })),
+        fc.record({
+          kind: fc.constant('field' as const),
+          initial: initials,
+          children: fc.constant([]),
+          schema: fc.constantFrom<SchemaKind | null>(null, 'sync'),
+          validator: fc.constantFrom<ValidatorKind>('sync', 'async', 'abortable'),
+          condition: rarely(2),
+          hidden: fc.constant(null),
+          readonly: rarely(3),
+          identity: fc.constant(false),
+          start: fc.constant([]),
+          rules: fc.constant([]),
+        }),
+      )
+      .map((children) => [...children]),
+    schema: fc.constantFrom<SchemaKind | null>(null, null, 'sync'),
+    validator: fc.constant(null),
+    condition: fc.constant(null),
+    identity: fc.constant(false),
+    start: fc.constant([]),
+    rules,
+  }),
+  steps: fc.array(steps, { minLength: 10, maxLength: 30 }),
+  watched: fc.boolean(),
+});
+
+test('a node disabled, hidden, or optional and empty is left out, checked by nothing, read as absent', async () => {
+  const counts = fresh();
+  await fc.assert(
+    fc.asyncProperty(hiding, fc.scheduler(), (program, scheduler) => run(program, scheduler, counts)),
+    { numRuns: 150 },
+  );
+  console.log(counts);
+  assert.ok(counts.leftOut > 1000, `${counts.leftOut} looks at a node left out`);
+  assert.ok(counts.leftOutIssues > 50, `${counts.leftOutIssues} looks at a node left out that shows issues`);
+  assert.ok(counts.absentOptional > 300, `${counts.absentOptional} looks at an optional group absent while shown`);
+  assert.ok(counts.masked > 100, `${counts.masked} looks at a field whose dirty is hidden`);
+  assert.ok(counts.ruleCalls > 1000, `${counts.ruleCalls} calls of rules`);
 });

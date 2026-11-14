@@ -1,4 +1,4 @@
-// The form of ARCHITECTURE.md §7.11 and ADR 0043 to 0046: a tree of fields, groups and arrays described by `field`,
+// The form of ARCHITECTURE.md §7.11 and ADR 0043 to 0047: a tree of fields, groups and arrays described by `field`,
 // `group` and `array`, built by `createForm` on one reactive graph (ADR 0041), every state a node of that graph. A
 // field holds its raw value, what its input shows, and its initial value; whether it was touched; an array, its items
 // and its initial raw value; the form, whether it was submitted. Everything else is derived, computed when read and
@@ -8,44 +8,53 @@
 //     the items change, never an older one kept for being equal;
 //   - an item is a node built from the array's element, holding a key for as long as it lives: its path ends with
 //     `{ key }`, so that its states, and the issues placed on it, follow it when it moves;
+//   - disabled, hidden, readonly: a node whose condition of that name holds on the raw values it reads, or whose
+//     parent's does;
+//   - what a node submits: nothing while it is disabled or hidden, nor, for an `optional` group, while none of its
+//     fields holds anything but a blank and none of its arrays an item; otherwise its raw value, a child left out
+//     holding `undefined`, an item left out dropped from its list. A node is left out when it, or an ancestor,
+//     submits nothing;
 //   - dirty: a field whose raw value differs from its initial value, by `equal` of @yaltaan/core/equal unless its
 //     `equals` says otherwise; a group with a dirty child; an array whose raw value differs from its initial one, its
-//     length or an item, by the comparisons of its fields. Touched: a field touched since its last reset; a group or
-//     an array holding a touched field. Submitted: the form's, on every node;
-//   - disabled: a node whose `disabled` condition holds on the raw values it reads, or whose parent is disabled;
-//   - a node with a schema reads its raw value through it, any Standard Schema; a schema of @yaltaan/schema through
+//     length or an item, by the comparisons of its fields; never on a node disabled or hidden. Touched: a field touched
+//     since its last reset; a group or an array holding a touched field; never on a node disabled, hidden or read
+//     only. Submitted: the form's, on every node;
+//   - a node with a schema reads what it submits through it, any Standard Schema; a schema of @yaltaan/schema through
 //     `parse`, so that its issues keep their code and their data. Each issue is placed on the deepest node its path
 //     names below the schema's node, through the children's own keys and, in the raw value the schema read, the
 //     items' indexes or `{ key }` segments: an index is then replaced by the item's `{ key }`, so that the path of an
 //     issue starts with the path of its node. `issues` of a node are those placed on it, from the outermost schema to
 //     its own. A schema whose promise rejects, or that fails without an issue, places `form.validation_failed` on its
 //     node: the form has nothing else to show;
-//   - a node with rules of @yaltaan/rules holds each as a node of the graph that reads the raw values of the paths the
-//     rule declares and nothing else, checked against the description when the form is built: a group's segment names
-//     a child, any segment of an array stands for every item, through a view of the array rewired with its items, and a
-//     path into a field reads the field, so that a rule reads what `checkRules` would read of the raw value. A rule is
-//     checked again only once one of those values changes, and only when a state that needs it is read; its issues
-//     keep their code, placed as a schema's, after those of the node's schema or validator;
+//   - a node with rules of @yaltaan/rules holds each as a node of the graph that reads what the paths the rule
+//     declares submit and nothing else, checked against the description when the form is built: a group's segment
+//     names a child, any segment of an array stands for every item submitted, through a view of the array rewired with
+//     its items, and a path into a field reads the field, so that a rule reads what `checkRules` would read of what
+//     the node submits. A rule is checked again only once one of those values changes, a node on its way left out or
+//     back included, and only when a state that needs it is read; its issues keep their code, placed as a schema's,
+//     after those of the node's schema or validator;
+//   - a node left out asks nothing of its schema, validator and rules, nor do the nodes below it; what other checks
+//     place on it is shown all the same, so that the form says what a server checking what it submits would say;
 //   - required: a node that `required` of a rule of the node or of an ancestor names, placed as an issue is;
-//   - a node with a validator of the application checks its raw value as only the application can, once no schema or
-//     rule of the node, of a node below or of an ancestor has placed an issue that is not a warning on it or below, nor
-//     a schema has yet to answer; the run counts until its raw value or the lives of its items change, a schema or a
-//     rule places such an issue, or the node leaves the form, and is handed a signal of its own, aborted when it stops
-//     counting before it answered. Its issues are placed as a schema's; a node shows those of its schema while there
-//     are any, those of its validator otherwise;
+//   - a node with a validator of the application checks what it submits as only the application can, once no schema
+//     or rule of the node, of a node below or of an ancestor has placed an issue that is not a warning on it or below,
+//     nor a schema has yet to answer; the run counts until what it submits or the lives of its items change, a schema
+//     or a rule places such an issue, or the node leaves the form or the submission, and is handed a signal of its
+//     own, aborted when it stops counting before it answered. Its issues are placed as a schema's; a node shows those
+//     of its schema while there are any, those of its validator otherwise;
 //   - pending: a node that a schema or a validator may still place issues on, its own, an ancestor's or a
 //     descendant's, because it has not yet answered for the raw value it reads. An answer is the promise that one read,
 //     or one run, gave: settled, it counts only while that read is the node's last one, and the node is in the form, so
 //     that the answer for a value since replaced, or for a removed item, is never delivered;
 //   - parsed, the read value: an error with the issues of the node and of its descendants, in that order, while one of
-//     them is not a warning, which is shown and blocks nothing, or the node is pending; otherwise the value its schema
-//     gave, or with none, its raw value for a field, the object of its children's parsed values for a group and the
-//     list of its items' for an array.
+//     them is not a warning, which is shown and blocks nothing, the node is pending, or it is left out; otherwise the
+//     value its schema gave, or with none, its raw value for a field, the object of its children's read values for a
+//     group, `undefined` for a child left out, and the list of its items' for an array, those left out dropped.
 // A computation never reads the graph (ADR 0042): every state names what it reads when it is built, the nodes a
 // condition reads included, whatever branch its `when` takes; the states of an array that follow its items are rewired
 // to the new items each time they change (ADR 0044). A write reads its whole value, and checks it, before it writes
 // anything. An answer that settles after its read is delivered from the promise's callback, where nothing awaits what
-// the listeners throw. Validators are ADR 0045's, rules ADR 0046's.
+// the listeners throw. Validators are ADR 0045's, rules ADR 0046's, what is left out ADR 0047's.
 export { createForm, field, group } from './node.ts';
 export type {
   ArrayNode,
@@ -68,6 +77,7 @@ export type {
   OutputOf,
   RawOf,
   Spec,
+  Staying,
   Validation,
 } from './types.ts';
 export { array } from './array.ts';

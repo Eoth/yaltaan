@@ -1,9 +1,10 @@
 // What an application writes with the form on the model every fixture has: a description of nested groups, fields
 // holding a list and a nullable value, a schema of the whole value that types the parsed value, a field whose schema
-// reads text into a number, and a disabled condition; the raw and parsed types read back; a node of the tree reached
+// reads text into a number, and a disabled condition, the schema taking the field it disables as optional; the raw and
+// parsed types read back; a node of the tree reached
 // through `children`; what an adapter declares, a generic function over any field and any node; and the submission.
 import { createForm, field, group, type FieldNode, type FormNode, type RawOf } from '@yaltaan/form';
-import { array, nullable, number, object, string } from '@yaltaan/schema';
+import { array, nullable, number, object, optional, string } from '@yaltaan/schema';
 
 import type { Model } from '../model.ts';
 
@@ -30,7 +31,7 @@ const invoice = group(
       customer: object({
         name: string(),
         email: string(),
-        address: object({ street: string(), city: string(), zip: nullable(string()) }),
+        address: object({ street: string(), city: optional(string()), zip: nullable(string()) }),
       }),
     }),
   },
@@ -40,12 +41,12 @@ export type InvoiceRaw = RawOf<typeof invoice>;
 
 const form = createForm(invoice);
 
-export function readInvoice(): Pick<Model, 'id' | 'total' | 'tags' | 'customer'> | undefined {
+export function readInvoice(): Pick<Model, 'id' | 'total' | 'tags'> | undefined {
   const parsed = form.submit();
   return parsed.ok ? parsed.value : undefined;
 }
 
-export const city: FieldNode<string> = form.children.customer.children.address.children.city;
+export const city: FieldNode<string, string | undefined> = form.children.customer.children.address.children.city;
 
 export function bind<R>(node: FieldNode<R, unknown>, write: (raw: R) => void): () => void {
   return node.raw.subscribe(() => write(node.raw.get()));

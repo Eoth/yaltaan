@@ -7,11 +7,13 @@ import type { Path } from '@yaltaan/core/path';
 import { rewire, type ReadableNode, type SourceNode } from '@yaltaan/core/reactive';
 
 import {
+  ABSENT,
   build,
   check,
   checkOptions,
   doubtsOf,
   initialOf,
+  isBlank,
   isObject,
   isSpec,
   NONE,
@@ -19,7 +21,6 @@ import {
   own,
   plan,
   resolve,
-  some,
   under,
   wire,
   writesOf,
@@ -27,13 +28,11 @@ import {
   type Reads,
   type Writes,
 } from './node.ts';
-import type { ArrayOptions, ArraySpec, FieldOptions, OutputOf, RawOf, Spec } from './types.ts';
+import type { ArrayOptions, ArraySpec, FieldOptions, OutputOf, RawOf, Spec, Staying } from './types.ts';
 
 const MAX_LENGTH = 1000;
 // V8 hashes a longer string by its length alone: keys are compared on this many code units, as @yaltaan/rules does.
 const KEY_LENGTH = 16_000;
-const isBlank = (value: unknown): boolean =>
-  value === undefined || value === null || value === '' || (Array.isArray(value) && value.length === 0);
 
 // A key as two keys are compared, by SameValueZero on their first `KEY_LENGTH` code units.
 const bounded = (key: unknown): unknown => (typeof key === 'string' ? key.slice(0, KEY_LENGTH) : key);
@@ -47,23 +46,32 @@ let indexes: WeakMap<object, Map<unknown, number>> | undefined;
 /**
  * An array of items, each built from `element`: its raw value is the list of theirs. Each item holds a key for as long
  * as it lives, its business key at `identity` or one the form gives it, so that its states and its issues follow it
- * when it moves; `initial` items are read and checked when a form is built.
+ * when it moves; `initial` items are read and checked when a form is built. With a `disabled` or a `hidden` condition,
+ * or options of a wider type, its read value may be `undefined` in its group's.
  * @pure
  * @sharing structural
  * @complexity O(1)
  * @throws TypeError when `element` is not a spec, or an option is not of its kind: `schema` a Standard Schema,
- *   `disabled` a condition, `validate` a function, `rules` rules, `initial` an array, `identity` a path, `maxLength` a
- *   whole number from 0
+ *   `disabled`, `hidden` and `readonly` conditions, `validate` a function, `rules` rules, `initial` an array,
+ *   `identity` a path, `maxLength` a whole number from 0; when given `optional`
  * @since 0.3
  * @experimental
  * @example array(group({ sku: field(''), qty: field(1) }), { identity: ['sku'], initial: [{ sku: 'A', qty: 2 }] })
  */
 export function array<const E extends Spec, Output = OutputOf<E>[]>(
   element: E,
+  options?: ArrayOptions<RawOf<NoInfer<E>>, Output> & Staying,
+): ArraySpec<E, NoInfer<Output>>;
+export function array<const E extends Spec, Output = OutputOf<E>[]>(
+  element: E,
+  options?: ArrayOptions<RawOf<NoInfer<E>>, Output>,
+): ArraySpec<E, NoInfer<Output> | undefined>;
+export function array<const E extends Spec, Output = OutputOf<E>[]>(
+  element: E,
   options: ArrayOptions<RawOf<NoInfer<E>>, Output> = {},
 ): ArraySpec<E, NoInfer<Output>> {
   check(isSpec(element), 'element is a spec of field, group or array');
-  checkOptions(options);
+  checkOptions(options, 'array');
   const { initial, identity, maxLength } = options as { readonly [K in keyof ArrayOptions<unknown>]?: unknown };
   check(initial === undefined || Array.isArray(initial), 'initial is a list of items');
   check(identity === undefined || Array.isArray(identity), 'identity is a path');
@@ -88,12 +96,12 @@ export class List extends Node {
 
   override get dirty(): ReadableNode<boolean> {
     return (this.dirtyNode ??= this.graph.derived(
-      [this.start, this.raw],
-      (initial, raw) => !same(this.spec, initial, raw),
+      [this.start, this.raw, this.off],
+      (initial, raw, off) => !off && !same(this.spec, initial, raw),
     ));
   }
 
-  // Builds its items from `value`, a list as the form holds it, and the states that follow them.
+  // Builds its items from `value`, a list as the form holds it, and its raw value.
   fill(value: unknown[]): void {
     const { graph, rows } = this.shared;
     const items = value.map((inner) => item(this, inner));
@@ -103,14 +111,19 @@ export class List extends Node {
         rows.set(values, list);
         return values;
       }),
-      touched: graph.derived(
-        items.map((inner) => inner.touched),
-        some,
-      ),
     });
   }
 
-  // What a rule reads of every item, a list, its items named in `rows`: one node for each `reads`, rewired by `relist`.
+  // What it submits: what its items submit, those left out dropped, each named in `rows`; `ABSENT` when it is left out.
+  ship(): void {
+    this.sent = this.graph.derived(
+      [this.off, this.items, ...this.items.get().map((inner) => inner.sent)],
+      (off, items, ...values) => (off ? ABSENT : listed(this, items as readonly Node[], values)),
+    );
+  }
+
+  // What a rule reads of every item submitted, a list, its items named in `rows`: one node for each `reads`, rewired by
+  // `relist`.
   view(reads: Reads): ReadableNode<unknown> {
     const views = (this.views ??= new Map());
     let made = views.get(reads);
@@ -121,11 +134,12 @@ export class List extends Node {
         const deps: ReadableNode<unknown>[] = [];
         const items = this.items.get();
         const parts = items.map((item) => resolve(item, reads, deps));
-        make = (values) => {
-          const list = parts.map((part) => part(values));
-          this.shared.rows.set(list, items);
-          return list;
-        };
+        make = (values) =>
+          listed(
+            this,
+            items,
+            parts.map((part) => part(values)),
+          );
         rewire(node, deps);
       };
       views.set(reads, (made = [node, refresh]));
@@ -271,6 +285,21 @@ export class List extends Node {
   }
 }
 
+// `values`, what `items` submit or what a rule reads of them, as a list: those left out dropped, each named by its item
+// in `rows`.
+function listed(array: Node, items: readonly Node[], values: readonly unknown[]): unknown[] {
+  const list: unknown[] = [];
+  const named: Node[] = [];
+  values.forEach((value, index) => {
+    if (value !== ABSENT) {
+      list.push(value);
+      named.push(items[index]!);
+    }
+  });
+  array.shared.rows.set(list, named);
+  return list;
+}
+
 // Whether two raw values of `spec`, as the form holds them, are the same by the comparisons of its fields.
 function same(spec: Spec, initial: unknown, raw: unknown): boolean {
   if (spec.kind === 'field') {
@@ -312,13 +341,13 @@ function relist(array: Node, items: readonly Node[]): void {
     array.touched,
     items.map((item) => item.touched),
   );
+  if (array.sent !== array.raw) {
+    rewire(array.sent, [array.off, array.items!, ...items.map((item) => item.sent)]);
+  }
   rewire(array.below, [...(answer ? [answer] : []), ...items.map((item) => item.below)]);
   rewire(array.all, [array.issues, ...items.map((item) => item.all)]);
   if (!array.own) {
-    rewire(
-      array.output,
-      items.map((item) => item.output),
-    );
+    rewire(array.output, [array.gone, ...items.map((item) => item.output)]);
   }
   if (array.doubt) {
     rewire(array.doubt, doubtsOf(array));

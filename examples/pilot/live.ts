@@ -4,21 +4,18 @@
 // run against the form of the schema and the rules alone (form.test.ts).
 //
 // A form holds every input of a sub-form, entered or not, where the values the scenarios give leave an empty sub-form
-// out, and a rule reads the raw value as it is: an empty sub-form is an object, not a blank. The application writes
-// for it what differs: the fields of the billing address and of the parent company are each read through `optional`,
-// so that an empty sub-form passes and a field entered in it is checked, and the postal code of an address none of
-// whose fields holds a value is not checked. What a form does with an empty or a disabled sub-form, its issues and
-// what it submits, is still to decide: until then, an empty billing address or parent company is not marked as
-// required, and a parent company unchecked after being filled still shows its issues.
+// out. The billing address and the parent company are `optional` groups: left empty, they are absent from what the
+// form submits, as from those values, so that a rule finds them blank and their fields are not checked; started, each
+// of their fields is read by its own schema. Each is hidden while its box says it is not needed, the billing address
+// while it follows the head office, the parent company while there is none: a hidden sub-form is left out of the
+// submission, neither checked nor read by a rule, whatever it holds.
 import type { Issue } from '@yaltaan/core/issue';
 import type { Path } from '@yaltaan/core/path';
 import type { Result } from '@yaltaan/core/result';
 import { array, createForm, field, group, type Form, type Spec } from '@yaltaan/form';
-import { optional, parse, type Schema } from '@yaltaan/schema';
+import { parse, type Schema } from '@yaltaan/schema';
 
-import type { Rule } from '@yaltaan/rules';
-
-import { applicationSchema, derivations, parent, pilotRules, postalCode, type Submission } from './form.ts';
+import { applicationSchema, derivations, parent, pilotRules, type Submission } from './form.ts';
 import type { ServerAnswer } from './scenarios.ts';
 
 type AnySchema = Schema<unknown, unknown>;
@@ -26,16 +23,22 @@ type AnySchema = Schema<unknown, unknown>;
 /** A field read by `schema`, empty until something is entered. */
 const input = (schema?: AnySchema): Spec => field<unknown>(undefined, schema ? { schema } : {});
 
-/** A group of fields, one per entry of an object schema, each read by its entry, through `optional` when `loose`. */
-function fieldsOf(entries: Readonly<Record<string, unknown>>, loose: boolean): Record<string, Spec> {
+/** The fields of an object schema, one per entry, each read by its entry, a nested object schema a group of its own. */
+function fieldsOf(entries: Readonly<Record<string, unknown>>): Record<string, Spec> {
   return Object.fromEntries(
     Object.entries(entries).map(([key, entry]) => {
       const nested = (entry as { readonly entries?: Readonly<Record<string, unknown>> }).entries;
-      const schema = entry as AnySchema;
-      return [key, nested ? group(fieldsOf(nested, loose)) : input(loose ? optional(schema) : schema)];
+      return [key, nested ? group(fieldsOf(nested)) : input(entry as AnySchema)];
     }),
   );
 }
+
+/** A sub-form the user may leave empty, absent then, and hidden while the box at `box` holds `hiddenWhen`. */
+const subForm = (entries: Readonly<Record<string, unknown>>, box: string, hiddenWhen: boolean): Spec =>
+  group(fieldsOf(entries), {
+    optional: true,
+    hidden: { reads: [['company', box]], when: (checked) => (checked === true) === hiddenWhen },
+  });
 
 /** A group of plain fields, read as a whole by `schema`, an object schema whose issues go to the fields they name. */
 function readAsOne(schema: AnySchema & { readonly entries: Readonly<Record<string, unknown>> }): Spec {
@@ -45,27 +48,6 @@ function readAsOne(schema: AnySchema & { readonly entries: Readonly<Record<strin
 const { entries } = applicationSchema;
 const company = entries.company.entries;
 const keyed = { identity: ['key'] };
-
-const blank = (value: unknown): boolean => value === undefined || value === null || value === '';
-
-/** The postal code of an address that holds something: an address of the form is there, filled or not. */
-const postalCodeEntered: Rule = {
-  ...postalCode,
-  check: (values) => {
-    const issues = postalCode.check(values);
-    return issues.filter(({ path }) => {
-      const address = path
-        .slice(0, -1)
-        .reduce<unknown>((at, key) => (at as Record<PropertyKey, unknown>)?.[key as PropertyKey], values);
-      return Object.values(address as object).some((value) => !blank(value));
-    });
-  },
-};
-
-/** The rules of the pilot on the day of submission, as its form reads them: an empty address has no postal code. */
-export function liveRules(today: string): readonly Rule[] {
-  return pilotRules(today).map((rule) => (rule === postalCode ? postalCodeEntered : rule));
-}
 
 /** The description of the pilot form: what `createForm` builds, the rules of `today` at its root. */
 export function liveSpec(today: string): Spec {
@@ -82,9 +64,9 @@ export function liveSpec(today: string): Spec {
         foundedOn: input(company.foundedOn),
         headOffice: readAsOne(company.headOffice),
         billingSameAsHeadOffice: field(false, { schema: company.billingSameAsHeadOffice }),
-        billingAddress: group(fieldsOf(company.headOffice.entries, true)),
+        billingAddress: subForm(company.headOffice.entries, 'billingSameAsHeadOffice', true),
         hasParentCompany: field(false, { schema: company.hasParentCompany }),
-        parent: group(fieldsOf(parent.entries, true)),
+        parent: subForm(parent.entries, 'hasParentCompany', false),
       }),
       contacts: array(
         group({
@@ -126,7 +108,7 @@ export function liveSpec(today: string): Spec {
       ),
       declarations: readAsOne(entries.declarations),
     },
-    { rules: liveRules(today) },
+    { rules: pilotRules(today) },
   );
 }
 
@@ -163,6 +145,8 @@ export interface LiveNode {
   readonly raw: { get(): unknown };
   readonly issues: { get(): readonly Issue[] };
   readonly required: { get(): boolean };
+  readonly hidden: { get(): boolean };
+  readonly disabled: { get(): boolean };
   readonly children?: Readonly<Record<string, LiveNode>>;
   readonly items?: { get(): readonly LiveNode[] };
 }
@@ -190,8 +174,8 @@ function byBusinessKey(form: LiveNode, path: Path): Path {
 
 /**
  * Submits what the user entered through the form: the legal name trimmed, as its input does when it loses focus, every
- * value written into the form, which shows every issue its schemas and its rules find; the server is asked, with the
- * values the derivations give, only when the form reads none.
+ * value written into the form, which shows every issue its schemas and its rules find; the server is asked only when
+ * the form reads none, with what the form submits and the values the derivations give from it.
  */
 export function submitLive(
   entered: Readonly<Record<string, unknown>>,
@@ -202,11 +186,14 @@ export function submitLive(
   const form = createForm(spec) as unknown as LiveForm;
   form.set(holding(spec, derivations['legal-name-trimmed']!(entered)));
   const read = form.submit();
-  const raw = form.raw.get() as Readonly<Record<string, unknown>>;
-  const values = Object.values(derivations).reduce((current, derive) => derive(current), raw);
   if (!read.ok) {
+    const raw = form.raw.get() as Readonly<Record<string, unknown>>;
+    const values = Object.values(derivations).reduce((current, derive) => derive(current), raw);
     return { form, values, issues: read.error.map((issue) => ({ ...issue, path: byBusinessKey(form, issue.path) })) };
   }
+  // What the form submits, a hidden sub-form `undefined` and an empty optional one absent, is what the server reads.
+  const submitted = read.value as Readonly<Record<string, unknown>>;
+  const values = Object.values(derivations).reduce((current, derive) => derive(current), submitted);
   const sent = parse(applicationSchema, values);
   if (!sent.ok) {
     throw new Error(`the form accepted what the server reads wrong: ${JSON.stringify(sent.error)}`);

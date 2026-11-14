@@ -48,14 +48,16 @@ Every value and state is a node of the form's graph, with `get()` and `subscribe
 | State | Of a field | Of a group |
 |---|---|---|
 | `raw` | What its input holds. | The object of its children's raw values. |
-| `parsed` | The read value: `{ ok: true, value }`, or `{ ok: false, error }` with the issues of the node and of everything below, while one is not a warning or the node is pending. | The same, over its children. |
+| `parsed` | The read value: `{ ok: true, value }`, or `{ ok: false, error }` with the issues of the node and of everything below, while one is not a warning, the node is pending, or it is left out of what the form submits. | The same, over its children. |
 | `issues` | The issues placed on it, the outermost node first, a node's schema before its rules. | Only those placed on the group itself. |
 | `required` | A rule of its own or of an ancestor requires it. | The same. |
-| `dirty` | Its raw value differs from its initial value, compared by `equal` (a list, a date by content). | A field below is dirty. |
-| `touched` | `touch()` was called since its last reset. | A field below is touched. |
+| `dirty` | Its raw value differs from its initial value, compared by `equal` (a list, a date by content), and it is not disabled or hidden. | A field below is dirty. |
+| `touched` | `touch()` was called since its last reset, and it is not disabled, hidden or read only. | A field below is touched. |
 | `pending` | A schema that may place issues on it, its own, an ancestor's or a descendant's, has not answered yet. | The same. |
 | `submitted` | `submit()` was called on the form since its last reset. | The same, one node for the whole form. |
 | `disabled` | Its `disabled` condition holds, or its parent is disabled. | The same. |
+| `hidden` | Its `hidden` condition holds, or its parent is hidden. | The same. |
+| `readonly` | Its `readonly` condition holds, or its parent is read only. | The same. |
 
 `dirty` follows the value: set back to its initial value, a field is clean again, which is what an "unsaved changes" warning needs.
 
@@ -90,25 +92,45 @@ form.dirty.get(); // → false
 form.submitted.get(); // → false
 ```
 
-## A field disabled by others
+## Disabled, hidden, read only, and sub-forms left empty
 
-A condition names the paths it reads, from the root of the form, and says whether the node is disabled. Everything below a disabled group is disabled too.
+Three conditions, each written `{ reads, when }` with the paths it reads from the root of the form, hold on a node and on everything below it:
+
+- `disabled`: the input is shown and cannot be used. The node keeps its raw value, and the form leaves it out of what it submits, as a browser leaves out a disabled control: its group holds `undefined` in its place, its array drops it, and its schema, validator and rules are not asked.
+- `hidden`: the input is not shown. The form treats it as a disabled one: a value the user cannot see is neither sent nor checked.
+- `readonly`: the input is shown and cannot be changed. It is submitted, so it is checked.
+
+None of the three shows `touched`, since the user cannot act on it; `dirty` follows what is submitted, so a read-only node shows it and a disabled or hidden one does not. Every check that remains reads what the form submits: a rule finds a hidden field blank, the schema of a group finds `undefined` where a child is left out, so that schema says it is `optional`. No issue is hidden: a rule that requires a hidden field shows its issue on that field, and the submission waits.
+
+A sub-form the user may leave empty is a group with `optional: true`: while none of its fields holds a value (`undefined`, `null`, `''` or an empty list), it is absent from what the form submits, as an optional sub-form of a schema. A rule then finds it blank, and its fields are not checked; once something is entered in it, each field is.
 
 ```ts
 import { createForm, field, group } from '@yaltaan/form';
+import { requiredIf } from '@yaltaan/rules';
 
 const form = createForm(
-  group({
-    sameAsHeadOffice: field(true),
-    billing: group({ city: field('') }, { disabled: { reads: [['sameAsHeadOffice']], when: (same) => same === true } }),
-  }),
+  group(
+    {
+      hasParent: field(false),
+      parent: group(
+        { name: field(''), siren: field('') },
+        { optional: true, hidden: { reads: [['hasParent']], when: (has) => has !== true } },
+      ),
+    },
+    { rules: [requiredIf({ reads: [['hasParent']], when: (has) => has === true }, [['parent']])] },
+  ),
 );
-form.children.billing.children.city.disabled.get(); // → true
-form.children.sameAsHeadOffice.set(false);
-form.children.billing.children.city.disabled.get(); // → false
+form.children.parent.hidden.get(); // → true
+form.children.parent.children.name.set('Holding');
+form.submit(); // → { ok: true, value: { hasParent: false, parent: undefined } }
+form.children.parent.children.name.set('');
+form.children.hasParent.set(true);
+form.children.parent.issues.get().map((issue) => issue.code); // → ['rules.required_if']
+form.children.parent.children.name.set('Holding');
+form.submit(); // → { ok: true, value: { hasParent: true, parent: { name: 'Holding', siren: '' } } }
 ```
 
-For now `disabled` changes nothing else: the issues of a disabled node still count, and its value stays in the parsed value.
+A condition reads raw values, what the inputs hold, so that what is shown never depends on what is shown.
 
 ## Lists whose rows move
 

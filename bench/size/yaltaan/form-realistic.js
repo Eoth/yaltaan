@@ -1,5 +1,6 @@
 // The first step of the pilot form on the form package: nested groups, a schema of the whole step and one of a field, a
-// field disabled while a box is checked, every state of a field read, and the submission.
+// group disabled while a box is checked, and so left out of what the form submits, every state of a field read, and the
+// submission.
 import { createForm, field, group } from '@yaltaan/form';
 import { boolean, object, optional, string } from '@yaltaan/schema';
 
@@ -24,7 +25,7 @@ export const form = createForm(
         siren: optional(string({ pattern: /^\d{9}$/ })),
         headOffice: addressSchema,
         billingSameAsHeadOffice: boolean(),
-        billingAddress: object({ street: string(), postalCode: string(), city: string(), country: string() }),
+        billingAddress: optional(object({ street: string(), postalCode: string(), city: string(), country: string() })),
       }),
     },
   ),

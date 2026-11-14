@@ -1,29 +1,25 @@
 // The scenarios of the pilot, run against the form built with @yaltaan/form (live.ts): the issues the form shows, by
 // code and by path, items named by the key their value holds, the values the derivations give from what it holds, and
 // what reaches the server, judged as form.test.ts judges the form of the schema and the rules alone. Beside them, what
-// only a live form shows: a write checks again only the rules that read the field written, counted on the pilot's own
-// rules, and `required` says what the rules require. A scenario that needs what the form does with an empty or a
-// disabled sub-form, still to decide, is named below, and must fail until then: once it passes, it leaves the list.
+// only a live form shows: a write checks again only the rules whose values it changes, counted on the pilot's own
+// rules, and `required` says what the rules require, both judged on what the form submits, written here from what its
+// nodes show: a hidden or disabled node is left out, and so is an optional sub-form none of whose fields holds a
+// value. A scenario that would wait for a decision on the form is named below, and must fail until then: once it
+// passes, it leaves the list.
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
 import type { Path } from '@yaltaan/core/path';
-import { createForm } from '@yaltaan/form';
+import { createForm, type Spec } from '@yaltaan/form';
 import { requiredPaths, type Rule } from '@yaltaan/rules';
 
-import { holding, liveRules, liveSpec, submitLive, type LiveForm, type LiveNode } from './live.ts';
+import { pilotRules } from './form.ts';
+import { holding, liveSpec, submitLive, type LiveForm, type LiveNode } from './live.ts';
 import { rules as catalogue } from './model.ts';
 import { frenchSupplier, scenarios, type Scenario } from './scenarios.ts';
 
-/** The scenarios that wait for what the form does with an empty or a disabled sub-form, with the reason. */
-const AWAITING_SUB_FORMS: Readonly<Record<string, string>> = {
-  'billing address unchecked and left empty':
-    'an empty sub-form is an object, never blank: "billing address required" cannot mark it (T2.4 e)',
-  'parent company checked and left empty':
-    'an empty sub-form is an object, never blank: "parent company required" cannot mark it (T2.4 e)',
-  'parent company unchecked after being filled':
-    'the parent sub-form, filled then unchecked, still shows its issues: what a disabled node shows (T2.4 e)',
-};
+/** The scenarios that wait for a decision on the form, with the reason: none since sub-forms may be optional. */
+const AWAITING_SUB_FORMS: Readonly<Record<string, string>> = {};
 
 const keyOf = (code: string, path: readonly unknown[]): string => `${code} ${JSON.stringify(path)}`;
 
@@ -109,7 +105,7 @@ test('the scenarios awaiting a decision on sub-forms are scenarios of the pilot'
 /** The pilot form whose rules count their checks, by the index of each rule in `pilotRules`. */
 function countedForm(today: string): { readonly form: LiveForm; readonly checks: number[]; readonly rules: Rule[] } {
   const checks: number[] = [];
-  const rules = liveRules(today).map((rule, index): Rule => {
+  const rules = pilotRules(today).map((rule, index): Rule => {
     checks[index] = 0;
     return {
       ...rule,
@@ -137,18 +133,68 @@ function nodeAt(form: LiveNode, ...path: readonly (string | { readonly key: stri
   return node;
 }
 
-/** Which rules of the pilot read a path: those that declare a path at or above it, or below it. */
-function readersOf(rules: readonly Rule[], path: readonly (string | { readonly key: string })[]): number[] {
-  const steps = path.map((segment) => (typeof segment === 'string' ? segment : '*'));
-  return rules.flatMap((rule, index) =>
-    rule.reads.some((read) => {
-      const declared = read.map((segment) =>
-        typeof segment === 'object' || typeof segment === 'number' ? '*' : segment,
+const OUT = Symbol('left out');
+
+const holdsNothing = (value: unknown): boolean =>
+  value === OUT ||
+  value === undefined ||
+  value === null ||
+  value === '' ||
+  (Array.isArray(value) && value.length === 0) ||
+  (typeof value === 'object' && !Array.isArray(value) && Object.values(value).every(holdsNothing));
+
+/**
+ * What the form submits, from what its nodes show: `OUT` for a node hidden or disabled, or for an optional group none
+ * of whose fields holds a value nor arrays an item; a group holds its children, `OUT` among them, an array the items
+ * that are not.
+ */
+function submittedOf(spec: Spec, node: LiveNode): unknown {
+  if (node.hidden.get() || node.disabled.get()) {
+    return OUT;
+  }
+  if (spec.kind === 'field') {
+    return node.raw.get();
+  }
+  if (spec.kind === 'array') {
+    return node
+      .items!.get()
+      .map((item) => submittedOf(spec.element, item))
+      .filter((value) => value !== OUT);
+  }
+  const value = Object.fromEntries(
+    Object.entries(spec.children).map(([key, child]) => [key, submittedOf(child, node.children![key]!)]),
+  );
+  return (spec.options as { optional?: boolean }).optional && holdsNothing(value) ? OUT : value;
+}
+
+/** What the server reads of a value `submittedOf` gives: a node left out is `undefined`. */
+const plain = (value: unknown): unknown =>
+  value === OUT
+    ? undefined
+    : Array.isArray(value)
+      ? value.map(plain)
+      : typeof value === 'object' && value !== null
+        ? Object.fromEntries(Object.entries(value).map(([key, inner]) => [key, plain(inner)]))
+        : value;
+
+/** What a rule reads of `values`, at each path it declares, every item for an index or `anyElement`: `OUT` kept. */
+function readOf(rule: Rule, values: unknown): string {
+  const at = (value: unknown, path: readonly unknown[]): unknown[] => {
+    if (!path.length || value === OUT) {
+      return [value];
+    }
+    const [segment, ...rest] = path;
+    if (typeof segment === 'string') {
+      return at(
+        typeof value === 'object' && value !== null ? (value as Record<string, unknown>)[segment] : undefined,
+        rest,
       );
-      return declared.every((segment, at) => at >= steps.length || segment === steps[at]);
-    })
-      ? [index]
-      : [],
+    }
+    return Array.isArray(value) ? value.flatMap((item) => at(item, rest)) : [];
+  };
+  return JSON.stringify(
+    rule.reads.map((path) => at(values, path)),
+    (_, value: unknown) => (value === OUT ? '<out>' : value === undefined ? '<undefined>' : value),
   );
 }
 
@@ -157,7 +203,13 @@ const WRITES: readonly { readonly path: readonly (string | { readonly key: strin
   { path: ['company', 'siren'], value: '123456789' },
   { path: ['company', 'country'], value: 'BE' },
   { path: ['company', 'headOffice', 'postalCode'], value: '7501' },
+  // The parent company is hidden: a write into it changes nothing a rule reads, until its box is checked.
   { path: ['company', 'parent', 'address', 'city'], value: 'Lille' },
+  { path: ['company', 'hasParentCompany'], value: true },
+  { path: ['company', 'parent', 'address', 'city'], value: 'Roubaix' },
+  // The billing address, shown once its box is unchecked, stays absent until something is entered in it.
+  { path: ['company', 'billingSameAsHeadOffice'], value: false },
+  { path: ['company', 'billingAddress', 'street'], value: '3 quai Est' },
   { path: ['contacts', { key: 'c2' }, 'firstName'], value: 'Karima' },
   { path: ['contacts', { key: 'c2' }, 'email'], value: 'claire.durand@atelier-durand.example' },
   { path: ['bank', 'iban'], value: 'BR1800360305000010009795493C1' },
@@ -178,11 +230,16 @@ test('on the pilot, a write checks again exactly the rules that read the field w
     checks.every((count) => count === 1),
     `each rule checked once at first: ${JSON.stringify(checks)}`,
   );
+  const spec = liveSpec(today);
   for (const { path, value } of WRITES) {
     const before: number[] = [...checks];
+    const read = rules.map((rule) => readOf(rule, submittedOf(spec, form)));
     (nodeAt(form, ...path) as unknown as { set(raw: unknown): void }).set(value);
     const again: number[] = checks.flatMap((count, index) => (count > before[index]! ? [index] : []));
-    assert.deepEqual(again, readersOf(rules, path), `rules checked again by a write at ${JSON.stringify(path)}`);
+    const changed = rules.flatMap((rule, index) =>
+      readOf(rule, submittedOf(spec, form)) !== read[index] ? [index] : [],
+    );
+    assert.deepEqual(again, changed, `rules checked again by a write at ${JSON.stringify(path)}`);
     assert.ok(
       checks.every((count, index) => count - before[index]! <= 1),
       'each at most once',
@@ -191,7 +248,7 @@ test('on the pilot, a write checks again exactly the rules that read the field w
   stop();
 });
 
-test('on the pilot, required is what requiredPaths says of the raw value, node by node', () => {
+test('on the pilot, required is what requiredPaths says of what the form submits, node by node', () => {
   const today = scenarios[0]!.today;
   for (const scenario of scenarios) {
     const spec = liveSpec(today);
@@ -223,8 +280,8 @@ test('on the pilot, required is what requiredPaths says of the raw value, node b
       }
       return JSON.stringify(node.path);
     };
-    // The raw value the form holds, as its rules read it.
-    const want = [...new Set(requiredPaths(liveRules(today), form.raw.get()).map(named))].sort();
+    // What the form submits, as its rules read it.
+    const want = [...new Set(requiredPaths(pilotRules(today), plain(submittedOf(spec, form))).map(named))].sort();
     const got = nodes
       .filter((node) => node.required.get())
       .map((node) => JSON.stringify(node.path))

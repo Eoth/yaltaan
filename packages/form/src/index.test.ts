@@ -324,8 +324,26 @@ test('what a schema or a condition throws is thrown by every state that reads it
   ]) {
     assert.throws(() => state.get(), broken);
   }
-  assert.throws(() => form.children.b.disabled.get(), broken);
-  assert.deepEqual([form.children.b.parsed.get().ok, form.dirty.get(), form.touched.get()], [true, false, false]);
+  // A condition decides what its node submits and whether it shows dirty and touched: those states throw too.
+  for (const state of [
+    form.children.b.disabled,
+    form.children.b.parsed,
+    form.children.b.dirty,
+    form.children.b.touched,
+    form.dirty,
+    form.touched,
+  ]) {
+    assert.throws(() => state.get(), broken);
+  }
+  assert.deepEqual(
+    [
+      form.children.a.dirty.get(),
+      form.children.a.touched.get(),
+      form.children.b.raw.get(),
+      form.children.b.hidden.get(),
+    ],
+    [false, false, '', false],
+  );
   form.children.a.set('fine');
   assert.deepEqual([form.parsed.get().ok, form.children.b.disabled.get()], [true, false]);
 });

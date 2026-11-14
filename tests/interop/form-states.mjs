@@ -124,9 +124,15 @@ assert.deepEqual(address.issues.get(), []);
 assert.equal(address.parsed.get().ok, false);
 
 // Disabled: the condition holds on the zip once the city is empty, in Angular and here; TanStack has no such state.
-// Angular also leaves out the issues of a disabled node; here they stay (the pilot decides).
+// Angular leaves out the issues of a disabled node and keeps its value; here its value is left out of what the form
+// submits, so that the schema of the root, which requires the zip, says so on it (form-conditions.mjs).
 assert.deepEqual([angular.address.zip().disabled(), address.children.zip.disabled.get()], [true, true]);
 assert.equal('disabled' in meta('address.zip'), false);
+assert.deepEqual(angular.address.zip().errors(), []);
+assert.deepEqual(
+  address.children.zip.issues.get().map((issue) => issue.code),
+  ['schema.invalid_type'],
+);
 
 // Submission: Angular and TanStack touch every field, and so does the form; TanStack counts the attempts, the form
 // keeps whether one was made since the last reset; Angular keeps neither.

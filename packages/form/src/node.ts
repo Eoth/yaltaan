@@ -20,6 +20,7 @@ import type {
   GroupOptions,
   GroupSpec,
   NodeSpecOptions,
+  Staying,
   OutputOf,
   RawOf,
   Spec,
@@ -39,6 +40,11 @@ export const NONE: readonly never[] = [];
 const PENDING: Answer = { issues: NONE };
 // What a validator that found nothing, or was not asked, answers.
 const CLEAR: Answer = { issues: NONE };
+// What a node left out of the submission holds instead of a value: its group holds `undefined`, its array drops it.
+export const ABSENT = {};
+// What the schema of a node left out answers: nothing, since it is not asked.
+const GONE: Answer = { value: ABSENT, issues: NONE };
+const CONDITIONS = ['disabled', 'hidden', 'readonly'] as const;
 const DANGEROUS = ['__proto__', 'constructor', 'prototype'];
 const KINDS = ['field', 'group', 'array'];
 const MAX_ITEMS = 10_000;
@@ -67,19 +73,40 @@ export const isSpec = (spec: unknown): spec is Spec => {
 export const own = (value: unknown, key: PropertyKey): unknown =>
   isObject(value) && Object.hasOwn(value, key) ? value[key as string] : undefined;
 
-export function checkOptions(options: unknown): void {
+// A blank, as @yaltaan/rules reads one: `undefined`, `null`, an empty string or an empty list.
+export const isBlank = (value: unknown): boolean =>
+  value === undefined || value === null || value === '' || (Array.isArray(value) && value.length === 0);
+
+// Whether `value`, what a node of `spec` submits, holds nothing: a blank, or a group whose children all hold nothing.
+const empty = (spec: Spec, value: unknown): boolean =>
+  isBlank(value) ||
+  (spec.kind === 'group' && Object.keys(spec.children).every((key) => empty(spec.children[key]!, own(value, key))));
+
+// Whether a node of `spec`, or one below it, may be left out of the submission by an option of its own.
+const loose = (spec: Spec): boolean =>
+  !!(spec.options.disabled || spec.options.hidden || (spec.options as GroupOptions<unknown>).optional) ||
+  (spec.kind === 'group' ? Object.values(spec.children).some(loose) : spec.kind === 'array' && loose(spec.element));
+
+export function checkOptions(options: unknown, kind?: Spec['kind']): void {
   check(isObject(options), 'options are an object');
-  const { schema, disabled, equals, validate, rules } = options as {
+  const { schema, equals, validate, rules, optional } = options as {
     readonly schema?: Partial<StandardSchema> | null;
-    readonly disabled?: Partial<Condition> | null;
     readonly equals?: unknown;
     readonly validate?: unknown;
     readonly rules?: readonly Partial<Rule>[];
+    readonly optional?: unknown;
   };
   check(schema === undefined || typeof schema?.['~standard']?.validate === 'function', 'schema is a Standard Schema');
+  for (const name of CONDITIONS) {
+    const condition = options[name] as Partial<Condition> | null | undefined;
+    check(
+      condition === undefined || (Array.isArray(condition?.reads) && typeof condition.when === 'function'),
+      `${name} is a condition: reads and when`,
+    );
+  }
   check(
-    disabled === undefined || (Array.isArray(disabled?.reads) && typeof disabled.when === 'function'),
-    'disabled is a condition: reads and when',
+    optional === undefined || (kind === 'group' && typeof optional === 'boolean'),
+    'optional is a boolean of a group',
   );
   check(equals === undefined || typeof equals === 'function', 'equals is a function');
   check(validate === undefined || typeof validate === 'function', 'validate is a function');
@@ -97,16 +124,25 @@ export function checkOptions(options: unknown): void {
 }
 
 /**
- * A field holding `initial` until it is set.
+ * A field holding `initial` until it is set; with a `disabled` or a `hidden` condition, or options of a wider type,
+ * its read value may be `undefined` in its group's.
  * @pure
  * @sharing structural
  * @complexity O(1)
- * @throws TypeError when an option is not of its kind: `schema` a Standard Schema, `disabled` a condition, `equals`
- *   and `validate` functions, `rules` rules
+ * @throws TypeError when an option is not of its kind: `schema` a Standard Schema, `disabled`, `hidden` and
+ *   `readonly` conditions, `equals` and `validate` functions, `rules` rules; when given `optional`
  * @since 0.3
  * @experimental
  * @example field('', { schema: string({ minLength: 1 }) })
  */
+export function field<Raw, Output = Raw>(
+  initial: Raw,
+  options?: FieldOptions<NoInfer<Raw>, Output> & Staying,
+): FieldSpec<Raw, NoInfer<Output>>;
+export function field<Raw, Output = Raw>(
+  initial: Raw,
+  options?: FieldOptions<NoInfer<Raw>, Output>,
+): FieldSpec<Raw, NoInfer<Output> | undefined>;
 export function field<Raw, Output = Raw>(
   initial: Raw,
   options: FieldOptions<NoInfer<Raw>, Output> = {},
@@ -116,7 +152,8 @@ export function field<Raw, Output = Raw>(
 }
 
 /**
- * A group of `children`, by key: its raw value is the object of theirs.
+ * A group of `children`, by key: its raw value is the object of theirs; with a `disabled` or a `hidden` condition, or
+ * `optional`, or options of a wider type, its read value may be `undefined` in its parent's.
  * @pure
  * @sharing structural
  * @complexity O(c) (c = number of children)
@@ -128,6 +165,14 @@ export function field<Raw, Output = Raw>(
  */
 export function group<const C extends Children, Output = OutputOf<C>>(
   children: C,
+  options?: GroupOptions<Output, RawOf<C>> & Staying & { readonly optional?: false },
+): GroupSpec<C, NoInfer<Output>>;
+export function group<const C extends Children, Output = OutputOf<C>>(
+  children: C,
+  options?: GroupOptions<Output, RawOf<C>>,
+): GroupSpec<C, NoInfer<Output> | undefined>;
+export function group<const C extends Children, Output = OutputOf<C>>(
+  children: C,
   options: GroupOptions<Output, RawOf<C>> = {},
 ): GroupSpec<C, NoInfer<Output>> {
   check(isObject(children), 'children are an object of specs');
@@ -135,7 +180,7 @@ export function group<const C extends Children, Output = OutputOf<C>>(
     check(isSpec(children[key]), `${key} is not a spec of field, group or array`);
     check(!DANGEROUS.includes(key), `${key} cannot name a child`);
   }
-  checkOptions(options);
+  checkOptions(options, 'group');
   return { kind: 'group', children, options };
 }
 
@@ -186,12 +231,15 @@ const heard = (list: unknown, value: unknown, path: Path): Answer =>
       : CLEAR
     : failed(path, list);
 
+// The object of `values` by `keys`, a value left out holding `undefined`.
 export const compose = (keys: readonly string[], values: readonly unknown[]): unknown =>
-  Object.fromEntries(keys.map((key, index) => [key, values[index]]));
+  Object.fromEntries(keys.map((key, index) => [key, values[index] === ABSENT ? undefined : values[index]]));
 
 export const some = (...values: unknown[]): boolean => values.some((value) => value === true || value === PENDING);
 
-const list = (...values: unknown[]): unknown[] => values;
+// An array's read value: what its items submit, those left out dropped; `ABSENT` when it is left out itself.
+export const kept = (gone: unknown, ...values: unknown[]): unknown =>
+  gone ? ABSENT : values.filter((value) => value !== ABSENT);
 
 // Whether an issue blocks: any but a warning, which is shown and holds nothing back.
 const blocks = (issue: Issue): boolean => issue.severity !== 'warning';
@@ -218,6 +266,20 @@ export class Node {
   declare readonly raw: ReadableNode<unknown>;
   declare readonly touched: ReadableNode<boolean>;
   declare disabled: ReadableNode<boolean>;
+  declare hidden: ReadableNode<boolean>;
+  declare readonly: ReadableNode<boolean>;
+  /** Whether it is disabled or hidden, and so left out of the submission: it shows no `dirty`. */
+  declare off: ReadableNode<boolean>;
+  /** Whether it is disabled, hidden or read only: the user cannot act on it, and it shows no `touched`. */
+  declare idle: ReadableNode<boolean>;
+  /** What it submits if its parent is submitted: its raw value without what is left out; `ABSENT` when left out. */
+  declare sent: ReadableNode<unknown>;
+  /** What its schema, validator and rules read: what it submits, `ABSENT` when it or an ancestor is left out. */
+  declare judged: ReadableNode<unknown>;
+  /** Whether it or an ancestor is left out of the submission. */
+  declare gone: ReadableNode<boolean>;
+  /** For a node that may be left out, what each rule that reads it reads of it, by what it reads: built once. */
+  declare reading: Map<Reads, ReadableNode<unknown>> | undefined;
   declare issues: ReadableNode<readonly Issue[]>;
   declare pending: ReadableNode<boolean>;
   /** The issues placed on this node and below it, this node's first. */
@@ -270,8 +332,8 @@ export class Node {
 
   get parsed(): ReadableNode<Result<unknown, readonly Issue[]>> {
     return (this.parsedNode ??= this.graph.derived(
-      [this.all, this.pending, this.output],
-      (all, pending, output) => (all.some(blocks) || pending ? err(all) : ok(output)),
+      [this.all, this.pending, this.output, this.gone],
+      (all, pending, output, gone) => (gone || all.some(blocks) || pending ? err(all) : ok(output)),
       { equals: sameParsed },
     ));
   }
@@ -404,8 +466,8 @@ function write(node: Node, raw: unknown, mode: Mode): void {
   });
 }
 
-// Builds the sources of a node from `value`, its raw value as the form holds it, and the states that only follow its
-// children or items; the others need the whole tree.
+// Builds the sources of a node from `value`, its raw value as the form holds it, and its raw value; its states need
+// the whole tree.
 export function build(
   spec: Spec,
   path: Path,
@@ -433,10 +495,6 @@ export function build(
       children.map((child) => child.raw),
       (...values) => compose(keys, values),
     );
-    node.touched = graph.derived(
-      children.map((child) => child.touched),
-      some,
-    );
   } else {
     node.fill(value as unknown[]);
   }
@@ -448,7 +506,7 @@ export function build(
 // the condition, a `{ key }` segment without a key; a rule's, as `readsOf` reads it; so that a condition or a rule of
 // an item fails when the form is built, not when an item is.
 function checkReads(spec: Spec, root: Spec, arrays: readonly Spec[]): void {
-  for (const read of spec.options.disabled?.reads ?? NONE) {
+  for (const read of CONDITIONS.flatMap((name) => spec.options[name]?.reads ?? NONE)) {
     check(Array.isArray(read), 'a condition reads paths');
     let at: Spec | undefined = root;
     for (const key of read) {
@@ -511,25 +569,40 @@ function readsOf(spec: Spec, paths: readonly Path[]): Reads {
 }
 
 /**
- * Notes in `deps` the nodes whose raw values `reads` names at and below `node`, and returns what builds, from their
- * values, the values a rule reads: what it does not read left out, through an array the list of what it reads of each
- * item, a node the array rewires with its items, and nothing for a rule that reads nothing.
+ * Notes in `deps` the nodes whose submitted values `reads` names at and below `node`, and returns what builds, from
+ * their values, the values a rule reads: what it does not read left out, through an array the list of what it reads of
+ * each item submitted, a node the array rewires with its items, nothing for a rule that reads nothing, and `ABSENT`
+ * once `node` is left out of the submission. What a node that may be left out gives is a node of its own, which keeps
+ * `ABSENT` while it is out, so that nothing below it reaches the rule then.
  */
 export function resolve(node: Node, reads: Reads, deps: ReadableNode<unknown>[]): (values: unknown[]) => unknown {
-  if (reads !== true && !reads.size) {
-    return () => undefined;
-  }
-  if (reads === true || !node.children) {
-    const at = deps.push(node.items && reads !== true ? (node as List).view(reads.get(0)!) : node.raw) - 1;
+  const { graph, no } = node.shared;
+  const made = node.gone === no ? undefined : node.reading?.get(reads);
+  if (made) {
+    const at = deps.push(made) - 1;
     return (values) => values[at];
   }
-  const keys = [...reads.keys()] as string[];
-  const parts = keys.map((key) => resolve(node.children![key]!, reads.get(key)!, deps));
-  return (values) =>
-    compose(
-      keys,
-      parts.map((part) => part(values)),
-    );
+  const inner: ReadableNode<unknown>[] = node.gone === no ? deps : [];
+  let make: (values: unknown[]) => unknown = () => undefined;
+  if (reads === true || (reads.size && !node.children)) {
+    const at = inner.push(node.items && reads !== true ? (node as List).view(reads.get(0)!) : node.sent) - 1;
+    make = (values) => values[at];
+  } else if (reads.size) {
+    const keys = [...reads.keys()] as string[];
+    const parts = keys.map((key) => resolve(node.children![key]!, reads.get(key)!, inner));
+    make = (values) =>
+      compose(
+        keys,
+        parts.map((part) => part(values)),
+      );
+  }
+  if (inner === deps) {
+    return make;
+  }
+  const read = graph.derived([node.gone, ...inner], (gone, ...values) => (gone ? ABSENT : make(values)));
+  (node.reading ??= new Map()).set(reads, read);
+  const at = deps.push(read) - 1;
+  return (values) => values[at];
 }
 
 // The node `path` names from the root, as `checkReads` checked it: through group keys and, for an array, the item
@@ -632,11 +705,90 @@ export const doubtsOf = (node: Node): ReadableNode<unknown>[] => {
   return [...deps, ...under(node).map((child) => child.doubt!)];
 };
 
-// A node's whole state, its own and that of every node below: what schemas and validators answer (`ask`), then what
-// follows from it (`connect`), so that a validator may wait for the schemas below it.
+// A node's whole state, its own and that of every node below: its conditions and what it submits (`prepare`), what
+// schemas and validators answer (`ask`), then what follows from it (`connect`), so that a validator may wait for the
+// schemas below it.
 export function wire(node: Node, shared: Shared): void {
+  prepare(node, shared);
+  settle(node, shared);
   ask(node, shared);
   connect(node, shared);
+}
+
+// Either of two states, without a node when one of them never holds.
+const either = (shared: Shared, a: ReadableNode<boolean>, b: ReadableNode<boolean>): ReadableNode<boolean> =>
+  a === shared.no ? b : b === shared.no ? a : shared.graph.derived([a, b], some);
+
+// Builds the conditions of a node from the root down, each holding on the raw values it reads or on its parent, then
+// from the leaves up, what touches it and what it submits: nothing while it is disabled or hidden, nor, for an
+// optional group, while it holds nothing; otherwise its raw value, a child left out holding `undefined`, an item left
+// out dropped from its array.
+function prepare(node: Node, shared: Shared): void {
+  const { graph, no } = shared;
+  const { spec, parent } = node;
+  const { options } = spec;
+  for (const name of CONDITIONS) {
+    const condition = options[name];
+    const holds =
+      condition &&
+      graph.derived(
+        condition.reads.map((read) => find(shared.root, read, node).raw),
+        (...values) => !!condition.when(...values),
+      );
+    node[name] = holds ? (parent ? graph.derived([parent[name], holds], some) : holds) : (parent?.[name] ?? no);
+  }
+  const fresh = CONDITIONS.some((name) => options[name]);
+  node.off = fresh ? either(shared, node.disabled, node.hidden) : (parent?.off ?? no);
+  node.idle = fresh ? either(shared, node.off, node.readonly) : (parent?.idle ?? no);
+  const children = under(node);
+  for (const child of children) {
+    prepare(child, shared);
+  }
+  const touched = node as Writable<Node>;
+  touched.touched =
+    spec.kind !== 'field'
+      ? graph.derived(
+          children.map((child) => child.touched),
+          some,
+        )
+      : node.idle === no
+        ? (node as Field).marked
+        : graph.derived([(node as Field).marked, node.idle], (marked, idle) => marked && !idle);
+  if (node.off === no && !loose(spec)) {
+    node.sent = node.raw;
+  } else if (spec.kind === 'field') {
+    node.sent = graph.derived([node.off, node.raw], (off, raw) => (off ? ABSENT : raw));
+  } else if (spec.kind === 'group') {
+    const keys = Object.keys(spec.children);
+    node.sent = graph.derived([node.off, ...children.map((child) => child.sent)], (off, ...values) => {
+      if (off) {
+        return ABSENT;
+      }
+      const value = compose(keys, values);
+      return (options as GroupOptions<unknown>).optional && empty(spec, value) ? ABSENT : value;
+    });
+  } else {
+    (node as List).ship();
+  }
+}
+
+// From the root down, whether each node is left out, by an ancestor or by itself: an optional group by what it
+// submits, any other node by a condition of its own, so that a write elsewhere never reaches it; and what its schema,
+// validator and rules read: what it submits, `ABSENT` once it is left out.
+function settle(node: Node, shared: Shared): void {
+  const { graph, no } = shared;
+  const { parent, spec } = node;
+  const self = (spec.options as GroupOptions<unknown>).optional
+    ? graph.derived([node.sent], (sent) => sent === ABSENT)
+    : node.off === (parent?.off ?? no)
+      ? no
+      : node.off;
+  node.gone = either(shared, parent?.gone ?? no, self);
+  node.judged =
+    node.gone === no ? node.sent : graph.derived([node.gone, node.sent], (gone, sent) => (gone ? ABSENT : sent));
+  for (const child of under(node)) {
+    settle(child, shared);
+  }
 }
 
 // Builds what the schema of a node answers, from the root down; then, from the leaves up, for a node at or below a
@@ -648,7 +800,9 @@ function ask(node: Node, shared: Shared): void {
   const { spec, parent, path } = node;
   const { schema, validate, rules } = spec.options as NodeSpecOptions<unknown>;
   if (schema) {
-    node.own = node.answer = answerOf(shared, [node.raw], (raw) => judge(schema, raw, path));
+    node.own = node.answer = answerOf(shared, [node.judged], (value) =>
+      value === ABSENT ? GONE : judge(schema, value, path),
+    );
     node.ownPlaced = node.placed = placedOf(node, [node.own]);
   }
   if (rules?.length) {
@@ -662,14 +816,16 @@ function ask(node: Node, shared: Shared): void {
       said.push(
         graph.derived(deps, (...values) => {
           const read = make(values);
-          return { issues: check(read).map(placeAt(path)), read };
+          return read === ABSENT ? CLEAR : { issues: check(read).map(placeAt(path)), read };
         }),
       );
       if (required) {
         needed.push(
           graph.derived(deps, (...values) => {
             const read = make(values);
-            return { issues: required(read).map((at) => ({ code: '', path: [...path, ...at] })), read };
+            return read === ABSENT
+              ? CLEAR
+              : { issues: required(read).map((at) => ({ code: '', path: [...path, ...at] })), read };
           }),
         );
       }
@@ -715,12 +871,12 @@ function ask(node: Node, shared: Shared): void {
         void Promise.resolve().then(() => controller.abort());
       }
     });
-    const verdict = answerOf(shared, [node.raw, node.doubt!, ...lives], (raw, shut, ...alive) => {
+    const verdict = answerOf(shared, [node.judged, node.doubt!, ...lives], (raw, shut, ...alive) => {
       if (run && (shut === 2 || !Object.is(run.raw, raw) || alive.some((life, index) => life !== run!.alive[index]))) {
         stop();
         run = undefined;
       }
-      if (!run && shut === 0 && !alive.includes(null)) {
+      if (!run && shut === 0 && raw !== ABSENT && !alive.includes(null)) {
         const controller = new AbortController();
         const answer = validate(raw, { signal: controller.signal, path });
         if (isThenable(answer)) {
@@ -756,19 +912,7 @@ function ask(node: Node, shared: Shared): void {
 // children or items, from the leaves up: a node's dependencies always exist before it.
 function connect(node: Node, shared: Shared): void {
   const { graph } = shared;
-  const { spec, parent } = node;
-  const { disabled } = spec.options;
-  const condition =
-    disabled &&
-    graph.derived(
-      disabled.reads.map((read) => find(shared.root, read, node).raw),
-      (...values) => !!disabled.when(...values),
-    );
-  node.disabled = condition
-    ? parent
-      ? graph.derived([parent.disabled, condition], some)
-      : condition
-    : (parent?.disabled ?? shared.no);
+  const { parent } = node;
   node.above = parent?.answer ? graph.derived([parent.above, parent.answer], some) : (parent?.above ?? shared.no);
   const sources: ReadableNode<Map<Node, Issue[]>>[] = [];
   for (let at: Node | undefined = node; at; at = at.parent) {
@@ -805,16 +949,12 @@ function connect(node: Node, shared: Shared): void {
   node.output = node.own
     ? graph.derived([node.own], (answer) => answer.value)
     : node.items
-      ? graph.derived(
-          children.map((child) => child.output),
-          list,
-        )
+      ? graph.derived([node.gone, ...children.map((child) => child.output)], kept)
       : node.children
-        ? graph.derived(
-            children.map((child) => child.output),
-            (...values) => compose(Object.keys(node.children!), values),
+        ? graph.derived([node.gone, ...children.map((child) => child.output)], (gone, ...values) =>
+            gone ? ABSENT : compose(Object.keys(node.children!), values),
           )
-        : node.raw;
+        : node.judged;
 }
 
 // A node's `required`: whether what a rule of the node or of an ancestor requires names it.
@@ -828,13 +968,14 @@ function requiredOf(node: Node): ReadableNode<boolean> {
   return needs.length ? node.graph.derived(needs, (...maps) => maps.some((map) => map.has(node))) : node.shared.no;
 }
 
-// A node's `dirty`: a field's raw value against its initial one, a group's children; an array's is its own.
+// A node's `dirty`: a field's raw value against its initial one, while it is not disabled nor hidden; a group's
+// children; an array's is its own.
 function dirtyOf(node: Node): ReadableNode<boolean> {
   const { spec, graph } = node;
   return spec.kind === 'field'
     ? graph.derived(
-        [node.start, (node as Field).value],
-        (initial, raw) => !((spec.options as FieldOptions<unknown>).equals ?? equal)(initial, raw),
+        [node.start, (node as Field).value, node.off],
+        (initial, raw, off) => !off && !((spec.options as FieldOptions<unknown>).equals ?? equal)(initial, raw),
       )
     : graph.derived(
         Object.values(node.children!).map((child) => child.dirty),

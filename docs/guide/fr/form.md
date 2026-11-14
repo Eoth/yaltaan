@@ -48,14 +48,16 @@ Chaque valeur et chaque état est un nœud du graphe du formulaire, avec `get()`
 | État | D'un champ | D'un groupe |
 |---|---|---|
 | `raw` | Ce que tient sa saisie. | L'objet des valeurs brutes de ses enfants. |
-| `parsed` | La valeur lue : `{ ok: true, value }`, ou `{ ok: false, error }` avec les issues du nœud et de tout ce qui est en dessous, tant que l'une n'est pas un avertissement ou que le nœud est en attente. | La même chose, sur ses enfants. |
+| `parsed` | La valeur lue : `{ ok: true, value }`, ou `{ ok: false, error }` avec les issues du nœud et de tout ce qui est en dessous, tant que l'une n'est pas un avertissement, que le nœud est en attente, ou qu'il est laissé hors de ce que le formulaire envoie. | La même chose, sur ses enfants. |
 | `issues` | Les issues placées sur lui, le nœud le plus extérieur d'abord, le schéma d'un nœud avant ses règles. | Seulement celles placées sur le groupe lui-même. |
 | `required` | Une règle à lui ou d'un ancêtre l'exige. | La même chose. |
-| `dirty` | Sa valeur brute diffère de sa valeur initiale, comparée par `equal` (une liste, une date par leur contenu). | Un champ en dessous est modifié. |
-| `touched` | `touch()` a été appelé depuis sa dernière remise à zéro. | Un champ en dessous est touché. |
+| `dirty` | Sa valeur brute diffère de sa valeur initiale, comparée par `equal` (une liste, une date par leur contenu), et il n'est ni désactivé ni caché. | Un champ en dessous est modifié. |
+| `touched` | `touch()` a été appelé depuis sa dernière remise à zéro, et il n'est ni désactivé, ni caché, ni en lecture seule. | Un champ en dessous est touché. |
 | `pending` | Un schéma qui peut placer des issues sur lui, le sien, celui d'un ancêtre ou d'un descendant, n'a pas encore répondu. | La même chose. |
 | `submitted` | `submit()` a été appelé sur le formulaire depuis sa dernière remise à zéro. | La même chose, un seul nœud pour tout le formulaire. |
 | `disabled` | Sa condition `disabled` tient, ou son parent est désactivé. | La même chose. |
+| `hidden` | Sa condition `hidden` tient, ou son parent est caché. | La même chose. |
+| `readonly` | Sa condition `readonly` tient, ou son parent est en lecture seule. | La même chose. |
 
 `dirty` suit la valeur : remis à sa valeur initiale, un champ redevient propre, ce dont un avertissement « modifications non enregistrées » a besoin.
 
@@ -90,25 +92,45 @@ form.dirty.get(); // → false
 form.submitted.get(); // → false
 ```
 
-## Un champ désactivé par d'autres
+## Désactivé, caché, en lecture seule, et sous-formulaires laissés vides
 
-Une condition nomme les chemins qu'elle lit, depuis la racine du formulaire, et dit si le nœud est désactivé. Tout ce qui est sous un groupe désactivé l'est aussi.
+Trois conditions, chacune écrite `{ reads, when }` avec les chemins qu'elle lit depuis la racine du formulaire, tiennent sur un nœud et sur tout ce qui est en dessous :
+
+- `disabled` : la saisie est montrée et inutilisable. Le nœud garde sa valeur brute, et le formulaire le laisse hors de ce qu'il envoie, comme un navigateur laisse de côté un contrôle désactivé : son groupe tient `undefined` à sa place, son tableau l'écarte, et ni son schéma, ni son validateur, ni ses règles ne sont interrogés.
+- `hidden` : la saisie n'est pas montrée. Le formulaire la traite comme une saisie désactivée : une valeur que l'utilisateur ne voit pas n'est ni envoyée ni vérifiée.
+- `readonly` : la saisie est montrée et ne peut pas être changée. Elle est envoyée, donc vérifiée.
+
+Aucune des trois ne montre `touched`, puisque l'utilisateur ne peut pas agir dessus ; `dirty` suit ce qui est envoyé, si bien qu'un nœud en lecture seule le montre et qu'un nœud désactivé ou caché ne le montre pas. Tout contrôle qui reste lit ce que le formulaire envoie : une règle trouve vide un champ caché, le schéma d'un groupe trouve `undefined` là où un enfant est laissé de côté, et ce schéma le dit donc `optional`. Aucune issue n'est cachée : une règle qui exige un champ caché montre son issue sur ce champ, et l'envoi attend.
+
+Un sous-formulaire que l'utilisateur peut laisser vide est un groupe avec `optional: true` : tant qu'aucun de ses champs ne tient de valeur (`undefined`, `null`, `''` ou une liste vide), il est absent de ce que le formulaire envoie, comme un sous-formulaire facultatif d'un schéma. Une règle le trouve alors vide, et ses champs ne sont pas vérifiés ; dès que quelque chose y est saisi, chaque champ l'est.
 
 ```ts
 import { createForm, field, group } from '@yaltaan/form';
+import { requiredIf } from '@yaltaan/rules';
 
 const form = createForm(
-  group({
-    sameAsHeadOffice: field(true),
-    billing: group({ city: field('') }, { disabled: { reads: [['sameAsHeadOffice']], when: (same) => same === true } }),
-  }),
+  group(
+    {
+      hasParent: field(false),
+      parent: group(
+        { name: field(''), siren: field('') },
+        { optional: true, hidden: { reads: [['hasParent']], when: (has) => has !== true } },
+      ),
+    },
+    { rules: [requiredIf({ reads: [['hasParent']], when: (has) => has === true }, [['parent']])] },
+  ),
 );
-form.children.billing.children.city.disabled.get(); // → true
-form.children.sameAsHeadOffice.set(false);
-form.children.billing.children.city.disabled.get(); // → false
+form.children.parent.hidden.get(); // → true
+form.children.parent.children.name.set('Holding');
+form.submit(); // → { ok: true, value: { hasParent: false, parent: undefined } }
+form.children.parent.children.name.set('');
+form.children.hasParent.set(true);
+form.children.parent.issues.get().map((issue) => issue.code); // → ['rules.required_if']
+form.children.parent.children.name.set('Holding');
+form.submit(); // → { ok: true, value: { hasParent: true, parent: { name: 'Holding', siren: '' } } }
 ```
 
-Pour l'instant, `disabled` ne change rien d'autre : les issues d'un nœud désactivé comptent toujours, et sa valeur reste dans la valeur lue.
+Une condition lit les valeurs brutes, ce que tiennent les saisies, pour que ce qui est montré ne dépende jamais de ce qui est montré.
 
 ## Des listes dont les lignes bougent
 

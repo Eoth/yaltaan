@@ -141,8 +141,9 @@ export interface Validation {
  */
 export interface NodeSpecOptions<Output, Raw = unknown> {
   /**
-   * Reads the node's raw value: any Standard Schema, which may answer with a promise; its output is the node's parsed
-   * value, and each of its issues goes to the node its path names below this one. A rejected promise, or a failure
+   * Reads what the node submits, its raw value without what is left out: any Standard Schema, which may answer with a
+   * promise; its output is the node's parsed value, and each of its issues goes to the node its path names below this
+   * one. Not asked while the node, or an ancestor, is left out of the submission. A rejected promise, or a failure
    * without an issue, places `form.validation_failed` on the node. What listeners throw when an answer settles after
    * its read rejects a promise that nothing awaits: the platform reports it as an unhandled rejection.
    */
@@ -150,16 +151,32 @@ export interface NodeSpecOptions<Output, Raw = unknown> {
   /**
    * Disables the node, and every node below it, while `when` holds on the raw values of `reads`: paths from the root
    * of the form, each naming one of its nodes; through an array that holds the node, a `{ key }` segment without a key
-   * (`anyElement` of `@yaltaan/rules`) names the item that holds it.
+   * (`anyElement` of `@yaltaan/rules`) names the item that holds it. A disabled node keeps its raw value and is left
+   * out of the submission, as the platform leaves out a disabled control: its group holds `undefined` in its place, its
+   * array drops it, and its schema, validator and rules, and those below it, are not asked. It shows neither `dirty`
+   * nor `touched`. A rule of an ancestor that still requires it shows its issue on it: nothing is hidden.
    */
   readonly disabled?: Condition;
   /**
-   * Checks the node's raw value, as the application alone can, a server's answer for instance: returns the issues
+   * Hides the node, and every node below it, while `when` holds, read as `disabled` reads its condition: a hidden node
+   * is left out of the submission and shows neither `dirty` nor `touched`, as a disabled one, so that a value the user
+   * cannot see is neither sent nor checked.
+   */
+  readonly hidden?: Condition;
+  /**
+   * Makes the node, and every node below it, read only while `when` holds, read as `disabled` reads its condition: a
+   * read-only node is submitted and checked, as the platform submits a read-only control: it shows `dirty` when its
+   * value differs from its initial one, and never `touched`.
+   */
+  readonly readonly?: Condition;
+  /**
+   * Checks what the node submits, as the application alone can, a server's answer for instance: returns the issues
    * found, their paths from this node, placed as a schema's are, or a promise of them; an empty list when there is
    * none. Called with a signal of its own when a state that needs its answer is read and no run counts, once no schema
    * or rule of this node, of a node below or of an ancestor has placed an issue that is not a warning on it or below,
-   * nor a schema has yet to answer. A run counts until the raw value, or the lives of the items that hold the node,
-   * change, a schema or a rule places such an issue, or the node leaves the form; a schema that has yet to answer
+   * nor a schema has yet to answer, while the node is submitted. A run counts until what the node submits, or the lives
+   * of the items that hold the node, change, a schema or a rule places such an issue, or the node leaves the form or
+   * the submission; a schema that has yet to answer
    * neither starts nor drops one, so that a write elsewhere asks nothing again, and an item given back by `reset()`
    * asks again. A promise that rejects places
    * `form.validation_failed` on the node, the reason as `cause`, and so does an answer that is not a list of issues, or
@@ -171,12 +188,13 @@ export interface NodeSpecOptions<Output, Raw = unknown> {
   /**
    * Rules across the fields of the node, as `@yaltaan/rules` writes them, their paths from this node, each checked
    * against the description when the form is built: a group's segment names a child, any segment of an array stands
-   * for every item, and a path into a field reads the field. Each rule is a node of the graph that reads the raw values
-   * of the paths it declares and nothing else, as `checkRules` would read the raw value of the node, so that a sub-form
-   * left empty is an object, not a blank; it is checked again only once one of them changes, or the items of an array
-   * on its way do, and only when a state that needs it is read. Its issues keep
-   * their code, placed as a schema's are, after the schema's of the same node; what `required` gives makes those nodes
-   * required. What a rule throws is thrown by every state that depends on it.
+   * for every item, and a path into a field reads the field. Each rule is a node of the graph that reads what the paths
+   * it declares submit and nothing else, as `checkRules` would read what the node submits: a node left out is
+   * `undefined` there, an item left out is not in its list, and a sub-form left empty is an object unless its group is
+   * `optional`. It is checked again only once one of them changes, or the items of an array on its way do, and only
+   * when a state that needs it is read; not while its node, or an ancestor, is left out of the submission. Its issues
+   * keep their code, placed as a schema's are, after the schema's of the same node, even on a node left out; what
+   * `required` gives makes those nodes required. What a rule throws is thrown by every state that depends on it.
    */
   readonly rules?: readonly Rule[];
 }
@@ -201,7 +219,28 @@ export interface FieldOptions<Raw, Output = Raw> extends NodeSpecOptions<Output,
  * @since 0.3
  * @experimental
  */
-export type GroupOptions<Output, Raw = unknown> = NodeSpecOptions<Output, Raw>;
+export interface GroupOptions<Output, Raw = unknown> extends NodeSpecOptions<Output, Raw> {
+  /**
+   * Leaves the group out of the submission while none of its fields holds anything but a blank (`undefined`, `null`,
+   * an empty string or an empty list, as `@yaltaan/rules` reads one), nor any of its arrays an item: a sub-form the
+   * user has not started is then absent, as an optional sub-form of a schema, so that a rule finds it blank and its
+   * fields are not checked, nor its own rules: a server agrees when it runs them under the same optional node. A field
+   * that starts with a value that is not blank, `false` or `0`, keeps it present. Refused on a field or an array.
+   */
+  readonly optional?: boolean;
+}
+
+/**
+ * Options that leave a node in the submission whatever its fields hold: neither `disabled` nor `hidden` (nor, for a
+ * group, `optional`). Any other options, those holding one of them or a variable of a wider type, make the node's read
+ * value `Output | undefined` in its group's.
+ * @since 0.3
+ * @experimental
+ */
+export interface Staying {
+  readonly disabled?: undefined;
+  readonly hidden?: undefined;
+}
 
 /**
  * The options of an array.
@@ -239,23 +278,28 @@ export interface FormNode<Raw, Output> {
    */
   readonly raw: ReadableNode<Raw>;
   /**
-   * The read value: the issues of this node and of its descendants while one of them is not a warning or the node is
-   * pending (with the issues known so far), the parsed value otherwise.
+   * The read value: the issues of this node and of its descendants while one of them is not a warning, the node is
+   * pending, or it is left out of the submission (with the issues known so far), the parsed value otherwise.
    */
   readonly parsed: ReadableNode<Result<Output, readonly Issue[]>>;
   /**
    * The issues placed on this node by the schemas, validators and rules of the node and of its ancestors, the
-   * outermost first, a node's schema or validator before its rules.
+   * outermost first, a node's schema or validator before its rules; none is hidden, on a node left out of the
+   * submission either.
    */
   readonly issues: ReadableNode<readonly Issue[]>;
   /** Whether a rule of the node or of an ancestor requires this node, by its `required` on the values it reads. */
   readonly required: ReadableNode<boolean>;
   /**
    * Whether a field's raw value differs from its initial value; whether a group holds a dirty child; whether an
-   * array's raw value differs from its initial list, by its length or an item.
+   * array's raw value differs from its initial list, by its length or an item, the fields of its items left out
+   * included; never while the node is disabled or hidden, since it is not submitted.
    */
   readonly dirty: ReadableNode<boolean>;
-  /** Whether a field was touched since its last reset; whether a group or an array holds a touched field. */
+  /**
+   * Whether a field was touched since its last reset and is not disabled, hidden or read only; whether a group or an
+   * array holds such a field.
+   */
   readonly touched: ReadableNode<boolean>;
   /**
    * Whether a schema that places issues on this node or below, its own, an ancestor's or a descendant's, has not yet
@@ -266,6 +310,10 @@ export interface FormNode<Raw, Output> {
   readonly submitted: ReadableNode<boolean>;
   /** Whether the `disabled` condition of this node or of an ancestor holds. */
   readonly disabled: ReadableNode<boolean>;
+  /** Whether the `hidden` condition of this node or of an ancestor holds. */
+  readonly hidden: ReadableNode<boolean>;
+  /** Whether the `readonly` condition of this node or of an ancestor holds. */
+  readonly readonly: ReadableNode<boolean>;
   /**
    * Writes `raw`: a field's raw value; for a group, the own property of `raw` of each child's key, `undefined` when
    * absent; for an array, the elements of `raw`, each to the item that holds its key with `identity`, or by position
