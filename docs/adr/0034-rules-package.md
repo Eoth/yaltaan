@@ -1,7 +1,7 @@
 # ADR 0034 — `@yaltaan/rules`: rules across fields, on any schema and any engine
 
 - Date: 2026-11-02
-- Status: accepted (design choices delegated by the owner; the first rules API, `@experimental` until the contracts are frozen; the budget of 1,550 bytes is signalled to the owner and undone by one line)
+- Status: accepted (the first rules API, `@experimental` until the contracts are frozen; the budget of 1,550 bytes is a ceiling until the pilot is measured, T2.6, which calibrates it on the same rules written by hand, and is not raised again before; undone by one line)
 
 ## Context
 
@@ -46,7 +46,7 @@ On 2026-11-02, Ubuntu 26.04 x64, Node 24.21.0, under load from other work.
 
 **Performance**: not measured. No competitor runs these rules, and no scenario of `bench/perf/` holds them; the pilot's measurements (T2.6) will.
 
-**A reviewer** given only the question and the code, and told to look for reasons to refuse, refused the first version, 16 of 32 of its aimed mutants passing every test. Before and after:
+**A second reader**, who had only the question and the code and looked for reasons to refuse, refused the first version, 16 of 32 of its aimed mutants passing every test. Before and after:
 
 - `unique` was quadratic: V8 hashes a string over 16,383 code units by its length alone, so that same-length keys all collide in a `Map`. A 204 MB body killed at 110 s now takes 442 ms, keys being compared on their first 16,000 code units. `uniqueBy` and `indexBy` of `core` have the same defect (T3.13).
 - `c => c.email.toLowerCase()` threw on a row just added: see the options above.

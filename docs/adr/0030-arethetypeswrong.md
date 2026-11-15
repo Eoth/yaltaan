@@ -1,7 +1,7 @@
 # ADR 0030 — No arethetypeswrong: the supported compilers judge the published types
 
 - Date: 2026-11-01
-- Status: proposed — recommendation, awaiting the owner
+- Status: accepted (2026-11-15)
 
 ## Context
 
@@ -23,13 +23,14 @@ On 2026-11-01, Ubuntu 26.04 x64, Node 24.21.0, npm 11.19.0, in a throwaway folde
 
 ## Decision
 
-Recommended: option 3, implemented by the release script (ADR 0029): the compilers and the runtime the packages promise to support are the judges, on the bytes of the tarball, with no package added. `arethetypeswrong` is not installed.
+Option 3, implemented by the release script (ADR 0029): the compilers and the runtime the packages promise to support are the judges, on the bytes of the tarball, with no package added. `arethetypeswrong` is not installed.
 
 ## Consequences
 
 - No package added; the question attw answers is answered by TypeScript 7.0.2 and 6.0.3 themselves, and by Node.
 - What option 3 does not see: resolutions outside `nodenext` and `bundler` (`node10`, which ignores `exports`, is not supported by the packages anyway; a `classic` resolution neither); TypeScript versions other than the two installed; a CommonJS consumer compiled by TypeScript (the packages are ES modules only, and Node's `require` is checked at run time instead).
-- ARCHITECTURE.md §11 keeps its promise of a type check of the published tarball; its wording changes once the owner decides.
+- ARCHITECTURE.md §11 keeps its promise of a type check of the published tarball, and names these judges.
+- Two consumers the check lacks are added to it, with no package (T0.30): a CommonJS one compiled by TypeScript, a `.cts` file that requires each sub-path, and one compiled with the DOM library, as every Angular project is. Tried by hand on 2026-11-15, both compile under TypeScript 7.0.2 and 6.0.3.
 
 ## Review condition
 

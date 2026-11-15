@@ -4,7 +4,7 @@
 // Nothing runs on import.
 //
 // The source of @yaltaan/angular, kept beside the interoperability scripts until Angular is a development dependency of
-// the workspace (ADR 0048, awaiting the owner): tests/interop/run.sh compiles it against the declarations of Angular
+// the workspace (ADR 0048): tests/interop/run.sh compiles it against the declarations of Angular
 // 22.2.4, runs it there, and measures it.
 //
 // A rule runs as one tree validator of Signal Forms, which reads, through the fields of the form, only the paths the

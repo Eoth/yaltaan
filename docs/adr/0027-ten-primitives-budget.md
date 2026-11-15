@@ -1,7 +1,7 @@
 # ADR 0027 — The ten-primitives budget, measured
 
 - Date: 2026-10-30
-- Status: proposed — recommendation, awaiting the owner
+- Status: accepted (2026-11-15), as a measured ceiling: the next request to raise this line changes the method instead
 
 ## Context
 
@@ -28,13 +28,13 @@ The scenario holds the same ten functions as es-toolkit's, `paginate` standing f
 
 Alone, `omit` weighs 531 B and `pick` 517 B (masks at every depth, the refusal of `__proto__`, arrays walked element by element), `merge` 523 B, `mapValues` 377 B, `uniqueBy` 263 B, `paginate` 267 B, `indexBy` 236 B. Shared code (the copy helpers, `ok` and `err`) makes the ten 1 472 B instead of the sum.
 
-A contradictor, given the question and the code without this record, measured each function's share of the bundle (esbuild): `clamp` 178 B, `paginate` 166, `merge` 146, `uniqueBy` 137, `indexBy` 100, `omit` 65, `pick` 58, `mapValues` 56, `partition` 37, `countBy` 27; shortening every error message to one character would save only 76 B. It refused 1 510 B before the savings that change no behaviour were taken, and put them near 1 440 B: a shorter `clamp` with the same errors (taken here: shorter messages, `Infinity` for `Number.POSITIVE_INFINITY`, no array of the two bounds, 1 509 → 1 472 B), then `propertyIsEnumerable` read once in `object` (−8 B) and `${x}` for `${String(x)}` (−4 B), left to the size pass. It agrees that about 440 B are decided behaviour, and notes that es-toolkit's ten do less work (keys as a list for `pick` and `omit`, bare chunks): the reference gives a ratio, not a judge.
+A second reader, given the question and the code without this record, measured each function's share of the bundle (esbuild): `clamp` 178 B, `paginate` 166, `merge` 146, `uniqueBy` 137, `indexBy` 100, `omit` 65, `pick` 58, `mapValues` 56, `partition` 37, `countBy` 27; shortening every error message to one character would save only 76 B. It refused 1 510 B before the savings that change no behaviour were taken, and put them near 1 440 B: a shorter `clamp` with the same errors (taken here: shorter messages, `Infinity` for `Number.POSITIVE_INFINITY`, no array of the two bounds, 1 509 → 1 472 B), then `propertyIsEnumerable` read once in `object` (−8 B) and `${x}` for `${String(x)}` (−4 B), left to the size pass. It agrees that about 440 B are decided behaviour, and notes that es-toolkit's ten do less work (keys as a list for `pick` and `omit`, bare chunks): the reference gives a ratio, not a judge.
 
 ## Decision
 
-Option 2, as a recommendation: the budget of `yaltaan/core-ten-primitives` becomes 1 480 B, the larger figure rounded up to ten bytes, with es-toolkit's ten as its basis still. The bytes over es-toolkit are the decided behaviours listed above, not slack. A size pass (ROADMAP.md T7.6) looks for bytes that no decision requires, before the first stable version, and lowers this budget to what it measures.
+Option 2: the budget of `yaltaan/core-ten-primitives` becomes 1 480 B, the larger figure rounded up to ten bytes, with es-toolkit's ten as its basis still. The bytes over es-toolkit are the decided behaviours listed above, not slack. A size pass (ROADMAP.md T7.6) looks for bytes that no decision requires, before the first stable version, and lowers this budget to what it measures.
 
-Until the owner rules, the budget line is applied, since it changes no published byte and is undone by one line of `bench/size/budgets.tsv`.
+The line is a ceiling set at what was measured, 8 bytes above it, not a budget calibrated on a reference: it is the second of six lines of `bench/size/budgets.tsv` raised to their measure in five weeks. It is not raised again. A change that passes it takes the bytes back elsewhere, or opens option 3, a budget per function, by a record of its own. It changes no published byte and is undone by one line of `bench/size/budgets.tsv`.
 
 ## Consequences
 
@@ -43,4 +43,4 @@ Until the owner rules, the budget line is applied, since it changes no published
 
 ## Review condition
 
-A `chunk` of the library, which replaces `paginate` in the scenario; the size pass of T7.6; a refusal by the owner, which reopens option 1 with the list of behaviours to remove.
+A `chunk` of the library, which replaces `paginate` in the scenario; the size pass of T7.6, which must lower it before the first stable version; a wish to hold one and a half times es-toolkit in public, which reopens option 1 with the list of behaviours to remove.

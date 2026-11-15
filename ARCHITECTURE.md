@@ -54,7 +54,7 @@ The strongest differentiator is probably `@yaltaan/rules` (§7.10): declarative 
 
 ## 3. Non-goals
 
-The authoritative list, with each verdict, is ROADMAP.md §4; a new exclusion needs the owner's explicit agreement. The reasons, one line each:
+The authoritative list, with each verdict, is ROADMAP.md §4; a new exclusion needs a decision record. The reasons, one line each:
 
 | Non-goal | Reason |
 |---|---|
@@ -474,7 +474,7 @@ The energy consumed by a JavaScript function cannot be measured reliably. What i
 
 Every import scenario of `bench/size/` is bundled for real, by esbuild and by Rollup, minified with `"sideEffects"` honoured, then measured raw, gzip and brotli. [docs/size-baseline.tsv](docs/size-baseline.tsv) records each figure, and a byte that moves fails the gate until the baseline is rewritten by a commit that explains the change ([ADR 0009](docs/adr/0009-size-harness-bundlers-and-references.md)). Reference libraries are measured by the same harness: es-toolkit (primitives), valibot (schemas), temporal-polyfill (the polyfill of ADR 0005), `@preact/signals-core` (reactive graph).
 
-The budgets, in bytes minified and brotli-compressed under every bundler, live in one file, [bench/size/budgets.tsv](bench/size/budgets.tsv). Each is the tighter of the design's first hypothesis and one and a half times the reference for the same scenario, but for the ten core primitives, measured at about 2.2 times es-toolkit for the checks their contracts require ([ADR 0027](docs/adr/0027-ten-primitives-budget.md), awaiting the owner); the temporal layer gets a tenth of the polyfill it sits on; the rules, the form and the adapters, which no library matches, keep their hypothesis (the rules' raised once to what five rules with the contracts of §7.10 weigh, [ADR 0034](docs/adr/0034-rules-package.md)) until the pilot form is measured against the same form written with Angular Signal Forms alone ([ADR 0010](docs/adr/0010-import-size-budgets.md)).
+The budgets, in bytes minified and brotli-compressed under every bundler, live in one file, [bench/size/budgets.tsv](bench/size/budgets.tsv). Each is the tighter of the design's first hypothesis and one and a half times the reference for the same scenario, but for the ten core primitives, measured at about 2.2 times es-toolkit for the checks their contracts require ([ADR 0027](docs/adr/0027-ten-primitives-budget.md)); the temporal layer gets a tenth of the polyfill it sits on; the rules, the form and the adapters, which no library matches, keep their hypothesis (the rules' raised once to what five rules with the contracts of §7.10 weigh, [ADR 0034](docs/adr/0034-rules-package.md)) until the pilot form is measured against the same form written with Angular Signal Forms alone ([ADR 0010](docs/adr/0010-import-size-budgets.md)).
 
 Parse time and execution time at cold start are to be measured for the same scenarios.
 
@@ -569,7 +569,7 @@ An `@experimental` API can change in a minor version; a `@stable` API follows Se
 - Lockfile under version control; no Git dependency; licence check; vulnerability scan; secret detection.
 - The repository's `.npmrc` enforces part of this at install time: no dependency lifecycle script runs, versions are saved exactly, nothing is installed from Git, and a version published less than seven days ago is never picked.
 - Publishing through trusted publishing (OIDC) with npm provenance, by a release workflow that rehearses on every change and publishes only a release tag; no npm token exists; an SBOM with every release; two-factor authentication mandatory ([ADR 0029](docs/adr/0029-release-workflow.md)).
-- CI runs `publint` and inspects the actual content of the published tarball: it holds exactly what the targets of `exports` reach, and two builds of the same commit give the same tarball to the byte ([ADR 0029](docs/adr/0029-release-workflow.md)). The published types are compiled by TypeScript 7 and 6.0 from the installed tarball; whether `arethetypeswrong` runs as well awaits the owner's decision on [ADR 0030](docs/adr/0030-arethetypeswrong.md), which recommends not.
+- CI runs `publint` and inspects the actual content of the published tarball: it holds exactly what the targets of `exports` reach, and two builds of the same commit give the same tarball to the byte ([ADR 0029](docs/adr/0029-release-workflow.md)). The published types are compiled by TypeScript 7 and 6.0 from the installed tarball; `arethetypeswrong` is not installed: it judges with a compiler outside the supported versions ([ADR 0030](docs/adr/0030-arethetypeswrong.md)).
 - No `postinstall` script, no telemetry, no network call.
 
 ## 12. Decisions, contributions and plan
