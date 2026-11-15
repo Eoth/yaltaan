@@ -67,6 +67,14 @@ fc.assert(fc.property(adversarial.unicode.arbitrary, ({ value }) => value.length
 - `shapes` and `schemaCases`: schemas described as data, with inputs near them, valid or broken at every depth;
 - `fromShape` and `ShapeLibrary`: a shape built by any library, `valibotLibrary` for the reference. A comparison hands both to `createJudge`.
 
+## Running a law on each Temporal
+
+`@yaltaan/testing/temporal`, a sub-path of its own so that the tests of other packages do not load the polyfill, holds the Temporal implementations a law of `@yaltaan/temporal` runs on:
+
+- `IMPLEMENTATIONS`: those of this runtime by name, the polyfill always, the native one where the runtime has it;
+- `testOnEach(name, check)`: a test per implementation, with `globalThis.Temporal` set to it, which is what the package reads when called;
+- `OTHER_IMPLEMENTATION`: the native one and the polyfill together, for a test that mixes them; `undefined` under a Node without Temporal.
+
 ## The reporter
 
 `npm test` runs `node:test` with the reporter of this package (`@yaltaan/testing/reporter`): Node's `spec` report and, when the gate sets `YALTAAN_ADVERSARIAL_RECORDS=1`, one record line per adversarial category test that finished. `scripts/check-adversarial.ts` reads those lines.

@@ -21,7 +21,7 @@ parse(contact, { ...read, unknown: 'dropped' }); // → { ok: true, value: read 
 parse(contact, { name: '', email: 'ada' }); // → { ok: false, error: [{ code: 'schema.too_short', path: ['name'], params: { length: 0, minimum: 1 } }, { code: 'schema.invalid_format', path: ['email'], params: { pattern: '^[^@\\s]+@[^@\\s]+$' } }] }
 ```
 
-- [Guide](../../docs/guide/en/schema.md), with the three states of a field, unknown keys and messages for an engine.
+- [Guide](../../docs/guide/en/schema.md), with the bounds, checkboxes and choices, the three states of a field, unknown keys and messages for an engine.
 - [Reference](../../docs/reference/schema.md) and [issue codes](../../docs/issue-codes/schema.md).
 - [Why it is built this way](../../docs/adr/0032-schema-package.md).
 

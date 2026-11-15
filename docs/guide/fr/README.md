@@ -15,7 +15,7 @@ flowchart LR
 | Page | Import | Ce que vous obtenez | À la place de |
 |---|---|---|---|
 | [Résultats](result.md) | `@yaltaan/core/result` | Rendre un échec attendu comme une valeur, jamais comme une exception. | Un `try`/`catch` autour d'un code qui échoue sur une saisie fausse, un `null` qui cache la raison. |
-| [Chemins](path.md) | `@yaltaan/core/path` | Désigner un endroit d'une structure, lire et écrire sa forme texte sans risque, refuser les chemins qui pollueraient un prototype. | Découper `'a.b[0]'` à la main, `lodash.toPath`. |
+| [Chemins](path.md) | `@yaltaan/core/path` | Désigner un endroit d'une structure, avec un type qui connaît chaque chemin qu'elle contient, lire et écrire sa forme texte sans risque, refuser les chemins qui pollueraient un prototype. | Découper `'a.b[0]'` à la main, `lodash.toPath`. |
 | [Égalité profonde](equal.md) | `@yaltaan/core/equal` | Savoir si deux valeurs contiennent les mêmes données : objets, tableaux, `Map`, `Set`, dates, tableaux typés, objets Temporal, cycles compris. | `JSON.stringify(a) === JSON.stringify(b)`, `lodash.isEqual`, `util.isDeepStrictEqual` hors de Node. |
 | [Collections par clé](collection.md) | `@yaltaan/core/collection` | Séparer une liste par un prédicat, l'indexer par une clé unique, compter, dédoublonner, ou garder les éléments dont la clé figure dans une autre liste. | `new Map(list.map(…))` qui perd un doublon sans rien dire, `lodash.keyBy` et `uniqBy`, une boucle par projet. |
 | [Collections par ordre](order.md) | `@yaltaan/core/collection` | Trouver le plus petit ou le plus grand élément par une clé, les k premiers d'un tri sans garder toute la liste, trier sur plusieurs clés avec les valeurs manquantes en dernier, et découper une page. | `toSorted(…)[0]`, une chaîne de `||` dans un comparateur qui se trompe sur `NaN`, `lodash.orderBy`, `slice` et calcul des pages par projet. |
@@ -49,7 +49,7 @@ flowchart LR
 
 | Page | Import | Ce que vous obtenez | Au lieu de |
 |---|---|---|---|
-| [Formulaires](form.md) | `@yaltaan/form` | Des champs et des groupes dont la valeur brute, la valeur lue, les issues et les états (`dirty`, `touched`, `pending`, `submitted`, `disabled`) sont des nœuds qu'on lit et qu'on écoute, déduits des valeurs, chaque issue sur son champ. | Des drapeaux mis à jour à la main après chaque changement, la réponse périmée d'une vérification du serveur montrée pour la mauvaise valeur. |
+| [Formulaires](form.md) | `@yaltaan/form` | Des champs, des groupes et des listes dont la valeur brute, la valeur lue, les issues et les états (`dirty`, `touched`, `pending`, `submitted`, `disabled`, `hidden`, `readonly`, `required`) sont des nœuds qu'on lit et qu'on écoute, tous déduits des valeurs sauf `touched` et `submitted`, chaque issue sur son champ, sur la ligne qu'elle nomme même une fois la ligne déplacée ; des règles entre les champs, chacune revérifiée seulement quand une valeur qu'elle lit a changé, et des vérifications que seul le serveur peut faire, dont la réponse pour une valeur remplacée depuis n'est jamais montrée. | Des drapeaux mis à jour à la main après chaque changement, une erreur restée à l'ancienne position d'une ligne, la réponse périmée d'une vérification du serveur montrée pour la mauvaise valeur. |
 
 Chaque export reste `@experimental` jusqu'au gel des contrats : il peut changer dans une version mineure, et le [journal des changements](../../../CHANGELOG.md) le signale en gras.
 

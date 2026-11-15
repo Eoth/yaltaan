@@ -1,6 +1,6 @@
 # Schémas : lire ce qui vient de l'extérieur
 
-`import { array, discriminatedUnion, literal, nullable, number, object, optional, parse, string, withMessages } from '@yaltaan/schema';`
+`import { array, boolean, discriminatedUnion, literal, nullable, number, object, optional, parse, picklist, string, withMessages } from '@yaltaan/schema';`
 
 ## Le problème
 
@@ -38,6 +38,25 @@ parse(signUp, { email: 'ada', age: 17.5 }); // → { ok: false, error: [{ code: 
 | `array` | `minLength`, `maxLength`, en éléments | `schema.too_small`, `schema.too_large` |
 
 `number` ne prend que des nombres finis : `NaN` et les infinis donnent `schema.invalid_type`. Un `pattern` exige `maxLength` et n'est pas testé sur un texte qui le dépasse, pour ne rencontrer qu'un texte borné ; un motif à répétitions imbriquées peut quand même prendre un temps exponentiel, et c'est à vous de l'éviter. Pour compter ce qu'un lecteur voit, utilisez `graphemeLength` de [`@yaltaan/core/string`](string.md).
+
+## Une case à cocher, un choix
+
+`boolean` lit `true` et `false`, et rien d'autre : ni `0`, ni `'false'`, ni un objet `Boolean`. `picklist` lit l'un de quelques textes ou nombres, les options d'une liste déroulante ou de boutons radio, comparés par `===` : une valeur hors des options donne `schema.invalid_value`, avec les options, là où un `pattern` dirait seulement `schema.invalid_format`. Le type de la sortie est l'union des options.
+
+```ts
+import { boolean, object, parse, picklist, type InferOutput } from '@yaltaan/schema';
+
+const terms = object({ currency: picklist(['EUR', 'USD']), accepted: boolean() });
+
+type Currency = InferOutput<typeof terms>['currency']; // 'EUR' | 'USD'
+
+const currency: Currency = 'EUR';
+
+parse(terms, { currency, accepted: true }); // → { ok: true, value: { currency: 'EUR', accepted: true } }
+parse(terms, { currency: 'GBP', accepted: 'true' }); // → { ok: false, error: [{ code: 'schema.invalid_value', path: ['currency'], params: { expected: ['EUR', 'USD'] } }, { code: 'schema.invalid_type', path: ['accepted'], params: { expected: 'boolean' } }] }
+```
+
+Une `picklist` sans option, avec une option qui n'est ni un texte ni un nombre fini, ou avec deux fois la même option est un bug, et lève une `TypeError` à sa construction.
 
 ## Absent, `undefined` et `null`
 

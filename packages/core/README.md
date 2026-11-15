@@ -53,6 +53,8 @@ checkWritablePath(['__proto__', 'isAdmin']).ok; // → false
 
 The text form has one spelling per path: a name where the key is an ASCII identifier, an index in brackets, any other key as a JSON string in brackets (`["a.b"]`, `["3"]`, `["prénom"]`, `[""]`), so that every runtime reads and writes the same text whatever its Unicode version. `parsePath` reads untrusted text: 4,096 code units and 64 segments at most by default, a time linear in the length, and an issue that says where the text breaks the grammar, never a guess. A symbol or a `{ key }` segment has no text form: `formatPath` returns the issue `path.not_textual`. Before writing through a path that came from outside, `checkWritablePath` refuses `__proto__`, `constructor` and `prototype`.
 
+`Path<T>` is every path a type holds, down to 6 segments unless told otherwise, and `PathValue<T, P>` the value at a path: a typo in a field name is a compile error.
+
 ## `issue`
 
 Every expected failure of the library is an `Issue`: a stable code, a `Path` and parameters, never a message. The application formats it, and converts it at the Standard Schema boundary, in both directions.
@@ -179,7 +181,7 @@ graph.batch(() => {
 seen; // → [60]
 ```
 
-The graph instance holds its batches, so nothing lives in the module and nothing runs but a call of the caller: no timer, no microtask. An error thrown by a computation is kept and thrown again by `get` until a dependency changes; a listener that throws stops no other. A computation reads the graph through its arguments only: a read or a write of a node inside it throws, and listeners that keep writing are stopped after 100 passes. The whole module weighs under 1,000 bytes minified and compressed with brotli.
+The graph instance holds its batches, so nothing lives in the module and nothing runs but a call of the caller: no timer, no microtask. An error thrown by a computation is kept and thrown again by `get` until a dependency changes; a listener that throws stops no other. A computation reads the graph through its arguments only: a read or a write of a node inside it throws, and listeners that keep writing are stopped after 100 passes. `rewire` gives a derived node new dependencies, as a write does, for a list that changes at run time; a cycle is refused. `createGraph` weighs under 1,000 bytes minified and compressed with brotli, and `rewire` about 250 more where it is imported.
 
 ## License
 

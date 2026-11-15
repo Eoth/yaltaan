@@ -11,13 +11,13 @@ flowchart LR
   input["Ce que tiennent les saisies (brut)"] --> schema["N'importe quel Standard Schema"]
   schema -->|"Issue : code, chemin"| field["Le champ que nomme le chemin"]
   schema -->|"sa sortie"| parsed["La valeur lue"]
-  rules["Rules across fields"] -->|"reads its paths only"| field
-  input --> states["dirty, touched, pending, submitted, disabled, required"]
+  rules["Des règles entre les champs"] -->|"ne lit que ses chemins"| field
+  input --> states["dirty, touched, pending, submitted, disabled, hidden, readonly, required"]
 ```
 
 ## Ce que vous écrivez
 
-Décrivez les champs et les groupes, puis construisez le formulaire. Un schéma lit la valeur brute d'un nœud : mettez-en un sur tout le formulaire, sur un groupe ou sur un champ. Chaque issue va au nœud le plus profond que nomme son chemin.
+Décrivez les champs et les groupes, puis construisez le formulaire. Un schéma lit la valeur brute d'un nœud, moins ce que le formulaire [laisse de côté](#désactivé-caché-en-lecture-seule-et-sous-formulaires-laissés-vides) : mettez-en un sur tout le formulaire, sur un groupe ou sur un champ. Chaque issue va au nœud le plus profond que nomme son chemin.
 
 ```ts
 import { createForm, field, group } from '@yaltaan/form';
@@ -53,7 +53,7 @@ Chaque valeur et chaque état est un nœud du graphe du formulaire, avec `get()`
 | `required` | Une règle à lui ou d'un ancêtre l'exige. | La même chose. |
 | `dirty` | Sa valeur brute diffère de sa valeur initiale, comparée par `equal` (une liste, une date par leur contenu), et il n'est ni désactivé ni caché. | Un champ en dessous est modifié. |
 | `touched` | `touch()` a été appelé depuis sa dernière remise à zéro, et il n'est ni désactivé, ni caché, ni en lecture seule. | Un champ en dessous est touché. |
-| `pending` | Un schéma qui peut placer des issues sur lui, le sien, celui d'un ancêtre ou d'un descendant, n'a pas encore répondu. | La même chose. |
+| `pending` | Un schéma ou une vérification qui peut placer des issues sur lui, le sien, celui d'un ancêtre ou d'un descendant, n'a pas encore répondu. | La même chose. |
 | `submitted` | `submit()` a été appelé sur le formulaire depuis sa dernière remise à zéro. | La même chose, un seul nœud pour tout le formulaire. |
 | `disabled` | Sa condition `disabled` tient, ou son parent est désactivé. | La même chose. |
 | `hidden` | Sa condition `hidden` tient, ou son parent est caché. | La même chose. |
@@ -237,11 +237,11 @@ form.children.country.set('DE');
 siren.required.get(); // → false
 ```
 
-Une règle lit les valeurs brutes comme `checkRules` les lirait, si bien que le formulaire et un serveur qui applique les mêmes règles sont d'accord : un sous-formulaire laissé vide est un objet, pas un blanc, et `requiredIf(…, [['billing']])` ne le marque pas ; exigez plutôt ses champs. Un élément nommé par `{ key }` dans une issue de `each` ou de `unique` est trouvé par la clé que tient sa valeur quand la liste garde ses éléments par la même `identity` ; sinon aucun élément ne tient cette clé, et l'issue reste sur la liste. Un rang dans un chemin que la règle déclare lit chaque élément, puisque l'élément qui s'y trouve change à chaque déplacement. Un avertissement d'une règle est montré et ne bloque rien : ni la valeur lue ni une vérification. Une issue d'une règle sur un nœud ou en dessous retient sa vérification, comme celle d'un schéma.
+Une règle lit ce que le formulaire envoie comme `checkRules` le lirait, si bien que le formulaire et un serveur qui applique les mêmes règles sont d'accord : un nœud laissé de côté vaut `undefined`, un élément laissé de côté n'est pas dans sa liste, et un sous-formulaire laissé vide est un objet, pas un blanc, sauf si son groupe est `optional`. `requiredIf(…, [['billing']])` ne marque donc un `billing` vide que si ce groupe est `optional` ; sinon, exigez plutôt ses champs. Un élément nommé par `{ key }` dans une issue de `each` ou de `unique` est trouvé par la clé que tient sa valeur quand la liste garde ses éléments par la même `identity` ; sinon aucun élément ne tient cette clé, et l'issue reste sur la liste. Un rang dans un chemin que la règle déclare lit chaque élément, puisque l'élément qui s'y trouve change à chaque déplacement. Un avertissement d'une règle est montré et ne bloque rien : ni la valeur lue ni une vérification. Une issue d'une règle sur un nœud ou en dessous retient sa vérification, comme celle d'un schéma.
 
 ## Une vérification que seul le serveur peut faire
 
-`validate` donne à un champ, un groupe ou une liste une vérification propre à votre application, la réponse d'un serveur par exemple. Elle reçoit la valeur brute du nœud et `{ signal, path }`, et rend les issues trouvées, leurs chemins depuis le nœud, ou une promesse de celles-ci ; une liste vide s'il n'y en a pas. Une exécution ne démarre qu'une fois que les schémas et les règles n'ont rien contre la valeur : aucun schéma du nœud, d'un nœud en dessous ou d'un ancêtre n'a encore à répondre, ni aucun schéma ou règle n'a placé d'issue sur le nœud ou en dessous, un avertissement mis à part. Le serveur n'est donc pas interrogé sur un SIREN que le schéma de l'étape refuse.
+`validate` donne à un champ, un groupe ou une liste une vérification propre à votre application, la réponse d'un serveur par exemple. Elle reçoit ce que le nœud envoie, sa valeur brute moins ce qui est laissé de côté, et `{ signal, path }`, et rend les issues trouvées, leurs chemins depuis le nœud, ou une promesse de celles-ci ; une liste vide s'il n'y en a pas. Une exécution ne démarre qu'une fois que les schémas et les règles n'ont rien contre la valeur : aucun schéma du nœud, d'un nœud en dessous ou d'un ancêtre n'a encore à répondre, ni aucun schéma ou règle n'a placé d'issue sur le nœud ou en dessous, un avertissement mis à part. Le serveur n'est donc pas interrogé sur un SIREN que le schéma de l'étape refuse.
 
 ```ts
 import type { Issue } from '@yaltaan/core/issue';

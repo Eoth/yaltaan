@@ -59,7 +59,7 @@ interval(day('2024-02-01'), day('2024-01-01')).ok; // → false
 
 ## Reading a date
 
-A format is declared, and what does not follow it is refused. There is no guess: without a format, only `yyyy-MM-dd` is read. A date that does not exist is refused, where `dayjs('2024-02-31')` moves to March. No issue holds a part of the text.
+A format is declared, and what does not follow it is refused. There is no guess: without a format, `parsePlainDate` reads `yyyy-MM-dd` only. `parsePlainTime` reads a time the same way, `HH:mm:ss` without a format, and `parsePlainDateTime` a date with its time, `yyyy-MM-ddTHH:mm:ss`. A date that does not exist is refused, where `dayjs('2024-02-31')` moves to March. No issue holds a part of the text.
 
 ```ts
 import 'temporal-polyfill/global';

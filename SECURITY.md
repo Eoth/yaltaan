@@ -7,13 +7,13 @@ Yaltaan is a library: it runs inside the applications that import it, in browser
 - **Prototype pollution**: a key such as `__proto__`, `constructor` or `prototype`, in a path or an object, that reaches a prototype on write.
 - **Catastrophic regular expressions**: a pattern whose backtracking makes a short input take unbounded time.
 - **Unbounded resource use**: a depth, a number of keys or elements, a string length, a cache size or a recursion that no default limit bounds.
-- **Supply chain**: a published package that carries code absent from this repository. The packages have no runtime dependency; development dependencies are pinned, come from the npm registry only and never run install scripts; releases are published only by the release workflow, through npm trusted publishing with provenance, and no npm token exists.
+- **Supply chain**: a published package that carries code absent from this repository. The packages have no third-party runtime dependency; development dependencies are pinned, come from the npm registry only and never run install scripts; releases are published only by the release workflow, through npm trusted publishing with provenance, and no npm token exists.
 
 ## Reporting a vulnerability
 
 Please do not open a public issue, pull request or discussion for a vulnerability.
 
-The repository is not public yet. Once it is, report through GitHub's private vulnerability reporting (the "Report a vulnerability" button in the repository's Security tab): only the maintainers see the report, and the discussion and the fix stay private until disclosure. A contact address will be added here before the first release, for reporters who cannot use GitHub.
+Report through GitHub's private vulnerability reporting (the "Report a vulnerability" button in the [repository's Security tab](https://github.com/Eoth/yaltaan/security)): only the maintainers see the report, and the discussion and the fix stay private until disclosure. A contact address will be added here before the first release, for reporters who cannot use GitHub.
 
 A useful report gives:
 
@@ -48,4 +48,4 @@ Out of scope:
 
 ## Supported versions
 
-No version has been released yet. Until 1.0, fixes land on `main` and ship in the next release.
+No version has been released yet, and none will be before 1.0: until then, fixes land on `main`.

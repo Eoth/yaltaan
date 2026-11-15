@@ -46,7 +46,7 @@ parsePath('lines.2'); // → { ok: false, error: { code: 'path.syntax', path: []
 parsePath('a.b.c', { maxDepth: 2 }); // → { ok: false, error: { code: 'path.too_deep', path: [], params: { maximum: 2 } } }
 ```
 
-By default a text holds at most 4,096 characters and 64 segments, and reading it takes a time proportional to its length: a hostile text cannot freeze the page or the server. Raise the limits with `maxLength` and `maxDepth` only for text you trust.
+By default a text holds at most 4,096 UTF-16 code units and 64 segments, and reading it takes a time proportional to its length: a hostile text cannot freeze the page or the server. Raise the limits with `maxLength` and `maxDepth` only for text you trust.
 
 ## Before writing through a path from outside
 

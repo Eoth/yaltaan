@@ -12,7 +12,7 @@ These are the engineering rules of this repository: how a change is decided, tes
 
 ## Setting up
 
-- Node.js 22.18 or later and npm 10.9 or later. Scripts and tests are TypeScript that Node runs directly, with no build step.
+- Node.js 22.18 or later and npm 10.9 or later. Scripts and tests are TypeScript that Node runs directly; `npm test` builds every package first (`scripts/build.sh`), since some tests read what a package publishes.
 - `npm ci`. The repository's `.npmrc` refuses the install scripts of dependencies, records exact versions and never picks a version published less than 7 days ago.
 - Once per clone: `git config core.hooksPath githooks`. The pre-commit hook checks what you stage, commit-msg checks the message, pre-push runs the full gate. CI runs the same checks whether or not you enabled them.
 - `bash scripts/verify.sh` is the gate. It runs every step even after one fails, then prints `OK` or the list of failed steps. On Windows, run it from Git Bash.
@@ -21,11 +21,11 @@ These are the engineering rules of this repository: how a change is decided, tes
 
 A change is done when all of these hold, not when its own tests pass:
 
-1. `bash scripts/verify.sh` prints `OK`: the repository guards, formatting, types, tests, build, package manifests and contents, a rehearsal of the release, the lockfile's sources, integrity and licences, the dependency graph between packages, the contract tags of every public export and the reference generated from them, the adversarial declaration of every export that runs, import sizes, the dependency audit and the workflows; then, as each harness arrives, type-checking cost and the platform baseline. A step that cannot run (a tool missing, the registry unreachable) is reported as skipped, never as passed.
+1. `bash scripts/verify.sh` prints `OK`: the repository guards, formatting, types, tests, the timed harness of the benchmarks, build, package manifests and contents, a rehearsal of the release, the lockfile's sources, integrity and licences, the dependency graph between packages, the contract tags of every public export and the reference generated from them, the registry of issue codes, the examples of the guide and of the package READMEs, the adversarial declaration of every export that runs, import sizes, type-checking cost, the official Temporal tests (test262) on the native implementation and on the polyfill, the tests of the temporal package on the native implementation, the dependency audit and the workflows; then, once its harness arrives, the platform baseline. A step that cannot run (a tool missing, the registry unreachable) is reported as skipped, never as passed.
 2. A bug fixed comes with its regression test in the same commit, seen failing before the fix: remove the fix, watch the test fail, put the fix back.
 3. A bug that reveals a gap in the process (a check nobody ran, a gate that could not fail) also gets a mechanical guard, a script, a hook or a CI job, that stops the whole class of error, not only the case found.
 4. A decision record, written before the code, in every case listed in [docs/adr/README.md](docs/adr/README.md) (a new package, a new dependency, a change to a shared contract, an exception to a rule, a promotion to `@stable`…).
-5. Import sizes stay within their budgets ([bench/size/budgets.tsv](bench/size/budgets.tsv)), and type-checking cost within its own once its harness exists. A change to a recorded size (`node scripts/size-report.ts --update` rewrites [docs/size-baseline.tsv](docs/size-baseline.tsv) and prints each difference) is explained in the commit message, scenario by scenario, that is by package and sub-path; an unexplained increase blocks the change.
+5. Import sizes stay within their budgets ([bench/size/budgets.tsv](bench/size/budgets.tsv)), and type-checking cost within its ceilings ([bench/types/ceilings.tsv](bench/types/ceilings.tsv)). A change to a recorded size (`node scripts/size-report.ts --update` rewrites [docs/size-baseline.tsv](docs/size-baseline.tsv) and prints each difference) is explained in the commit message, scenario by scenario, that is by package and sub-path, and so is a change to a recorded count of instantiations (`node scripts/type-cost.ts --update` rewrites [docs/type-cost-baseline.tsv](docs/type-cost-baseline.tsv)); an unexplained increase blocks the change.
 6. A user-visible change has its entry in [CHANGELOG.md](CHANGELOG.md), under `Unreleased`.
 
 A verdict from an in-house checker counts only once a second, independent method agrees: an external tool, a measurement by hand, another runtime. A problem found along the way and outside the change's scope becomes an issue of its own, never a comment left in the code.
@@ -66,7 +66,7 @@ A verdict from an in-house checker counts only once a second, independent method
 - No exception for an expected failure (return a `Result`), no silent `catch`, and every `switch` over a union is exhaustive, checked against `never`.
 - Every public export carries its contract tags (ARCHITECTURE.md §5.6; the admitted tags are listed in [docs/reference/README.md](docs/reference/README.md)). The reference under `docs/reference/` is generated, never edited: `node scripts/check-contract-tags.ts --update` rewrites it after a build.
 - Markdown: one line per paragraph or list item, never wrapped by hand; tables unpadded.
-- Everything tracked is in English (code, tests, decision records, documents, commit messages), except the roadmap, which is in French.
+- Everything tracked is in English (code, tests, decision records, documents, commit messages), except the roadmap, which is in French, and the French text written for users beside the English: the guide ([docs/guide/fr/](docs/guide/fr/README.md)), the beta kit ([docs/beta/](docs/beta/)) and the table that moves an application from dayjs.
 
 ## Commit messages
 

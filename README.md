@@ -2,9 +2,9 @@
 
 # Yaltaan
 
-Yaltaan is a native-first TypeScript standard library for applications. Its value is not a long list of functions but one shared model — `Result`, `Issue`, `Path`, schemas that implement [Standard Schema](https://standardschema.dev), and reactive nodes — used the same way by every domain: an error from a schema, a date parser, a relational rule or a server has the same shape and the same `Path`, and one typed `Path` serves reading, writing, diffs, errors and form fields alike. It ships only what the platform lacks, has no runtime dependency, and its contracts (mutation, complexity, errors, import cost) are written down, checked in CI and measured.
+Yaltaan is a native-first TypeScript standard library for applications. Its value is not a long list of functions but one shared model — `Result`, `Issue`, `Path`, schemas that implement [Standard Schema](https://standardschema.dev), and reactive nodes — used the same way by every domain: an error from a schema, a date parser, a relational rule or a server has the same shape and the same `Path`, and one typed `Path` serves reading, writing, diffs, errors and form fields alike. It ships only what the platform lacks, has no third-party runtime dependency, and its contracts (mutation, complexity, errors, import cost) are written down, checked in CI and measured.
 
-**Status: pre-release. `@yaltaan/core`, `@yaltaan/schema`, `@yaltaan/rules` and `@yaltaan/form` have their first, `@experimental` API; nothing is published yet.**
+**Status: pre-release. `@yaltaan/core`, `@yaltaan/temporal`, `@yaltaan/schema`, `@yaltaan/rules` and `@yaltaan/form` have their first, `@experimental` API; nothing is published yet.**
 
 ## Packages
 
@@ -12,12 +12,12 @@ Dependencies flow one way and never back: `core ← temporal`, and `core ← sch
 
 | Package | Status | Purpose |
 |---|---|---|
-| [`@yaltaan/core`](packages/core/README.md) | experimental, unpublished | The shared contracts (`Result`, `Issue`, `Path`, reactive nodes) and the data primitives the platform lacks: objects, collections, strings, numbers, deep equality, diff, async control, bounded caches. |
-| `@yaltaan/temporal` | experimental, not published | What Temporal does not provide: intervals, parsing of declared formats, `Date` conversions that require an explicit time zone. Temporal itself comes from the platform or from a polyfill the application installs. |
+| [`@yaltaan/core`](packages/core/README.md) | experimental, unpublished | The shared contracts (`Result`, `Issue`, `Path`, reactive nodes) and the data primitives the platform lacks: objects, collections, strings, numbers and deep equality today; diff, async control and bounded caches are planned. |
+| [`@yaltaan/temporal`](packages/temporal/README.md) | experimental, unpublished | What Temporal does not provide: intervals, parsing of declared formats, `Date` conversions that require an explicit time zone, start and end of a unit, business days. Temporal itself comes from the platform or from a polyfill the application installs. |
 | [`@yaltaan/schema`](packages/schema/README.md) | experimental, unpublished | Schemas implementing Standard Schema v1, usable by any engine that reads it; reversible codecs are planned. |
 | [`@yaltaan/rules`](packages/rules/README.md) | experimental, unpublished | Declarative relational rules (required if, all or none, at least n of) that work in any form engine, with or without `@yaltaan/form`. |
-| [`@yaltaan/form`](packages/form/README.md) | experimental, unpublished | A form model on reactive nodes, conditional: kept only if a vertical slice on a real form shows its value over Angular Signal Forms and TanStack Form, a go/no-go decision recorded in [docs/adr/](docs/adr/). |
-| `@yaltaan/angular` | planned | Bridge to Angular Signal Forms. |
+| [`@yaltaan/form`](packages/form/README.md) | experimental, unpublished | A form model on reactive nodes: fields, groups and arrays that hold raw values, the parsed value, the issues and nearly every state derived from them, the rules of `@yaltaan/rules` checked again only once a value they read changes, and checks only the application can make, a server's answer for instance. Conditional: kept only if a vertical slice on a pilot form shows its value over Angular Signal Forms and TanStack Form, a go/no-go decision recorded in [docs/adr/](docs/adr/). |
+| `@yaltaan/angular` | planned | Bridge to Angular Signal Forms. A first bridge is written and judged against Angular 22 in [tests/interop/](tests/interop/), outside the packages until [ADR 0048](docs/adr/0048-angular-bridge.md) is accepted. |
 | `@yaltaan/react` | planned | Bridge to React through `useSyncExternalStore`. |
 | `@yaltaan/vue` | planned | Bridge to Vue, later, after the Angular and React ones. |
 
@@ -43,7 +43,7 @@ Each exclusion and its reason is listed in [ROADMAP.md](ROADMAP.md), section 4 (
 
 ## Developing
 
-Node.js 22.18 or later and npm 10.9 or later. Scripts and tests are TypeScript that Node runs directly, with no build step.
+Node.js 22.18 or later and npm 10.9 or later. Scripts and tests are TypeScript that Node runs directly; `npm test` builds every package first, since some tests read what a package publishes.
 
 ```sh
 npm ci                                # the repository's .npmrc runs no install script

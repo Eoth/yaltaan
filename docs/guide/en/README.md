@@ -15,7 +15,7 @@ flowchart LR
 | Page | Import | What you get | Instead of |
 |---|---|---|---|
 | [Results](result.md) | `@yaltaan/core/result` | Return an expected failure as a value, never as an exception. | `try`/`catch` around code that fails on bad input, `null` that hides why. |
-| [Paths](path.md) | `@yaltaan/core/path` | Name a place in a structure, read and write its text form safely, refuse paths that would pollute a prototype. | Splitting `'a.b[0]'` by hand, `lodash.toPath`. |
+| [Paths](path.md) | `@yaltaan/core/path` | Name a place in a structure, with a type that knows every path the structure holds, read and write its text form safely, refuse paths that would pollute a prototype. | Splitting `'a.b[0]'` by hand, `lodash.toPath`. |
 | [Deep equality](equal.md) | `@yaltaan/core/equal` | Tell whether two values hold the same data: objects, arrays, `Map`, `Set`, dates, typed arrays, Temporal objects, cycles included. | `JSON.stringify(a) === JSON.stringify(b)`, `lodash.isEqual`, `util.isDeepStrictEqual` outside Node. |
 | [Collections by key](collection.md) | `@yaltaan/core/collection` | Split a list by a predicate, index it by a unique key, count, deduplicate, or keep the elements whose key appears in another list. | `new Map(list.map(…))` that drops a duplicate unseen, `lodash.keyBy` and `uniqBy`, a loop per project. |
 | [Collections by order](order.md) | `@yaltaan/core/collection` | Find the smallest or the largest element by a key, the first k of a sort without holding the whole list, sort by several keys with missing values last, and cut a page. | `toSorted(…)[0]`, a comparator chain of `||` that gets `NaN` wrong, `lodash.orderBy`, `slice` and page arithmetic per project. |
@@ -49,7 +49,7 @@ flowchart LR
 
 | Page | Import | What you get | Instead of |
 |---|---|---|---|
-| [Forms](form.md) | `@yaltaan/form` | Fields and groups whose raw value, parsed value, issues and states (`dirty`, `touched`, `pending`, `submitted`, `disabled`) are nodes you read and watch, derived from values, each issue on its field. | Flags updated by hand after each change, a stale answer of a server check shown for the wrong value. |
+| [Forms](form.md) | `@yaltaan/form` | Fields, groups and lists whose raw value, parsed value, issues and states (`dirty`, `touched`, `pending`, `submitted`, `disabled`, `hidden`, `readonly`, `required`) are nodes you read and watch, all but `touched` and `submitted` derived from values, each issue on its field, on the row it names even once the row has moved; rules across fields, each checked again only once a value it reads changes, and checks only the server can make, whose answer for a value since replaced is never shown. | Flags updated by hand after each change, an error left on the old position of a row, a stale answer of a server check shown for the wrong value. |
 
 Every export is `@experimental` until the contracts are frozen: it may change in a minor version, and the [changelog](../../../CHANGELOG.md) says so in bold.
 

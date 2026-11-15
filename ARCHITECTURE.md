@@ -4,7 +4,7 @@ Yaltaan is a TypeScript standard library for applications: native-first, frugal,
 
 The product is named Yaltaan and its packages are published under the npm scope `@yaltaan` (ADR 0001).
 
-Status: no package is published and no API exists yet. ROADMAP.md tracks what is built and in which order; this document states the rules the code follows as it lands.
+Status: no package is published; the APIs that exist are `@experimental`, and the [reference](docs/reference/README.md) lists them. ROADMAP.md tracks what is built and in which order; this document states the rules the code follows as it lands.
 
 ## 1. How to read this document
 

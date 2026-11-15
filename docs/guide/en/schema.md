@@ -1,6 +1,6 @@
 # Schemas: reading what comes from outside
 
-`import { array, discriminatedUnion, literal, nullable, number, object, optional, parse, string, withMessages } from '@yaltaan/schema';`
+`import { array, boolean, discriminatedUnion, literal, nullable, number, object, optional, parse, picklist, string, withMessages } from '@yaltaan/schema';`
 
 ## The problem
 
@@ -38,6 +38,25 @@ parse(signUp, { email: 'ada', age: 17.5 }); // → { ok: false, error: [{ code: 
 | `array` | `minLength`, `maxLength`, in elements | `schema.too_small`, `schema.too_large` |
 
 `number` takes finite numbers only: `NaN` and the infinities are `schema.invalid_type`. A `pattern` requires `maxLength`, and is not tested on a text over it, so that it only meets a bounded text; a pattern with nested repetitions can still take exponential time, and stays yours to avoid. Use `graphemeLength` of [`@yaltaan/core/string`](string.md) to count what a reader sees.
+
+## A checkbox, a choice
+
+`boolean` reads `true` and `false`, and nothing else as one: neither `0`, `'false'` nor a `Boolean` object. `picklist` reads one of a few texts or numbers, the options of a select or of radio buttons, compared by `===`: a value outside them is `schema.invalid_value`, with the options, where a `pattern` would only say `schema.invalid_format`. The type of the output is the union of the options.
+
+```ts
+import { boolean, object, parse, picklist, type InferOutput } from '@yaltaan/schema';
+
+const terms = object({ currency: picklist(['EUR', 'USD']), accepted: boolean() });
+
+type Currency = InferOutput<typeof terms>['currency']; // 'EUR' | 'USD'
+
+const currency: Currency = 'EUR';
+
+parse(terms, { currency, accepted: true }); // → { ok: true, value: { currency: 'EUR', accepted: true } }
+parse(terms, { currency: 'GBP', accepted: 'true' }); // → { ok: false, error: [{ code: 'schema.invalid_value', path: ['currency'], params: { expected: ['EUR', 'USD'] } }, { code: 'schema.invalid_type', path: ['accepted'], params: { expected: 'boolean' } }] }
+```
+
+A picklist with no option, with an option that is neither a text nor a finite number, or with the same option twice is a bug, and throws a `TypeError` when it is built.
 
 ## Absent, `undefined` and `null`
 

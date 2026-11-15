@@ -46,7 +46,7 @@ parsePath('lines.2'); // → { ok: false, error: { code: 'path.syntax', path: []
 parsePath('a.b.c', { maxDepth: 2 }); // → { ok: false, error: { code: 'path.too_deep', path: [], params: { maximum: 2 } } }
 ```
 
-Par défaut, un texte compte au plus 4 096 caractères et 64 segments, et sa lecture prend un temps proportionnel à sa longueur : un texte hostile ne peut pas figer la page ni le serveur. N'augmentez `maxLength` et `maxDepth` que pour un texte de confiance.
+Par défaut, un texte compte au plus 4 096 unités de code UTF-16 et 64 segments, et sa lecture prend un temps proportionnel à sa longueur : un texte hostile ne peut pas figer la page ni le serveur. N'augmentez `maxLength` et `maxDepth` que pour un texte de confiance.
 
 ## Avant d'écrire par un chemin venu de l'extérieur
 

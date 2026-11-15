@@ -49,7 +49,7 @@ A rule holds no state and writes nothing. `requiredPaths` names a field only whe
 | `unique` | every element sharing a key |
 | `ordered` | the end, when it comes before the start |
 
-A field is blank when it is absent, `undefined`, `null`, an empty string or an empty array. `0` and `false` are values, and so is a string of spaces: a schema trims it first. A value is read through own keys only: a field named `toString` is blank unless the object holds its own. `ordered` compares numbers and bigints by value, dates by time and strings by code unit, the order of ISO 8601 dates; `compare` is for what else there is, such as Temporal. Two values it cannot compare give the issue: a rule that cannot tell does not pass.
+A field is blank when it is absent, `undefined`, `null`, an empty string or an empty array. `0` and `false` are values, and so is a string of spaces: trim it before the rules if it must count as blank. A value is read through own keys only: a field named `toString` is blank unless the object holds its own. `ordered` compares numbers and bigints by value, dates by time and strings by code unit, the order of ISO 8601 dates; `compare` is for what else there is, such as Temporal. Two values it cannot compare give the issue: a rule that cannot tell does not pass.
 
 ## Lists
 
@@ -101,7 +101,7 @@ The message of an issue is its code until `format` gives it your words. A `warni
 
 ## A rule of your own
 
-A rule is a plain object: what it reads, where it marks, and what it says of given values. In your tests, `assertDeclaredReads` runs it on a view of the values that notes each read and refuses each write, and throws if it read what it did not declare.
+A rule is a plain object: what it reads, where it marks, and what it says of given values. In a path it declares, `anyElement` stands for every element of the list before it: `['contacts', anyElement, 'email']`. In your tests, `assertDeclaredReads` runs it on a view of the values that notes each read and refuses each write, and throws if it read what it did not declare.
 
 ```ts
 import { assertDeclaredReads, checkRules, each, type Rule } from '@yaltaan/rules';
@@ -141,5 +141,6 @@ A check holds at most 1,000 errors: it then adds `rules.too_many_issues`, at the
 
 - [Issues](issue.md)
 - [Schemas](schema.md)
+- [Forms](form.md#rules-across-fields): the same rules read by `@yaltaan/form`, each checked again only once a value it reads changes
 - [Reference](../../reference/rules.md), [issue codes](../../issue-codes/rules.md)
 - [Why it is built this way](../../adr/0034-rules-package.md)

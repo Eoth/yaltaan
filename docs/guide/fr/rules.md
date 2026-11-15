@@ -49,7 +49,7 @@ Une règle ne garde aucun état et n'écrit rien. `requiredPaths` ne nomme un ch
 | `unique` | tout élément qui partage une clé |
 | `ordered` | la fin, quand elle précède le début |
 
-Un champ est vide s'il est absent, `undefined`, `null`, une chaîne vide ou un tableau vide. `0` et `false` sont des valeurs, une chaîne d'espaces aussi : un schéma la nettoie d'abord. Une valeur se lit par les clés propres seulement : un champ nommé `toString` est vide tant que l'objet n'a pas le sien. `ordered` compare les nombres et les bigints par valeur, les dates par leur instant et les chaînes par unité de code, l'ordre des dates ISO 8601 ; `compare` sert au reste, comme Temporal. Deux valeurs qu'il ne sait pas comparer reçoivent l'issue : une règle qui ne sait pas dire ne laisse pas passer.
+Un champ est vide s'il est absent, `undefined`, `null`, une chaîne vide ou un tableau vide. `0` et `false` sont des valeurs, une chaîne d'espaces aussi : retirez ses espaces avant les règles si elle doit compter pour vide. Une valeur se lit par les clés propres seulement : un champ nommé `toString` est vide tant que l'objet n'a pas le sien. `ordered` compare les nombres et les bigints par valeur, les dates par leur instant et les chaînes par unité de code, l'ordre des dates ISO 8601 ; `compare` sert au reste, comme Temporal. Deux valeurs qu'il ne sait pas comparer reçoivent l'issue : une règle qui ne sait pas dire ne laisse pas passer.
 
 ## Les listes
 
@@ -101,7 +101,7 @@ Le message d'une issue est son code tant que `format` ne lui donne pas vos mots.
 
 ## Une règle à vous
 
-Une règle est un objet simple : ce qu'elle lit, où elle marque, et ce qu'elle dit de valeurs données. Dans vos tests, `assertDeclaredReads` la lance sur une vue des valeurs qui note chaque lecture et refuse chaque écriture, et lève une erreur si elle a lu ce qu'elle n'a pas déclaré.
+Une règle est un objet simple : ce qu'elle lit, où elle marque, et ce qu'elle dit de valeurs données. Dans un chemin qu'elle déclare, `anyElement` vaut pour chaque élément de la liste qui le précède : `['contacts', anyElement, 'email']`. Dans vos tests, `assertDeclaredReads` la lance sur une vue des valeurs qui note chaque lecture et refuse chaque écriture, et lève une erreur si elle a lu ce qu'elle n'a pas déclaré.
 
 ```ts
 import { assertDeclaredReads, checkRules, each, type Rule } from '@yaltaan/rules';
@@ -141,5 +141,6 @@ Une vérification garde au plus 1 000 erreurs : elle ajoute alors `rules.too_man
 
 - [Issues](issue.md)
 - [Schémas](schema.md)
+- [Formulaires](form.md#des-règles-entre-les-champs) : les mêmes règles lues par `@yaltaan/form`, chacune revérifiée seulement quand une valeur qu'elle lit a changé
 - [Référence](../../reference/rules.md), [codes d'issue](../../issue-codes/rules.md)
 - [Pourquoi il est construit ainsi](../../adr/0034-rules-package.md)

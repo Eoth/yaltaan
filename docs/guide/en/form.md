@@ -12,12 +12,12 @@ flowchart LR
   schema -->|"Issue: code, path"| field["The field the path names"]
   schema -->|"its output"| parsed["The parsed value"]
   rules["Rules across fields"] -->|"reads its paths only"| field
-  input --> states["dirty, touched, pending, submitted, disabled, required"]
+  input --> states["dirty, touched, pending, submitted, disabled, hidden, readonly, required"]
 ```
 
 ## What you write
 
-Describe the fields and the groups, then build the form. A schema reads a node's raw value: put one on the whole form, on a group or on a field. Each issue goes to the deepest node its path names.
+Describe the fields and the groups, then build the form. A schema reads a node's raw value, less what the form [leaves out](#disabled-hidden-read-only-and-sub-forms-left-empty): put one on the whole form, on a group or on a field. Each issue goes to the deepest node its path names.
 
 ```ts
 import { createForm, field, group } from '@yaltaan/form';
@@ -53,7 +53,7 @@ Every value and state is a node of the form's graph, with `get()` and `subscribe
 | `required` | A rule of its own or of an ancestor requires it. | The same. |
 | `dirty` | Its raw value differs from its initial value, compared by `equal` (a list, a date by content), and it is not disabled or hidden. | A field below is dirty. |
 | `touched` | `touch()` was called since its last reset, and it is not disabled, hidden or read only. | A field below is touched. |
-| `pending` | A schema that may place issues on it, its own, an ancestor's or a descendant's, has not answered yet. | The same. |
+| `pending` | A schema or a validator that may place issues on it, its own, an ancestor's or a descendant's, has not answered yet. | The same. |
 | `submitted` | `submit()` was called on the form since its last reset. | The same, one node for the whole form. |
 | `disabled` | Its `disabled` condition holds, or its parent is disabled. | The same. |
 | `hidden` | Its `hidden` condition holds, or its parent is hidden. | The same. |
@@ -237,11 +237,11 @@ form.children.country.set('DE');
 siren.required.get(); // → false
 ```
 
-A rule reads the raw values as `checkRules` would, so that the form and a server running the same rules agree: a sub-form left empty is an object, not a blank, and `requiredIf(…, [['billing']])` does not mark it; require its fields instead. An item named by `{ key }` in an issue of `each` or `unique` is found by the key its value holds when the array keeps its items by the same `identity`; otherwise no item holds that key, and the issue stays on the list. An index in a path the rule declares reads every item, since which item stands there changes with each move. A warning of a rule is shown, and blocks nothing: neither the parsed value nor a validator. An issue of a rule on a node or below it holds its validator back, as a schema's does.
+A rule reads what the form submits as `checkRules` would, so that the form and a server running the same rules agree: a node left out is `undefined`, an item left out is not in its list, and a sub-form left empty is an object, not a blank, unless its group is `optional`. So `requiredIf(…, [['billing']])` marks an empty `billing` only when that group is `optional`; otherwise, require its fields instead. An item named by `{ key }` in an issue of `each` or `unique` is found by the key its value holds when the array keeps its items by the same `identity`; otherwise no item holds that key, and the issue stays on the list. An index in a path the rule declares reads every item, since which item stands there changes with each move. A warning of a rule is shown, and blocks nothing: neither the parsed value nor a validator. An issue of a rule on a node or below it holds its validator back, as a schema's does.
 
 ## A check only the server can make
 
-`validate` gives a field, a group or an array a check of your application's own, a server's answer for instance. It receives the node's raw value and `{ signal, path }`, and returns the issues it found, their paths from the node, or a promise of them; an empty list when there is none. A run starts only once the schemas and the rules have nothing against the value: no schema of the node, of a node below it or of an ancestor is still to answer, nor has a schema or a rule placed an issue on the node or below, a warning aside. So the server is not asked about a SIREN the step's schema rejects.
+`validate` gives a field, a group or an array a check of your application's own, a server's answer for instance. It receives what the node submits, its raw value less what is left out, and `{ signal, path }`, and returns the issues it found, their paths from the node, or a promise of them; an empty list when there is none. A run starts only once the schemas and the rules have nothing against the value: no schema of the node, of a node below it or of an ancestor is still to answer, nor has a schema or a rule placed an issue on the node or below, a warning aside. So the server is not asked about a SIREN the step's schema rejects.
 
 ```ts
 import type { Issue } from '@yaltaan/core/issue';

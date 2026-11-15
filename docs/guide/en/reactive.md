@@ -188,4 +188,4 @@ export function nodeRef<T>(node: ReadableNode<T>): Ref<T> {
 - Listeners that keep writing are stopped after 100 passes: the write throws a `RangeError`, after the errors of listeners, and the notifications left wait for the next write or batch.
 - `get` and `subscribe` are methods, the contract of React's `useSyncExternalStore`: pass it `(listener) => node.subscribe(listener)` and `() => node.get()`, built once per node.
 - Every dependency belongs to the same graph, and two graphs never wait for each other's batches: build on one graph what must change together.
-- The whole module weighs under 1,000 bytes minified and compressed with brotli.
+- `createGraph` weighs under 1,000 bytes minified and compressed with brotli, and `rewire` about 250 more where it is imported.
