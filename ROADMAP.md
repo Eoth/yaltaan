@@ -29,7 +29,7 @@ Outillage de développement (empreinte installée, à ne laisser croître que pa
 
 Une version utilisable d'abord (décision du 2026-10-23, §3) : la 0.1.0 livre `@yaltaan/core`, les utilitaires que les équipes recodent, sur les contrats de §5 d'`ARCHITECTURE.md` ; la 0.2.0 ajoute schéma et règles, validés sur le formulaire pilote ; la 0.3.0 le formulaire et Angular. L'outillage qui reste attend d'être utile. Ces versions sont des jalons de travail : **rien n'est publié avant la v1** (décision du 2026-11-02, §3). Les contrats se gèlent après le pilote (T2.7), pas avant. Une itération peut prendre deux tickets S ou M d'un même domaine.
 
-**Avancement** : 45 étapes closes sur 111 ; prochaine : T2.1 a.
+**Avancement** : 45 étapes closes sur 112 ; prochaine : T2.1 a.
 
 | # | Lot | Tickets, dans l'ordre | Avancement | Sortie |
 |---|---|---|---|---|
@@ -37,7 +37,7 @@ Une version utilisable d'abord (décision du 2026-10-23, §3) : la 0.1.0 livre `
 | 2 | 0.1.0 — `@yaltaan/core` utilisable | T1.1, T1.3, T1.2, T1.5, T3.1 a, b, T0.17, T3.2, T0.20 a, T3.3 a, b, T3.5, T3.4, T0.16, T0.10 | 15 / 15 clos, terminé | `Result`, `Issue`, `Path`, `equal`, objets et accès par chemin, collections, nombres, chaînes ; workflow de publication répété à chaque poussée, archive vérifiée, rien de publié. |
 | 3 | Temporal devant (décision du 2026-11-03, §3) | T4.5, T0.20 b, T4.6, T4.1, T4.2, T4.3, T4.7 | 7 / 7 clos, terminé | Juge test262 et comparateur dayjs d'abord, puis `@yaltaan/temporal` et un kit d'archives pour les bêta-testeurs, rien de publié. |
 | 4 | 0.2.0 — Schéma et règles sur le pilote | T2.1 a, b, T2.8, T2.2, T2.9, T2.3, T1.4 | 6 / 7 clos ; prochain : T2.1 a | Schéma Standard Schema minimal et règles relationnelles, scénarios du pilote verts sans `form`. |
-| 5 | 0.3.0 — Formulaire et Angular | T0.14, T1.6 a, T1.6 b, T2.4 a, b, c, d, e, T2.5, T2.10, T2.11, T2.6, T2.7 | 9 / 13 clos ; prochain : T2.10 | Pilote de bout en bout dans Angular, mesures, **ADR go/no-go de `form`**, gel des contrats. |
+| 5 | 0.3.0 — Formulaire et Angular | T0.14, T1.6 a, T1.6 b, T2.4 a, b, c, d, e, T2.5, T2.10, T2.11, T2.12, T2.6, T2.7 | 9 / 14 clos ; prochain : T2.10 | Pilote de bout en bout dans Angular, mesures, **ADR go/no-go de `form`**, gel des contrats. |
 | 6 | Outillage reporté | T1.7, T0.18, T0.19, T0.21, T0.22, T0.24, T0.25, T0.26, T0.27, T0.28, T0.29, T0.30, T0.31, T0.32, T0.8, T0.9, T0.13, T0.15 | 0 / 18 clos ; prochain : T1.7 | Selon le besoin réel des versions précédentes. |
 | 7 | 3 — Données (suite) | T3.13, T3.3 c, T3.10, T3.11, T3.12 a, b, T3.6 a, b, c, T3.7 a, b, T3.8, T3.9 | 0 / 13 clos ; prochain : T3.13 | Modules `@experimental`. |
 | 8 | 4 — Temporal (suite) | T4.4, T4.8 | 0 / 2 clos ; prochain : T4.4 | Codecs des types Temporal, après T5.2 ; second polyfill. |
@@ -285,12 +285,19 @@ Une décision de produit (nom, licence, API publique, contrat transverse, exclus
 - **Accepté si** : (a) chaque règle et chaque issue d'un scénario cite un champ du pilote par son chemin, scénarios relus et acceptés (relecture du 2026-11-15 : refus, T2.11) ; (b) chaque scénario vu rouge, puis vert avec T2.2 et T2.3.
 - **Taille** M → (a) S, (b) S · **Prio** P0 · **Dépend de** (b) T2.2
 
+#### T2.12 — Formulaire : un écouteur de `raw` prévenu sans changement, que sa loi refuse
+- **Pourquoi** : la loi « moving items keep their states and issues, under schemas of the item, the array and the form » (`packages/form/src/properties.test.ts`) a trouvé le 2026-11-15 un contre-exemple, rejoué trois fois sur trois par sa graine (`seed: -871815472`, chemin dans le journal de la CI locale du commit `7f95056`) : un `batch` qui écrit un champ, insère un élément puis remet le tableau à zéro prévient une fois l'écouteur de `raw` d'un élément là où le modèle naïf n'attend aucun appel. Le formulaire n'avait pas changé depuis T2.4 e : le tirage, sans graine fixée, ne l'avait pas encore rencontré. T2.6 mesure les re-rendus : une notification de trop en est un.
+- **Faire** : rejouer la graine, dire qui a raison (le formulaire, qui prévient pour une valeur brute recomposée, ou le modèle, qui compare autrement), corriger le fautif, et garder le contre-exemple comme cas fixe de la loi.
+- **Où** : `packages/form/src/`, `packages/form/src/properties.test.ts`.
+- **Accepté si** : la graine verte, le cas réduit écrit en exemple, la loi verte sur 40 exécutions de suite ; si c'est le formulaire, la notification de trop corrigée sans coût mesurable au comptage d'instructions.
+- **Taille** S · **Prio** P1 · **Dépend de** —
+
 #### T2.6 — Pilote de bout en bout et mesures
 - **Pourquoi** : la décision go/no-go se prend sur des chiffres.
 - **Faire** : pilote complet sur la tranche ; mesures : octets livrés, temps, re-rendus, coût des types, lignes de code de l'application, face au même formulaire écrit avec Signal Forms seul (et avec les seuls `schema` et `rules`) ; budgets de `rules`, de `form` et des adapters recalibrés sur cette mesure par un ADR qui remplace leurs hypothèses (ADR 0010).
 - **Où** : `examples/pilot/`, `bench/`.
 - **Accepté si** : chaque scénario de T2.1 vert ; tableau de mesures reproductible ; plus aucun budget `hypothesis` dans `bench/size/budgets.tsv`.
-- **Taille** M · **Prio** P0 · **Dépend de** T2.5, T2.11
+- **Taille** M · **Prio** P0 · **Dépend de** T2.5, T2.11, T2.12
 
 #### T2.7 — Décision go/no-go de `form` et gel des contrats
 - **Pourquoi** : `form` n'existe que si sa valeur face aux moteurs natifs est démontrée ; les contrats se gèlent après la preuve, pas avant.
