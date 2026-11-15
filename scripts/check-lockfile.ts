@@ -19,7 +19,16 @@ import {
  * not listed, so it fails until it is listed itself). Adding an entry requires an architecture decision record that
  * justifies the dependency bringing it. An entry that no locked package uses is a stale exception and fails the check.
  */
-export const ALLOWED_LICENSES: readonly string[] = ['MIT', 'Apache-2.0', 'ISC'];
+export const ALLOWED_LICENSES: readonly string[] = [
+  'MIT',
+  'Apache-2.0',
+  'ISC',
+  // Angular's tslib, and the tree of jsdom, the DOM of the component tests (ADR 0048).
+  '0BSD',
+  'BSD-2-Clause',
+  'BSD-3-Clause',
+  'BlueOak-1.0.0',
+];
 
 /**
  * Packages allowed to declare an install script (`"hasInstallScript": true`). Adding an entry requires an architecture

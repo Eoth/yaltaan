@@ -33,10 +33,12 @@ if [ -z "$node_version" ]; then
   echo "node is not installed"
   failed
 elif ! node -e '
-  const [major, minor] = process.versions.node.split(".").map(Number);
-  process.exit(major > 22 || (major === 22 && minor >= 18) ? 0 : 1);'; then
-  # 22.18 is the first Node 22 that runs TypeScript files without a flag or a warning.
-  echo "node $node_version is older than 22.18"
+  const [major, minor, patch] = process.versions.node.split(".").map(Number);
+  const at = (n, p) => minor > n || (minor === n && patch >= p);
+  process.exit((major === 22 && at(22, 3)) || (major === 24 && at(15, 0)) || major >= 26 ? 0 : 1);'; then
+  # The range of devEngines: the Node lines that Angular 22, a development dependency (ADR 0048), runs on; Node runs
+  # TypeScript files without a flag from 22.18.
+  echo "node $node_version is outside ^22.22.3 || ^24.15.0 || >=26.0.0"
   failed
 else
   echo "node $node_version, npm $(npm --version)"

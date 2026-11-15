@@ -43,7 +43,7 @@ Each exclusion and its reason is listed in [ROADMAP.md](ROADMAP.md), section 4 (
 
 ## Developing
 
-Node.js 22.18 or later and npm 10.9 or later. Scripts and tests are TypeScript that Node runs directly; `npm test` builds every package first, since some tests read what a package publishes.
+Node.js 22.22.3 or later in the 22 line, 24.15 or later in the 24 line, or 26 and later (Angular, which the bridge is built and tested against, asks for them), and npm 10.9 or later. Scripts and tests are TypeScript that Node runs directly; `npm test` builds every package first, since some tests read what a package publishes.
 
 ```sh
 npm ci                                # the repository's .npmrc runs no install script

@@ -10,7 +10,7 @@
   "devEngines": {
     "runtime": {
       "name": "node",
-      "version": ">=22.18.0",
+      "version": "^22.22.3 || ^24.15.0 || >=26.0.0",
       "onFail": "error"
     },
     "packageManager": {
@@ -28,6 +28,11 @@
     "format:check": "prettier --check ."
   },
   "devDependencies": {
+    "@angular/common": "22.2.5",
+    "@angular/compiler": "22.2.5",
+    "@angular/core": "22.2.5",
+    "@angular/forms": "22.2.5",
+    "@angular/platform-browser": "22.2.5",
     "@preact/signals-core": "1.14.4",
     "@rollup/wasm-node": "4.64.0",
     "@standard-schema/spec": "1.1.0",
@@ -36,8 +41,10 @@
     "es-toolkit": "1.52.0",
     "esbuild-wasm": "0.28.2",
     "fast-check": "4.10.2",
+    "jsdom": "31.0.0",
     "prettier": "3.9.9",
     "publint": "0.3.25",
+    "rxjs": "7.8.2",
     "temporal-polyfill": "1.0.5",
     "typescript": "7.0.2",
     "valibot": "1.5.0"

@@ -57,6 +57,10 @@ function lockfile(changes: Json = {}): Json {
     'node_modules/publint/node_modules/picocolors': registryEntry('picocolors', '1.1.1', 'ISC'),
     'node_modules/typescript': registryEntry('typescript', '7.0.2', 'Apache-2.0', { bin: { tsc: 'bin/tsc' } }),
     'node_modules/undici-types': registryEntry('undici-types', '6.21.0', 'MIT'),
+    'node_modules/@angular/core/node_modules/tslib': registryEntry('tslib', '2.9.1', '0BSD'),
+    'node_modules/jsdom/node_modules/entities': registryEntry('entities', '9.0.0', 'BSD-2-Clause'),
+    'node_modules/jsdom/node_modules/tough-cookie': registryEntry('tough-cookie', '6.1.0', 'BSD-3-Clause'),
+    'node_modules/jsdom/node_modules/lru-cache': registryEntry('lru-cache', '11.5.3', 'BlueOak-1.0.0'),
     'packages/core': { name: '@yaltaan/core', version: '0.0.0', license: 'MIT' },
     ...changes,
   };
@@ -78,8 +82,16 @@ test('a lockfile that follows every rule has no problem', () => {
   assert.deepEqual(checkLockfile(lockfile(), rootManifest()), []);
 });
 
-test('the allowlists are MIT, Apache-2.0 and ISC, and the install script of fsevents alone', () => {
-  assert.deepEqual(ALLOWED_LICENSES, ['MIT', 'Apache-2.0', 'ISC']);
+test('the allowlists are seven permissive licences, and the install script of fsevents alone', () => {
+  assert.deepEqual(ALLOWED_LICENSES, [
+    'MIT',
+    'Apache-2.0',
+    'ISC',
+    '0BSD',
+    'BSD-2-Clause',
+    'BSD-3-Clause',
+    'BlueOak-1.0.0',
+  ]);
   assert.deepEqual(INSTALL_SCRIPT_ALLOWLIST, ['fsevents']);
 });
 
@@ -115,7 +127,16 @@ test('every locked package has a SHA-512 checksum', () => {
 });
 
 test('every locked package carries an allowed licence, as an exact SPDX identifier', () => {
-  const refused = [undefined, 'GPL-3.0-only', 'BSD-3-Clause', 'mit', 'MIT OR Apache-2.0', '(MIT OR Apache-2.0)', 42];
+  const refused = [
+    undefined,
+    'GPL-3.0-only',
+    'MIT-0',
+    'CC0-1.0',
+    'mit',
+    'MIT OR Apache-2.0',
+    '(MIT OR Apache-2.0)',
+    42,
+  ];
   for (const license of refused) {
     const entry = registryEntry('prettier', '3.9.9', license);
     const problems = checkLockfile(lockfile({ 'node_modules/prettier': entry }), rootManifest());
@@ -124,9 +145,9 @@ test('every locked package carries an allowed licence, as an exact SPDX identifi
 });
 
 test('an allowed licence that no locked package carries is a stale allowance', () => {
-  const policy = { licenses: [...ALLOWED_LICENSES, 'BSD-3-Clause'], installScripts: INSTALL_SCRIPT_ALLOWLIST };
+  const policy = { licenses: [...ALLOWED_LICENSES, 'MIT-0'], installScripts: INSTALL_SCRIPT_ALLOWLIST };
   const stale = checkLockfile(lockfile(), rootManifest(), policy);
-  assertOneProblem(stale, 'licence BSD-3-Clause is allowed but no locked package');
+  assertOneProblem(stale, 'licence MIT-0 is allowed but no locked package');
   // Removing the only Apache-2.0 package leaves its allowance unused: the workspace entries, skipped, never count.
   const problems = checkLockfile(lockfile({ 'node_modules/typescript': undefined }), rootManifest());
   assertOneProblem(problems, 'licence Apache-2.0 is allowed but no locked package');
@@ -240,7 +261,7 @@ test('the repository check reads package.json and package-lock.json from disk', 
   fs.writeFileSync(path.join(root, 'packages', 'core', 'package.json'), JSON.stringify(coreManifest));
   assertOneProblem(checkRepositoryLockfile(root).problems, 'package-lock.json: cannot be read as JSON');
   fs.writeFileSync(path.join(root, 'package-lock.json'), JSON.stringify(lockfile()));
-  assert.deepEqual(checkRepositoryLockfile(root), { problems: [], entries: 9 });
+  assert.deepEqual(checkRepositoryLockfile(root), { problems: [], entries: 13 });
   const unlicensed = lockfile({ 'node_modules/prettier': registryEntry('prettier', '3.9.9', undefined) });
   fs.writeFileSync(path.join(root, 'package-lock.json'), JSON.stringify(unlicensed));
   assertOneProblem(checkRepositoryLockfile(root).problems, 'has licence undefined');

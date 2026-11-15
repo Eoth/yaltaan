@@ -12,7 +12,7 @@ These are the engineering rules of this repository: how a change is decided, tes
 
 ## Setting up
 
-- Node.js 22.18 or later and npm 10.9 or later. Scripts and tests are TypeScript that Node runs directly; `npm test` builds every package first (`scripts/build.sh`), since some tests read what a package publishes.
+- Node.js 22.22.3 or later in the 22 line, 24.15 or later in the 24 line, or 26 and later (Angular, which the bridge is built and tested against, asks for them), and npm 10.9 or later. Scripts and tests are TypeScript that Node runs directly; `npm test` builds every package first (`scripts/build.sh`), since some tests read what a package publishes.
 - `npm ci`. The repository's `.npmrc` refuses the install scripts of dependencies, records exact versions and never picks a version published less than 7 days ago.
 - Once per clone: `git config core.hooksPath githooks`. The pre-commit hook checks what you stage, commit-msg checks the message, pre-push runs the full gate. CI runs the same checks whether or not you enabled them.
 - `bash scripts/verify.sh` is the gate. It runs every step even after one fails, then prints `OK` or the list of failed steps. On Windows, run it from Git Bash.
