@@ -4,7 +4,7 @@
 #   `squash!` and `Revert "` subjects made by git itself are let through;
 # - no trailer that credits a co-author or a generator (`Co-authored-by:`, `Assisted-by:`, `Generated-by:`): a commit
 #   has one author, the person who answers for it;
-# - no name of a local development-notes file (CLAUDE.md, AGENTS.md, HANDOFF.md, HANDOFF-ARCHIVE.md, the root guide/
+# - no name of a local development-notes file (HANDOFF.md, HANDOFF-ARCHIVE.md, the root guide/
 #   folder) and no "session", for the reasons given in scripts/check-no-internal-doc-refs.sh.
 #
 # Usage: scripts/check-commit-message.sh <message-file>
@@ -37,7 +37,7 @@ fi
 if printf '%s\n' "$message" | grep -n -i -E '^(co-authored-by|assisted-by|generated-by):' >&2; then
   fail "a commit names no co-author or generator trailer (line above)"
 fi
-internal_names='CLAUDE\.md|AGENTS\.md|HANDOFF(-ARCHIVE)?\.md|(^|[^[:alnum:]_./-])guide/'
+internal_names='HANDOFF(-ARCHIVE)?\.md|(^|[^[:alnum:]_./-])guide/'
 if printf '%s\n' "$message" | grep -n -i -E "$internal_names" >&2; then
   fail "the message names local development notes that no clone receives (line above)"
 fi

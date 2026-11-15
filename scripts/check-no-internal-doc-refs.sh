@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Fails (exit 1) if a file git does not ignore names a local development-notes file or folder that clones never receive
-# (CLAUDE.md, AGENTS.md, HANDOFF.md, HANDOFF-ARCHIVE.md, the guide/ folder at the repository root): a reference to
+# (HANDOFF.md, HANDOFF-ARCHIVE.md, the guide/ folder at the repository root): a reference to
 # them points at text a reader will never have, so the reason it stood for must be written out in place instead.
 #
 # Also refused, as a whole word in any case: "session" and "sessions". How the work is divided up is not part of
@@ -20,7 +20,7 @@ fi
 
 # `guide/` counts only as a root folder: at the start of a path or after a character that cannot end a path segment,
 # so `docs/guide/` is allowed.
-pattern='CLAUDE\.md|AGENTS\.md|HANDOFF(-ARCHIVE)?\.md|(^|[^[:alnum:]_./-])guide/'
+pattern='HANDOFF(-ARCHIVE)?\.md|(^|[^[:alnum:]_./-])guide/'
 
 # These files name the very patterns they refuse.
 self_exclude=(

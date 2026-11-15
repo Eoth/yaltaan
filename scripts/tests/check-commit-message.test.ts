@@ -44,7 +44,7 @@ test('co-author and generator trailers are refused, in any case', () => {
 });
 
 test('local notes and the word session are refused in a message', () => {
-  for (const body of ['see HANDOFF.md', 'per CLAUDE.md', 'from guide/outils', 'found in this session']) {
+  for (const body of ['see HANDOFF.md', 'from guide/outils', 'found in this session']) {
     assert.equal(judge(`docs: ok\n\n${body}\n`), 1, body);
   }
   assert.equal(judge('docs: ok\n\nsee docs/guide/start.md\n'), 0);

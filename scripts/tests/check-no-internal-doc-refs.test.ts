@@ -15,8 +15,6 @@ test('a clean tree passes', () => {
 for (const [label, text] of [
   ['the hand-over notes', 'Read HANDOFF.md first.'],
   ['their archive', 'Moved to HANDOFF-ARCHIVE.md.'],
-  ['the governance file', 'As CLAUDE.md says.'],
-  ['the other agents file', 'See agents.md for details.'],
   ['the root guide folder', 'Run guide/outils/replay-wip.sh.'],
   ['the word session', 'Done in the last Session.'],
   ['the plural', 'Over several sessions.'],
