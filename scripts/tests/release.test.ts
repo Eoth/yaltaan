@@ -455,7 +455,7 @@ test('a consumer sees a module or a declaration missing from a tarball, at run t
   assert.equal(problems.filter((problem) => problem.includes('compile every subpath')).length, 4);
 });
 
-test("a consumer installs an adapter's framework as locked, the peers it requires and what loads first", () => {
+test("a consumer is given an adapter's framework as locked, the peers it requires and what loads first", () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'yaltaan-test-'));
   try {
     const locked = (version: string, fields: JsonObject = {}): JsonObject => ({ version, ...fields });
@@ -477,12 +477,12 @@ test("a consumer installs an adapter's framework as locked, the peers it require
       peerDependencies: { '@angular/core': '^22.0.0', '@angular/forms': '^22.0.0' },
     });
     assert.deepEqual(frameworkOf([adapter, tarball('@yaltaan/core', { name: '@yaltaan/core' })], root), {
-      install: ['@angular/compiler@22.2.5', '@angular/core@22.2.5', '@angular/forms@22.2.5', 'rxjs@7.8.2'],
+      link: ['@angular/compiler', '@angular/core', '@angular/forms', 'rxjs'],
       first: ['@angular/compiler'],
       dom: true,
     });
     assert.deepEqual(frameworkOf([tarball('@yaltaan/core', { name: '@yaltaan/core' })], root), {
-      install: [],
+      link: [],
       first: [],
       dom: false,
     });

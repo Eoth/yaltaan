@@ -435,15 +435,23 @@ export function checkConsumer(tarballs: readonly ReleaseTarball[]): string[] {
     const manifest = { name: 'yaltaan-consumer', version: '0.0.0', private: true, type: 'module' };
     fs.writeFileSync(path.join(folder, 'package.json'), JSON.stringify(manifest));
     const framework = frameworkOf(tarballs, repositoryRoot);
+    // npm resolves no peer offline without the registry's metadata, which `npm ci` does not cache: the tarballs are
+    // installed without their peers, and the framework linked from the repository's install, where an application's
+    // install would put it.
+    const peers = framework.link.length > 0 ? ['--legacy-peer-deps'] : [];
     const install = runNpm(
-      ['install', '--offline', '--ignore-scripts', '--no-audit', '--no-fund', '--no-save', '--no-package-lock'].concat(
-        framework.install,
-        tarballs.map((tarball) => tarball.file),
-      ),
+      ['install', '--offline', '--ignore-scripts', '--no-audit', '--no-fund', '--no-save', '--no-package-lock']
+        .concat(peers)
+        .concat(tarballs.map((tarball) => tarball.file)),
       folder,
     );
     if (install.status !== 0) {
       return [`the tarballs do not install offline: ${`${install.stdout}${install.stderr}`.trim()}`];
+    }
+    for (const name of framework.link) {
+      const link = path.join(folder, 'node_modules', name);
+      fs.mkdirSync(path.dirname(link), { recursive: true });
+      fs.symlinkSync(path.join(repositoryRoot, 'node_modules', name), link, 'junction');
     }
     const specifiers = tarballs.flatMap((tarball) => listSubpathSpecifiers(tarball.manifest));
     const quoted = specifiers.map((specifier) => JSON.stringify(specifier));
@@ -493,21 +501,21 @@ export function checkConsumer(tarballs: readonly ReleaseTarball[]): string[] {
 }
 
 /**
- * The framework of the adapters among `tarballs`, as an application installs it beside them: their peers at the
- * versions the lockfile of `root` holds, the peers those ask for in turn (optional ones aside), and what Node loads
- * before them (scripts/lib/frameworks.ts); the DOM's types, which the declarations of a browser framework name. Nothing
- * for tarballs without peers.
+ * The framework of the adapters among `tarballs`, as an application installs it beside them: their peers that the
+ * lockfile of `root` holds, the peers those ask for in turn (optional ones aside), and what Node loads before them
+ * (scripts/lib/frameworks.ts); the DOM's types, which the declarations of a browser framework name. Nothing for
+ * tarballs without peers.
  */
 export function frameworkOf(
   tarballs: readonly ReleaseTarball[],
   root: string,
-): { readonly install: readonly string[]; readonly first: readonly string[]; readonly dom: boolean } {
+): { readonly link: readonly string[]; readonly first: readonly string[]; readonly dom: boolean } {
   const pending = tarballs.flatMap((tarball) => {
     const peers = tarball.manifest['peerDependencies'];
     return isJsonObject(peers) ? Object.keys(peers) : [];
   });
   if (pending.length === 0) {
-    return { install: [], first: [], dom: false };
+    return { link: [], first: [], dom: false };
   }
   const lock: unknown = JSON.parse(fs.readFileSync(path.join(root, 'package-lock.json'), 'utf8'));
   const locked = isJsonObject(lock) && isJsonObject(lock['packages']) ? lock['packages'] : {};
@@ -533,8 +541,7 @@ export function frameworkOf(
       }
     }
   }
-  const install = [...versions].sort(([a], [b]) => a.localeCompare(b)).map(([name, version]) => `${name}@${version}`);
-  return { install, first, dom: true };
+  return { link: [...versions.keys()].sort(), first, dom: true };
 }
 
 if (import.meta.main) {
