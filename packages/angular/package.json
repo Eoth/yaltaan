@@ -1,0 +1,42 @@
+{
+  "name": "@yaltaan/angular",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Angular bridge of Yaltaan: nodes as signals, rules of @yaltaan/rules as validators of Signal Forms.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Eoth/yaltaan.git",
+    "directory": "packages/angular"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist/",
+    "!dist/**/*.test.*"
+  ],
+  "engines": {
+    "node": ">=22.12"
+  },
+  "dependencies": {
+    "@yaltaan/core": "0.0.0",
+    "@yaltaan/form": "0.0.0",
+    "@yaltaan/rules": "0.0.0",
+    "@yaltaan/schema": "0.0.0"
+  },
+  "peerDependencies": {
+    "@angular/core": "^22.0.0",
+    "@angular/forms": "^22.0.0"
+  }
+}

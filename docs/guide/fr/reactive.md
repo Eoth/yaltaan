@@ -139,7 +139,7 @@ total.get(); // → 35
 
 ## Dans Angular et Vue
 
-Un nœud a déjà ce qu'un framework demande à une valeur extérieure : un moyen de la lire, et un moyen d'être prévenu qu'elle a changé. Ces deux fonctions en font un signal Angular et une ref Vue ; copiez-les dans votre application. Les deux sont vérifiées avec Angular 22.2.4 et Vue 3.5.44.
+Un nœud a déjà ce qu'un framework demande à une valeur extérieure : un moyen de la lire, et un moyen d'être prévenu qu'elle a changé. Ces deux fonctions en font un signal Angular et une ref Vue ; copiez-les dans votre application. Les deux sont vérifiées avec Angular 22.2.5 et Vue 3.5.44. En Angular, `@yaltaan/angular` exporte le même `fromNode`, qui accepte aussi un injecteur, à côté de son pont vers Signal Forms.
 
 Dans Angular, appelez `fromNode` dans un contexte d'injection, un constructeur ou l'initialisation d'un champ : l'abonnement finit avec le composant. Le signal suit le nœud, et lève ce que le nœud lève.
 

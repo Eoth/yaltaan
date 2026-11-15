@@ -16,6 +16,5 @@
     "packages/rules/src/**/*.ts",
     "packages/form/src/**/*.ts",
     "packages/temporal/src/**/*.ts"
-  ],
-  "exclude": ["tests/interop/angular-bridge.ts"]
+  ]
 }

@@ -21,7 +21,7 @@
   },
   "scripts": {
     "verify": "bash scripts/verify.sh",
-    "typecheck": "tsc -b",
+    "typecheck": "tsc -b && tsc -p packages/angular/tsconfig.json",
     "build": "bash scripts/build.sh",
     "test": "bash scripts/test.sh",
     "format": "prettier --write .",

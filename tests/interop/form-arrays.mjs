@@ -130,4 +130,4 @@ assert.deepEqual(lines.raw.get(), initial().lines);
 assert.equal(lines.dirty.get(), false);
 assert.equal(angular.lines().dirty(), false);
 
-console.log('form-arrays: the form agrees with Angular Signal Forms 22.2.4 and TanStack Form 1.33.5 where it says so');
+console.log('form-arrays: the form agrees with Angular Signal Forms 22.2.5 and TanStack Form 1.33.5 where it says so');

@@ -139,7 +139,7 @@ total.get(); // → 35
 
 ## In Angular and Vue
 
-A node already has what a framework asks of an outside value: a way to read it, and a way to be told it changed. These two functions turn it into an Angular signal and into a Vue ref; copy them into your application. Both are checked against Angular 22.2.4 and Vue 3.5.44.
+A node already has what a framework asks of an outside value: a way to read it, and a way to be told it changed. These two functions turn it into an Angular signal and into a Vue ref; copy them into your application. Both are checked against Angular 22.2.5 and Vue 3.5.44. In Angular, `@yaltaan/angular` exports the same `fromNode`, which also takes an injector, beside its bridge to Signal Forms.
 
 In Angular, call `fromNode` in an injection context, a constructor or a field initializer: the subscription ends with the component. The signal follows the node, and throws what the node throws.
 

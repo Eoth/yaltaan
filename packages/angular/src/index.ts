@@ -3,10 +3,6 @@
 // Signal Forms. It holds no state of its own: a signal follows its node, and Angular holds what a validator computes.
 // Nothing runs on import.
 //
-// The source of @yaltaan/angular, kept beside the interoperability scripts until Angular is a development dependency of
-// the workspace (ADR 0048): tests/interop/run.sh compiles it against the declarations of Angular
-// 22.2.4, runs it there, and measures it.
-//
 // A rule runs as one tree validator of Signal Forms, which reads, through the fields of the form, only the paths the
 // rule declares, each down to its first index or `anyElement`, the list then read whole: Angular checks it again only
 // once one of those values changes, as it checks a validator an application writes. What the rule requires is a
@@ -47,7 +43,7 @@ export interface FromNodeOptions {
  * A signal that follows `node`: its value, computed when the signal is read, and what it throws. Subscribed to the node
  * until the injector is destroyed, that of the current injection context or `injector`; the signal then keeps the last
  * value it read.
- * @mutates node (one subscription, until the injector is destroyed)
+ * @mutates node
  * @sharing structural
  * @complexity O(1); a read costs that of `node.get()`
  * @throws Error (NG0203) when called outside an injection context without `injector`
@@ -87,8 +83,8 @@ const STATES = [
 type State = (typeof STATES)[number];
 
 /**
- * Each state of a node of @yaltaan/form as a signal, `items` of an array included; `children` of a group, the same for
- * each child.
+ * Each state of a node of `@yaltaan/form` as a signal, `items` of an array included; `children` of a group, the same
+ * for each child.
  * @since 0.3
  * @experimental
  */
@@ -99,15 +95,15 @@ export type NodeSignals<N> = {
   : unknown);
 
 /**
- * Each state of `node`, a node of @yaltaan/form, as a signal that `fromNode` makes on its first read, shown as the form
- * gives it: `dirty` on a read-only node too, where Angular hides it, and nothing hidden on a node left out of the
+ * Each state of `node`, a node of `@yaltaan/form`, as a signal that `fromNode` makes on its first read, shown as the
+ * form gives it: `dirty` on a read-only node too, where Angular hides it, and nothing hidden on a node left out of the
  * submission. A group's `children` are reached the same way, each made on the first read of `children`; an array's
  * `items` is a signal of its item nodes, whose states `signalsOf` reads in turn. Every subscription ends with the
  * injector of the call, which is captured then, so that a template may read a state for the first time. Each call
  * subscribes anew, until that injector is destroyed: call it once per node, in a constructor or a field initializer,
  * an item's in the component of its row, so that a row removed takes its subscriptions with it; views made in a
  * `computed` over `items` would pile up the subscriptions of every item ever shown.
- * @mutates node (one subscription per state read, until the injector is destroyed)
+ * @mutates node
  * @sharing structural
  * @complexity O(1), and O(c) on the first read of `children` (c = children of the group)
  * @throws Error (NG0203) when called outside an injection context without `injector`
@@ -127,15 +123,17 @@ export function signalsOf<N extends FormNode<unknown, unknown>>(
       enumerable: true,
       get: () => {
         const value = make();
-        Object.defineProperty(view, name, { value, enumerable: true });
+        // A property that turns from accessor to data keeps its enumerable and configurable attributes.
+        Object.defineProperty(view, name, { value });
         return value;
       },
     });
   };
-  const states = node as unknown as Readonly<Record<string, ReadableNode<unknown>>>;
   for (const name of STATES) {
     if (name in node) {
-      lazy(name, () => fromNode(states[name]!, { injector }));
+      lazy(name, () =>
+        fromNode((node as unknown as Readonly<Record<string, ReadableNode<unknown>>>)[name]!, { injector }),
+      );
     }
   }
   if ('children' in node) {
@@ -154,7 +152,7 @@ export function signalsOf<N extends FormNode<unknown, unknown>>(
  */
 export interface ValidateRulesOptions {
   /**
-   * Builds the message of the error of an issue; the issue's code by default, as `refine` of @yaltaan/rules does.
+   * Builds the message of the error of an issue; the issue's code by default, as `refine` of `@yaltaan/rules` does.
    * Called once per issue, when Angular computes the errors.
    * @supplied
    */
@@ -182,7 +180,6 @@ interface Found {
   readonly message: string;
   readonly keys: readonly PropertyKey[];
 }
-const childPath = (path: AnyPath, key: string): AnyPath => (path as unknown as Readonly<Record<string, AnyPath>>)[key]!;
 
 // The deepest field on the way of `keys`, and how many keys it took: a field is a function, which `length` of a list
 // is not. Angular builds no field for a key whose value is `undefined`, nor under a value that is no object; once it
@@ -257,7 +254,7 @@ function keysOf(path: Path, values: unknown, resolveKey: ValidateRulesOptions['r
       break;
     }
     if (typeof segment === 'object' && !(Number.isSafeInteger(key) && (key as number) >= 0)) {
-      throw new TypeError(`resolveKey returned ${String(key)}, not an index, -1 or undefined`);
+      throw new TypeError(`resolveKey returned ${String(key)}, not an index`);
     }
     keys.push(key);
   }
@@ -273,7 +270,7 @@ function mark(path: AnyPath, target: Path, from: number, when: (context: RootFie
       applyEach(path as SchemaPath<readonly unknown[]>, (item) => mark(item, target, index + 1, when));
       return;
     }
-    path = childPath(path, segment);
+    path = (path as unknown as Readonly<Record<string, AnyPath>>)[segment]!;
   }
   metadata(path, REQUIRED, when);
 }
@@ -288,7 +285,7 @@ function mark(path: AnyPath, target: Path, from: number, when: (context: RootFie
  * down to its first index or `anyElement`, the list then read whole; a field built or removed on the way of one of its
  * issues places it again, without checking. It reads what Angular holds, hidden and disabled fields included, whose
  * errors Angular does not show. Up to 1,000 errors per rule, then `rules.too_many_issues`, as `checkRules` gives.
- * @mutates path (validators and metadata of the schema being defined)
+ * @mutates path
  * @sharing none
  * @complexity O(r × d) to define (r = rules, d = paths they declare); a check costs that of the rule, O(d) reads and
  *   a call of `resolveKey` per `{ key }` of each issue and required path; Angular then filters the tree errors of
@@ -310,7 +307,6 @@ export function validateRules<TValue, TPathKind extends PathKind = PathKind.Root
     throw new TypeError('not an array of rules');
   }
   const { format = (issue: Issue) => issue.code, resolveKey } = options;
-  const root = path as unknown as AnyPath;
   const gathered: Key<readonly Error[]>[] = [];
   for (const rule of rules) {
     const read = reader(pointsOf(rule.reads));
@@ -318,7 +314,7 @@ export function validateRules<TValue, TPathKind extends PathKind = PathKind.Root
     // The check in a computation of its own, its errors placed in another: a field built or removed on the way of an
     // issue places it again, and checks nothing.
     const issuesOf = createMetadataKey<readonly Found[]>();
-    metadata(root, issuesOf, ({ fieldTree }) => {
+    metadata(path, issuesOf, ({ fieldTree }) => {
       const values = read(fieldTree as unknown as Tree);
       return checkRules(alone, values)
         .filter((issue) => issue.severity !== 'warning')
@@ -326,7 +322,7 @@ export function validateRules<TValue, TPathKind extends PathKind = PathKind.Root
     });
     const errorsOf = createMetadataKey<readonly Error[]>();
     gathered.push(errorsOf);
-    metadata(root, errorsOf, ({ fieldTree, state }) =>
+    metadata(path, errorsOf, ({ fieldTree, state }) =>
       (state.metadata(issuesOf)?.() ?? []).map(({ kind, message, keys }) => {
         const [field, taken] = walk(fieldTree as unknown as Tree, keys);
         // No logic need stand below the field it stops at: its value, read, places the issue again once it changes.
@@ -339,7 +335,7 @@ export function validateRules<TValue, TPathKind extends PathKind = PathKind.Root
     const { required } = rule;
     if (required !== undefined) {
       const named = createMetadataKey<ReadonlySet<string>>();
-      metadata(root, named, ({ fieldTree }) => {
+      metadata(path, named, ({ fieldTree }) => {
         const values = read(fieldTree as unknown as Tree);
         const found = new Set<string>();
         for (const where of required(values)) {
@@ -351,13 +347,13 @@ export function validateRules<TValue, TPathKind extends PathKind = PathKind.Root
         return found;
       });
       for (const target of rule.targets) {
-        mark(root, target, 0, ({ pathKeys, stateOf }) => {
+        mark(path as unknown as AnyPath, target, 0, ({ pathKeys, stateOf }) => {
           const keys = pathKeys();
           const own = JSON.stringify(keys.slice(keys.length - target.length));
-          return stateOf(root).metadata(named)?.()?.has(own) ?? false;
+          return stateOf(path).metadata(named)?.()?.has(own) ?? false;
         });
       }
     }
   }
-  validateTree(root, ({ state }) => gathered.flatMap((errorsOf) => state.metadata(errorsOf)?.() ?? []));
+  validateTree(path, ({ state }) => gathered.flatMap((errorsOf) => state.metadata(errorsOf)?.() ?? []));
 }

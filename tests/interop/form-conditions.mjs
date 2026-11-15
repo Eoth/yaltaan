@@ -148,6 +148,6 @@ assert.deepEqual(
 assert.deepEqual([parent.required.get(), parent.children.name.issues.get()], [true, []]);
 
 console.log(
-  'form-conditions: the form agrees with Angular Signal Forms 22.2.4 and departs from it, and from TanStack Form ' +
+  'form-conditions: the form agrees with Angular Signal Forms 22.2.5 and departs from it, and from TanStack Form ' +
     '1.33.5, where it says so',
 );

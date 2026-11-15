@@ -109,7 +109,15 @@ npx --no-install prettier --check . || failed
 step "types"
 # Files outside the packages (examples, recipes) import them by name, through what they publish under dist/: built from
 # nothing first, so that the check never reads a dist/ that a fresh clone lacks or an earlier build left stale.
-bash scripts/build.sh > /dev/null && npx --no-install tsc -b && echo "ok: types check" || failed
+# A package whose sources need other options than the repository's, the DOM of Angular's declarations for instance,
+# has a tsconfig.json of its own, checked after the root's.
+types_ok=1
+bash scripts/build.sh > /dev/null && npx --no-install tsc -b || types_ok=0
+for config in packages/*/tsconfig.json; do
+  [ -e "$config" ] || continue
+  npx --no-install tsc -p "$config" || types_ok=0
+done
+if [ "$types_ok" = 1 ]; then echo "ok: types check"; else failed; fi
 
 step "tests"
 # The runner's summary is read, not only its exit code: a run that finds no test file exits 0 and reports nothing.

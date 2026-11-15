@@ -17,7 +17,7 @@ Dependencies flow one way and never back: `core ← temporal`, and `core ← sch
 | [`@yaltaan/schema`](packages/schema/README.md) | experimental, unpublished | Schemas implementing Standard Schema v1, usable by any engine that reads it; reversible codecs are planned. |
 | [`@yaltaan/rules`](packages/rules/README.md) | experimental, unpublished | Declarative relational rules (required if, all or none, at least n of) that work in any form engine, with or without `@yaltaan/form`. |
 | [`@yaltaan/form`](packages/form/README.md) | experimental, unpublished | A form model on reactive nodes: fields, groups and arrays that hold raw values, the parsed value, the issues and nearly every state derived from them, the rules of `@yaltaan/rules` checked again only once a value they read changes, and checks only the application can make, a server's answer for instance. Conditional: kept only if a vertical slice on a pilot form shows its value over Angular Signal Forms and TanStack Form, a go/no-go decision recorded in [docs/adr/](docs/adr/). |
-| `@yaltaan/angular` | planned | Bridge to Angular Signal Forms. A first bridge is written and judged against Angular 22 in [tests/interop/](tests/interop/), outside the packages until [ADR 0048](docs/adr/0048-angular-bridge.md) is accepted. |
+| [`@yaltaan/angular`](packages/angular/README.md) | experimental, unpublished | Bridge to Angular Signal Forms, Angular 22 and later: the rules of `@yaltaan/rules` as its validators, each checked again only once a value it reads changes, and the nodes of the reactive graph and of `@yaltaan/form` as signals. |
 | `@yaltaan/react` | planned | Bridge to React through `useSyncExternalStore`. |
 | `@yaltaan/vue` | planned | Bridge to Vue, later, after the Angular and React ones. |
 

@@ -18,6 +18,8 @@ references/temporal-polyfill	esbuild	57158	19793	17851	27300b9b8508605f
 references/temporal-polyfill	rollup	57911	19849	17876	705b0870ad76d476
 references/valibot-login	esbuild	3472	1408	1285	bbd0d9439e42b90b
 references/valibot-login	rollup	3354	1371	1254	7e92d1ca736dfefc
+yaltaan/angular-adapter	esbuild	3341	1641	1488	6fabb03dea5e7e7c
+yaltaan/angular-adapter	rollup	3415	1654	1491	0531e681a7d2c621
 yaltaan/core-equal	esbuild	3587	1415	1288	bb4348a5b6a31378
 yaltaan/core-equal	rollup	3641	1424	1303	f421810fc28eecd6
 yaltaan/core-issue	esbuild	1072	580	487	4e3e828ba9784eb9
