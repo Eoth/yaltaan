@@ -21,6 +21,7 @@ import { NPM_SCOPE } from './check-manifests.ts';
 import { REFERENCE_DIR, renderReference, type ReferencedPackage } from './lib/contract-reference.ts';
 import { judgeExport, judgeMembers, type PublicExport } from './lib/contract-tags.ts';
 import { readDeclarations } from './lib/declarations.ts';
+import { loadFrameworks } from './lib/frameworks.ts';
 import { readInternalPackages } from './lib/internal-packages.ts';
 import { relativePosix } from './lib/packages.ts';
 import {
@@ -57,6 +58,9 @@ interface Entry {
   readonly specifier: string;
   readonly declarations: string;
   readonly module: string;
+  /** The folder of the package, and the names of its peers: the framework of an adapter. */
+  readonly dir: string;
+  readonly peers: readonly string[];
 }
 
 /** Checks the repository at `root`; with `update`, writes the reference instead of comparing it. */
@@ -90,6 +94,8 @@ export async function checkContractTags(
       continue;
     }
     const exportsField = isJsonObject(read.value) ? read.value['exports'] : undefined;
+    const peersField = isJsonObject(read.value) ? read.value['peerDependencies'] : undefined;
+    const peers = Object.keys(isJsonObject(peersField) ? peersField : {});
     for (const [key, target] of Object.entries(isJsonObject(exportsField) ? exportsField : {})) {
       const shown = `${workspacePackage.dir}/package.json: "exports" ${JSON.stringify(key)}`;
       const files = filesOf(target);
@@ -105,6 +111,8 @@ export async function checkContractTags(
         specifier: key === '.' ? name : `${name}/${key.slice(2)}`,
         declarations: path.resolve(workspacePackage.path, files.declarations),
         module: path.resolve(workspacePackage.path, files.module),
+        dir: workspacePackage.path,
+        peers,
       };
       const missing = [entry.declarations, entry.module].filter((file) => !existsSync(file));
       if (missing.length > 0) {
@@ -201,6 +209,7 @@ async function compareWithRuntime(root: string, entry: Entry, exports: readonly 
   let namespace: object;
   try {
     loads += 1;
+    await loadFrameworks(entry.dir, entry.peers);
     namespace = (await import(`${pathToFileURL(entry.module).href}?check=${loads}`)) as object;
   } catch (error) {
     return [`${shown}: cannot be loaded (${describeError(error)})`];

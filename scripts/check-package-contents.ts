@@ -144,15 +144,17 @@ export function followJavaScript(files: ReadonlyMap<string, Buffer>, roots: read
 /**
  * Compiles the declaration files among `roots` with TypeScript 7, from the package written out in `folder`, and
  * returns every declaration file of the package the compiler loaded. An import the compiler cannot resolve is an
- * error, as it would be for a consumer.
+ * error, as it would be for a consumer. `dom` adds the DOM's types, which the declarations of a browser framework name,
+ * as an application that uses it compiles with them.
  */
-export function followDeclarations(folder: string, roots: readonly string[]): Reached {
+export function followDeclarations(folder: string, roots: readonly string[], dom = false): Reached {
   const declarations = roots.filter((root) => DECLARATIONS.test(root) && fs.existsSync(path.join(folder, root)));
   if (declarations.length === 0) {
     return { reached: new Set(), problems: [] };
   }
   const config = path.join(folder, 'tsconfig.inspection.json');
-  const compilerOptions = { noEmit: true, module: 'nodenext', target: 'es2023', lib: ['es2023'], types: [] };
+  const lib = dom ? ['es2023', 'dom'] : ['es2023'];
+  const compilerOptions = { noEmit: true, module: 'nodenext', target: 'es2023', lib, types: [] };
   fs.writeFileSync(config, JSON.stringify({ compilerOptions, files: declarations }));
   const result = spawnSync(process.execPath, [compilerPath(), '-p', config, '--listFiles', '--pretty', 'false'], {
     cwd: folder,
@@ -217,14 +219,16 @@ export function inspectFiles(files: ReadonlyMap<string, Buffer>, dir: string, li
       fs.mkdirSync(path.dirname(path.join(folder, file)), { recursive: true });
       fs.writeFileSync(path.join(folder, file), bytes);
     }
-    // Its declared dependencies, where a consumer's install would put them: an import of anything else stays an error.
+    // Its declared dependencies, and the framework of an adapter, its peers, where a consumer's install would put them:
+    // an import of anything else stays an error.
     const dependencies = isJsonObject(manifest['dependencies']) ? Object.keys(manifest['dependencies']) : [];
-    for (const name of dependencies) {
+    const peers = isJsonObject(manifest['peerDependencies']) ? Object.keys(manifest['peerDependencies']) : [];
+    for (const name of [...dependencies, ...peers]) {
       const link = path.join(folder, 'node_modules', name);
       fs.mkdirSync(path.dirname(link), { recursive: true });
       fs.symlinkSync(path.join(repositoryRoot, 'node_modules', name), link, 'junction');
     }
-    declarations = followDeclarations(folder, entries.targets);
+    declarations = followDeclarations(folder, entries.targets, peers.length > 0);
   } finally {
     fs.rmSync(folder, { recursive: true, force: true });
   }

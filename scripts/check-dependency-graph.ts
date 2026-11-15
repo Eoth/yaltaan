@@ -111,6 +111,8 @@ interface PackageView {
   readonly name: string;
   /** Names in "dependencies" and "peerDependencies". */
   readonly declared: ReadonlySet<string>;
+  /** Names in "peerDependencies": the framework of an adapter. */
+  readonly peers: ReadonlySet<string>;
   /** Keys of "exports": the subpaths another package may import. */
   readonly subpaths: ReadonlySet<string>;
 }
@@ -175,10 +177,14 @@ export function checkDependencyGraph(root: string): GraphVerdict {
 function viewOf(workspacePackage: WorkspacePackage, manifest: unknown): PackageView {
   const fields = isJsonObject(manifest) ? manifest : {};
   const declared = new Set<string>();
+  const peers = new Set<string>();
   for (const field of ['dependencies', 'peerDependencies']) {
     const value = fields[field];
     for (const name of isJsonObject(value) ? Object.keys(value) : []) {
       declared.add(name);
+      if (field === 'peerDependencies') {
+        peers.add(name);
+      }
     }
   }
   const exportsField = fields['exports'];
@@ -191,6 +197,7 @@ function viewOf(workspacePackage: WorkspacePackage, manifest: unknown): PackageV
     path: workspacePackage.path,
     name: `${NPM_SCOPE}/${workspacePackage.name}`,
     declared,
+    peers,
     subpaths: new Set(subpaths),
   };
 }
@@ -310,12 +317,41 @@ function listJavaScript(dir: string): string[] {
   return files;
 }
 
-// The compiler resolves type-only imports that the built JavaScript no longer shows. Its own library files
-// (`lib.*.d.ts`, shipped in the platform package of TypeScript 7) are the only files outside a declared package that
-// a build may read.
+// The third-party packages that the declarations of the peers of a package may read: the dependencies and the peers of
+// each, installed, and theirs in turn (the declarations of Angular name those of rxjs and of @angular/common). A peer
+// not installed, such as an optional one, reads nothing. Packages of the workspace are never reached this way: each
+// stays an edge its manifest declares. Only a file of the package itself is refused as their importer.
+function readThroughPeers(view: PackageView, index: PackageIndex): ReadonlySet<string> {
+  const reached = new Set<string>();
+  const pending = [...view.peers].map((name) => ({ name, from: view.path }));
+  for (let next = pending.pop(); next !== undefined; next = pending.pop()) {
+    if (reached.has(next.name) || next.name.startsWith(`${NPM_SCOPE}/`)) {
+      continue;
+    }
+    let info;
+    try {
+      info = index.find(next.name, next.from);
+    } catch {
+      continue;
+    }
+    reached.add(next.name);
+    for (const field of ['dependencies', 'peerDependencies']) {
+      const value = info.manifest[field];
+      for (const name of isJsonObject(value) ? Object.keys(value) : []) {
+        pending.push({ name, from: info.dir });
+      }
+    }
+  }
+  return reached;
+}
+
+// The compiler resolves type-only imports that the built JavaScript no longer shows, and says under each file what
+// imports it. Besides a declared package and what the declarations of its peers read, never imported from the package
+// itself, its own library files (`lib.*.d.ts`, shipped in the platform package of TypeScript 7) are the only files a
+// build may read.
 function checkBuildInputs(root: string, view: PackageView): string[] {
   const config = `${view.dir}/${BUILD_CONFIG}`;
-  const result = spawnSync(process.execPath, [compilerPath(), '-p', config, '--listFilesOnly'], {
+  const result = spawnSync(process.execPath, [compilerPath(), '-p', config, '--listFilesOnly', '--explainFiles'], {
     cwd: root,
     encoding: 'utf8',
   });
@@ -325,20 +361,37 @@ function checkBuildInputs(root: string, view: PackageView): string[] {
   }
   const index = new PackageIndex();
   const ownDir = realpathSync(view.path);
+  const throughPeers = readThroughPeers(view, index);
   const problems: string[] = [];
   const reported = new Set<string>();
+  // Each file the compiler lists on a line of its own, the files that import it on the indented lines below.
+  const importers = new Map<string, string[]>();
+  let listing: string[] = [];
   for (const line of result.stdout.split('\n')) {
-    const listed = line.trim();
-    if (listed === '') {
-      continue;
+    if (line.trim() !== '' && !/^\s/.test(line)) {
+      listing = [];
+      importers.set(line.trim(), listing);
     }
-    const file = existsSync(listed) ? realpathSync(listed) : listed;
+    const via = /^\s+Imported via (?:'[^']*'|"[^"]*") from file '([^']+)'/.exec(line);
+    if (via !== null) {
+      listing.push(via[1]!);
+    }
+  }
+  const realOf = (listed: string): string => {
+    const absolute = path.resolve(root, listed);
+    return existsSync(absolute) ? realpathSync(absolute) : absolute;
+  };
+  for (const [listed, from] of importers) {
+    const file = realOf(listed);
     const owner = index.ownerOf(file);
     if (owner === undefined) {
       problems.push(`${config}: the build reads ${listed}, which belongs to no package`);
       continue;
     }
     if (owner.dir === ownDir || view.declared.has(owner.name)) {
+      continue;
+    }
+    if (throughPeers.has(owner.name) && !from.some((importer) => index.ownerOf(realOf(importer))?.dir === ownDir)) {
       continue;
     }
     const isCompilerLibrary = /^lib\.[^/\\]*\.d\.ts$/.test(path.basename(file));

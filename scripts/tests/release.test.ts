@@ -25,6 +25,7 @@ import {
   checkSbom,
   compareTarballs,
   describeRelease,
+  frameworkOf,
   listSubpathSpecifiers,
   parseReleaseArguments,
   purlOf,
@@ -452,4 +453,40 @@ test('a consumer sees a module or a declaration missing from a tarball, at run t
   // Node fails to import and to require; each of the two compilers fails under each of the two resolutions.
   assert.equal(problems.length, 6, problems.join('\n'));
   assert.equal(problems.filter((problem) => problem.includes('compile every subpath')).length, 4);
+});
+
+test("a consumer installs an adapter's framework as locked, the peers it requires and what loads first", () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'yaltaan-test-'));
+  try {
+    const locked = (version: string, fields: JsonObject = {}): JsonObject => ({ version, ...fields });
+    const packages = {
+      '': { name: 'workspace' },
+      'node_modules/@angular/core': locked('22.2.5', {
+        peerDependencies: { rxjs: '^7.4.0', 'zone.js': '~0.16.0', '@angular/compiler': '22.2.5' },
+        peerDependenciesMeta: { 'zone.js': { optional: true }, '@angular/compiler': { optional: true } },
+      }),
+      'node_modules/@angular/forms': locked('22.2.5', { peerDependencies: { '@angular/core': '22.2.5' } }),
+      'node_modules/@angular/compiler': locked('22.2.5'),
+      'node_modules/rxjs': locked('7.8.2'),
+      'node_modules/zone.js': locked('0.16.0'),
+    };
+    fs.writeFileSync(path.join(root, 'package-lock.json'), JSON.stringify({ lockfileVersion: 3, packages }));
+    const tarball = (name: string, manifest: JsonObject) => ({ dir: name, name, file: '', integrity: '', manifest });
+    const adapter = tarball('@yaltaan/angular', {
+      name: '@yaltaan/angular',
+      peerDependencies: { '@angular/core': '^22.0.0', '@angular/forms': '^22.0.0' },
+    });
+    assert.deepEqual(frameworkOf([adapter, tarball('@yaltaan/core', { name: '@yaltaan/core' })], root), {
+      install: ['@angular/compiler@22.2.5', '@angular/core@22.2.5', '@angular/forms@22.2.5', 'rxjs@7.8.2'],
+      first: ['@angular/compiler'],
+      dom: true,
+    });
+    assert.deepEqual(frameworkOf([tarball('@yaltaan/core', { name: '@yaltaan/core' })], root), {
+      install: [],
+      first: [],
+      dom: false,
+    });
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
 });

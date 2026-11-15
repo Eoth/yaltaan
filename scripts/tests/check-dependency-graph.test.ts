@@ -314,6 +314,47 @@ test('a type-only import is an edge: the compiler lists what each build reads', 
   );
 });
 
+test("the declarations of an adapter's framework may read what it depends on, the adapter's code may not", () => {
+  const files = validWorkspace();
+  const installed = (name: string, manifestFields: Manifest, declarations: string): void => {
+    files.set(`node_modules/${name}/package.json`, JSON.stringify({ name, version: '1.0.0', ...manifestFields }));
+    files.set(`node_modules/${name}/index.d.ts`, declarations);
+  };
+  // react names the types of scheduler, which it depends on, and of an optional peer that is not installed.
+  installed(
+    'react',
+    { types: 'index.d.ts', dependencies: { scheduler: '1.0.0' }, peerDependencies: { 'react-absent': '1.0.0' } },
+    "import type { Task } from 'scheduler';\nexport declare const store: Task;\n",
+  );
+  installed('scheduler', { types: 'index.d.ts' }, 'export type Task = { readonly id: number };\n');
+  installed('stray', { types: 'index.d.ts' }, 'export type Stray = number;\n');
+  files.set('packages/react/tsconfig.build.json', BUILD_CONFIG);
+  files.set('packages/react/src/index.ts', "import { store } from 'react';\nexport const read: number = store.id;\n");
+  const root = writeWorkspace(files);
+  assert.deepEqual(checkDependencyGraph(root).problems, []);
+
+  fs.writeFileSync(
+    path.join(root, 'packages/react/src/index.ts'),
+    "import type { Stray } from 'stray';\nexport const read: Stray = 1;\n",
+  );
+  assertOneProblem(
+    checkDependencyGraph(root).problems,
+    'packages/react/tsconfig.build.json: the build reads node_modules/stray/index.d.ts, from stray, which ' +
+      'packages/react/package.json does not declare',
+  );
+
+  // What the framework depends on is for its declarations to read, not for the adapter's own code.
+  fs.writeFileSync(
+    path.join(root, 'packages/react/src/index.ts'),
+    "import type { Task } from 'scheduler';\nexport const read: Task = { id: 1 };\n",
+  );
+  assertOneProblem(
+    checkDependencyGraph(root).problems,
+    'packages/react/tsconfig.build.json: the build reads node_modules/scheduler/index.d.ts, from scheduler, which ' +
+      'packages/react/package.json does not declare',
+  );
+});
+
 test('the graph is read from the architecture document, transitively', () => {
   const read = parseAllowedGraph(ARCHITECTURE);
   assert.ok(read.ok);

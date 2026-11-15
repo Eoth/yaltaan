@@ -36,6 +36,7 @@ import {
   readChangelogSection,
 } from './lib/release.ts';
 import type { ReleasePackage, ReleaseVersion } from './lib/release.ts';
+import { LOADED_FIRST } from './lib/frameworks.ts';
 import { describeError, isJsonObject, readJson, repositoryRoot, report } from './lib/workspace.ts';
 import type { JsonObject } from './lib/workspace.ts';
 import { findCompilers } from './type-cost.ts';
@@ -383,6 +384,14 @@ function writeSbom(tarball: ReleaseTarball, tarballs: readonly ReleaseTarball[],
   try {
     const packageFolder = path.join(folder, 'node_modules', ...tarball.name.split('/'));
     unpack(tarball, packageFolder);
+    // npm refuses a tree without the peers a manifest names, and an SBOM of a library lists what it brings, not the
+    // framework the application installs beside it: the copy npm reads names no peer.
+    const unpacked = path.join(packageFolder, 'package.json');
+    const read: unknown = JSON.parse(fs.readFileSync(unpacked, 'utf8'));
+    if (isJsonObject(read) && isJsonObject(read['peerDependencies'])) {
+      const { peerDependencies, peerDependenciesMeta, ...rest } = read;
+      fs.writeFileSync(unpacked, `${JSON.stringify(rest, null, 2)}\n`);
+    }
     // npm refuses a tree without the dependencies a manifest declares: those of this release, from their tarballs.
     const dependencies = tarball.manifest['dependencies'];
     const declared = isJsonObject(dependencies) ? Object.keys(dependencies) : [];
@@ -425,8 +434,10 @@ export function checkConsumer(tarballs: readonly ReleaseTarball[]): string[] {
   try {
     const manifest = { name: 'yaltaan-consumer', version: '0.0.0', private: true, type: 'module' };
     fs.writeFileSync(path.join(folder, 'package.json'), JSON.stringify(manifest));
+    const framework = frameworkOf(tarballs, repositoryRoot);
     const install = runNpm(
       ['install', '--offline', '--ignore-scripts', '--no-audit', '--no-fund', '--no-save', '--no-package-lock'].concat(
+        framework.install,
         tarballs.map((tarball) => tarball.file),
       ),
       folder,
@@ -440,14 +451,17 @@ export function checkConsumer(tarballs: readonly ReleaseTarball[]): string[] {
       quoted
         .map((specifier) => `if (Object.keys(${call}(${specifier})).length === 0) throw new Error(${specifier});`)
         .join('\n');
-    fs.writeFileSync(path.join(folder, 'import.mjs'), `${empty('await import')}\n`);
-    fs.writeFileSync(path.join(folder, 'require.cjs'), `${empty('require')}\n`);
+    const first = (call: string): string =>
+      framework.first.map((name) => `${call}(${JSON.stringify(name)});\n`).join('');
+    fs.writeFileSync(path.join(folder, 'import.mjs'), `${first('await import')}${empty('await import')}\n`);
+    fs.writeFileSync(path.join(folder, 'require.cjs'), `${first('require')}${empty('require')}\n`);
     fs.writeFileSync(
       path.join(folder, 'consumer.ts'),
       quoted.map((specifier, index) => `import * as m${index} from ${specifier};`).join('\n') +
         `\nexport type Modules = [${specifiers.map((_, index) => `typeof m${index}`).join(', ')}];\n`,
     );
-    const common = { strict: true, noEmit: true, skipLibCheck: false, types: [], target: 'es2023', lib: ['es2023'] };
+    const lib = framework.dom ? ['es2023', 'dom'] : ['es2023'];
+    const common = { strict: true, noEmit: true, skipLibCheck: false, types: [], target: 'es2023', lib };
     const resolutions = {
       nodenext: { module: 'nodenext', moduleResolution: 'nodenext' },
       bundler: { module: 'preserve', moduleResolution: 'bundler' },
@@ -476,6 +490,51 @@ export function checkConsumer(tarballs: readonly ReleaseTarball[]): string[] {
   } finally {
     fs.rmSync(folder, { recursive: true, force: true });
   }
+}
+
+/**
+ * The framework of the adapters among `tarballs`, as an application installs it beside them: their peers at the
+ * versions the lockfile of `root` holds, the peers those ask for in turn (optional ones aside), and what Node loads
+ * before them (scripts/lib/frameworks.ts); the DOM's types, which the declarations of a browser framework name. Nothing
+ * for tarballs without peers.
+ */
+export function frameworkOf(
+  tarballs: readonly ReleaseTarball[],
+  root: string,
+): { readonly install: readonly string[]; readonly first: readonly string[]; readonly dom: boolean } {
+  const pending = tarballs.flatMap((tarball) => {
+    const peers = tarball.manifest['peerDependencies'];
+    return isJsonObject(peers) ? Object.keys(peers) : [];
+  });
+  if (pending.length === 0) {
+    return { install: [], first: [], dom: false };
+  }
+  const lock: unknown = JSON.parse(fs.readFileSync(path.join(root, 'package-lock.json'), 'utf8'));
+  const locked = isJsonObject(lock) && isJsonObject(lock['packages']) ? lock['packages'] : {};
+  const versions = new Map<string, string>();
+  const first: string[] = [];
+  for (let name = pending.pop(); name !== undefined; name = pending.pop()) {
+    const entry = locked[`node_modules/${name}`];
+    if (versions.has(name) || !isJsonObject(entry) || typeof entry['version'] !== 'string') {
+      continue;
+    }
+    versions.set(name, entry['version']);
+    const loaded = LOADED_FIRST.get(name);
+    if (loaded !== undefined && !first.includes(loaded)) {
+      first.push(loaded);
+      pending.push(loaded);
+    }
+    const peers = isJsonObject(entry['peerDependencies']) ? Object.keys(entry['peerDependencies']) : [];
+    const meta = isJsonObject(entry['peerDependenciesMeta']) ? entry['peerDependenciesMeta'] : {};
+    for (const peer of peers) {
+      const flags = meta[peer];
+      if (!(isJsonObject(flags) && flags['optional'] === true)) {
+        pending.push(peer);
+      }
+    }
+  }
+  const install = [...versions].sort(([a], [b]) => a.localeCompare(b)).map(([name, version]) => `${name}@${version}`);
+  return { install, first, dom: true };
 }
 
 if (import.meta.main) {
