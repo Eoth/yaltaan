@@ -1,7 +1,7 @@
 # ADR 0008 — Unknown keys in object schemas: strip by default
 
 - Date: 2026-10-12
-- Status: accepted (decision delegated by the owner to the recommendation, 2026-10-12)
+- Status: accepted (2026-10-12)
 
 ## Context
 

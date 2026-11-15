@@ -1,7 +1,7 @@
 # ADR 0026 — Numbers: strict parsing, bounds, tolerance, named rounding, exact bigint conversions
 
 - Date: 2026-10-30
-- Status: accepted (design choices delegated by the owner, reported for review)
+- Status: accepted
 
 ## Context
 
@@ -39,7 +39,7 @@ Node 24.21.0, es-toolkit 1.52.0, 2026-10-30:
 
 ## Review
 
-A contradictor, given the question and the code without this record, checked the module: `round` against `Intl.NumberFormat` on 200 000 inputs, 0 differences; time linear from 10 000 to 80 000 code units. It found five defects, fixed before the record was accepted: the overflow of `approxEqual` with `relative` above 1, the lower of two halfway texts refused, `0,123` read as 123, `exponent` read by truthiness, a text of more than 100 exact digits refused; and three hand mutations that no test caught, now caught. It holds `round`'s `RangeError` on overflow for a judgement call; kept, as written above. Measured cost, one noisy run: `round` about 474 ns against 20 ns for `Math.round(x * 100) / 100`, `parseNumber` of a 17-digit text about 731 ns against 43 ns for `Number`, `clamp`, `inRange` and `approxEqual` 18 to 21 ns.
+A second reader, given the question and the code without this record, checked the module: `round` against `Intl.NumberFormat` on 200 000 inputs, 0 differences; time linear from 10 000 to 80 000 code units. It found five defects, fixed before the record was accepted: the overflow of `approxEqual` with `relative` above 1, the lower of two halfway texts refused, `0,123` read as 123, `exponent` read by truthiness, a text of more than 100 exact digits refused; and three hand mutations that no test caught, now caught. It holds `round`'s `RangeError` on overflow for a judgement call; kept, as written above. Measured cost, one noisy run: `round` about 474 ns against 20 ns for `Math.round(x * 100) / 100`, `parseNumber` of a 17-digit text about 731 ns against 43 ns for `Number`, `clamp`, `inRange` and `approxEqual` 18 to 21 ns.
 
 ## Consequences
 

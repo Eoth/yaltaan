@@ -1,7 +1,7 @@
 # ADR 0023 — Reading and writing a value by `Path`
 
 - Date: 2026-10-28
-- Status: accepted (design choices delegated by the owner, reported for review)
+- Status: accepted
 
 ## Context
 

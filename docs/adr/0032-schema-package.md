@@ -1,7 +1,7 @@
 # ADR 0032 — `@yaltaan/schema`: a minimal Standard Schema engine
 
 - Date: 2026-11-01
-- Status: accepted (design choices delegated by the owner; the first schema API, `@experimental` until the contracts are frozen)
+- Status: accepted (the first schema API, `@experimental` until the contracts are frozen)
 
 ## Context
 
@@ -30,7 +30,7 @@ For the message:
 
 On 2026-11-01, Ubuntu 26.04 x64, Node 24.21.0, by `node scripts/size-report.ts`: see the commit that adds the scenario `yaltaan/schema-login` and the baseline it writes. The reference: valibot 1.5.0, 1 285 / 1 254 bytes brotli (esbuild / Rollup); the budget, 1 500 bytes.
 
-A reviewer given only the question and the code, and told to look for reasons to refuse, refused the first version as a reader of untrusted input. Before and after (`--max-old-space-size=2048`, a 2 GB heap): `array(object(20 strings))` on 2.9 MB of `[{},{},…]` aborted the process, which no `catch` can stop, and now gives 1,001 issues; `array(number(), { maxLength: 10 })` on one element at index 4 294 967 294 aborted it too, and now answers at once. The issue limit and the array limit come from that review, in this version and not in T5.5, whose planned 1,000,000 elements would have let the first input through; so do the required `maxLength`, the data property, the refusal of a literal `__proto__` and a law over what the judge's differences leave out, after 12 of its 13 aimed mutants passed every test.
+A second reader, who had only the question and the code and looked for reasons to refuse, refused the first version as a reader of untrusted input. Before and after (`--max-old-space-size=2048`, a 2 GB heap): `array(object(20 strings))` on 2.9 MB of `[{},{},…]` aborted the process, which no `catch` can stop, and now gives 1,001 issues; `array(number(), { maxLength: 10 })` on one element at index 4 294 967 294 aborted it too, and now answers at once. The issue limit and the array limit come from that review, in this version and not in T5.5, whose planned 1,000,000 elements would have let the first input through; so do the required `maxLength`, the data property, the refusal of a literal `__proto__` and a law over what the judge's differences leave out, after 12 of its 13 aimed mutants passed every test.
 
 ## Decision
 

@@ -1,7 +1,7 @@
 # ADR 0040 — Contract tags of the callable members of exports
 
 - Date: 2026-11-07
-- Status: accepted (design choices delegated by the owner, reported for review)
+- Status: accepted
 
 ## Context
 
@@ -19,7 +19,7 @@ A member raises three questions an export does not: what `@mutates` names when t
 1. **Do nothing.** The members stay free comments; the first `create*` of lot 3 (`createCache`, `createLimiter`) and the reactive node ship methods that change state without a checked word.
 2. **Members carry exactly the tags of an export that runs**, `@since` and stability included, callbacks included. Rejected: a `@complexity` or a `@pure` on the `key` of a sort criterion is a promise about code the library does not write, made up for form, which ADR 0012 refuses ("a tag that means nothing would be refused rather than written for form"); and `@since 0.1` repeated on every member of a `@since 0.1` interface says nothing.
 3. **Tell callbacks from library code by their position**: a member of a type used only as a parameter is a callback. Rejected: `Rule` and `StandardProps` are both returned by the library and accepted from the caller; the rule would be a guess the next type defeats.
-4. **Explicit on each member.** A callable member is code of the library and carries the contract of a function, unless it carries `@supplied`; `@mutates this` names the object it is called on; `@since` and the stability are inherited from the owner unless the member states its own. Kept.
+4. **Explicit on each member.** A callable member is code of the library and carries the contract of a function, unless it carries `@supplied`; `@mutates this` names the object it is called on; `@since` and the stability are inherited from the export unless the member states its own. Kept.
 
 For the object a member changes, `@mutates this` was kept over `@mutates self`, `@mutates instance` or `@mutates owner`: `this` is the name JavaScript gives that object when the member is called, for an instance as for an exported object, and it cannot be the name of a parameter.
 
@@ -39,7 +39,7 @@ Option 4.
 - **Where a member is judged**: where the type that declares it is exported. A member declared by the export itself is judged with it; one declared by another exported type is left to that type, even when inherited or reached here; one declared by a type no subpath exports is judged with every export that reaches it, inherited or through a property whose type holds it (`Schema.~standard.validate`), once per export, under its shortest name.
 - **A member of the library** carries `@pure` or `@mutates`, `@sharing`, `@complexity` and `@throws`, with the values of ADR 0012. `@mutates` names a parameter of one of its signatures, or `this`, the object it is called on; `this` is refused on an export. For a member that several implementations fulfil (`Rule.check`, `StandardProps.validate`), the tags state what the library's implementations do, and what any other must do is in its description.
 - **A supplied member** carries `@supplied` and a description that says when it is called and what it must do; a tag of the library's promise (`@pure`, `@mutates`, `@sharing`, `@complexity`, `@throws`) is refused on it. `@supplied` is refused on an export.
-- **Inherited tags**: on a member, `@since` and `@experimental` or `@stable` are optional; absent, they are the owner's; present, they state the member's own (a member added later, a member less stable than its type), and the two stability levels still exclude each other.
+- **Inherited tags**: on a member, `@since` and `@experimental` or `@stable` are optional; absent, they are its export's; present, they state the member's own (a member added later, a member less stable than its type), and the two stability levels still exclude each other.
 - **The reference** shows each member under its export (`#### \`Rule.check\``), in code-unit order of its name, with its kind (member or supplied member), description, declaration and contract table; the tag table says which tags each kind carries.
 - **One source of the tags** stays `scripts/lib/contract-tags.ts`; the reader stays `scripts/lib/declarations.ts`, the only file that imports the compiler.
 

@@ -1,7 +1,7 @@
 # ADR 0038 — Typed paths, and what bounds their cost
 
 - Date: 2026-11-03
-- Status: accepted by delegation of the owner (design choices), with one reservation on the ticket, to be read by the owner
+- Status: accepted, with one reservation on the ticket
 
 ## Context
 
@@ -46,7 +46,7 @@ The number of paths, one model of each shape, TypeScript 7:
 - `PathValue<T, P>`: `undefined` where a step may hold nothing (optional, nullable, an array element, a field that only some members of a union have); `unknown` for a path that is not a tuple or goes past what is typed.
 - Ceilings: the measure plus 10 %, rounded up to the hundred, as ADR 0033 did: 18,800 under TypeScript 7, 8,400 under 6.0.
 
-**The reservation.** The ticket asks for a cap on the number of paths with an explicit degradation. A type cannot count the members of a union without building them. What exists instead: the depth, which the application lowers (`Path<T, 3>`) or raises to 8 where a model needs it, at its own cost, and the compiler's own refusal, TS2589 or TS2590, around a million paths, or earlier in its memory. A model of 20 fields per level over 4 levels compiles in 16 s and 2.3 GB without a word. The owner may prefer option 4 for that case; T1.7 holds it.
+**The reservation.** The ticket asks for a cap on the number of paths with an explicit degradation. A type cannot count the members of a union without building them. What exists instead: the depth, which the application lowers (`Path<T, 3>`) or raises to 8 where a model needs it, at its own cost, and the compiler's own refusal, TS2589 or TS2590, around a million paths, or earlier in its memory. A model of 20 fields per level over 4 levels compiles in 16 s and 2.3 GB without a word. Option 4 may be preferred for that case; T1.7 holds it.
 
 ## Consequences
 

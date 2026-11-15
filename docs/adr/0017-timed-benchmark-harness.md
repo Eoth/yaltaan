@@ -1,7 +1,7 @@
 # ADR 0017 — Timed benchmark harness written in the repository, with batched samples
 
 - Date: 2026-10-20
-- Status: accepted (decided by the owner, against the recommendation of tinybench)
+- Status: accepted (no dependency, against the first recommendation, tinybench)
 
 ## Context
 
@@ -13,9 +13,9 @@ What a timed harness must get right is the cost of the clock itself. A hot path 
 
 ## Options
 
-1. **Native, or do nothing beyond Node.** A loop around `process.hrtime.bigint()` and sorted samples, in the repository. No dependency. Its first form, timing batches of calls through a closure, read 34 to 35 ns for an object spread that mitata reads at 9 to 10 ns: the loop and the indirect call were measured with the operation, and nothing outside the harness would have said so. Getting it right means writing and maintaining the statistics (quantiles, relative margin of error), the warmup and time budgets, and an overhead correction, with no second reading inside the repository. Kept by the owner, under the rules of the decision.
+1. **Native, or do nothing beyond Node.** A loop around `process.hrtime.bigint()` and sorted samples, in the repository. No dependency. Its first form, timing batches of calls through a closure, read 34 to 35 ns for an object spread that mitata reads at 9 to 10 ns: the loop and the indirect call were measured with the operation, and nothing outside the harness would have said so. Getting it right means writing and maintaining the statistics (quantiles, relative margin of error), the warmup and time budgets, and an overhead correction, with no second reading inside the repository. Kept, under the rules of the decision.
 2. **mitata 1.0.34**: batches calls and corrects the loop overhead itself, the most accurate reading of the probe (9 to 10 ns for the spread, the same as option 3 with batches). No dependency, MIT, 135 023 bytes installed. Its last release is 1.0.34 of 2025-02-04, twenty months ago, by its only npm maintainer, and it carries no provenance attestation. Rejected: a tool that fails ADR 0013's own review condition (twelve months without a release) on its first day.
-3. **tinybench 6.2.2** (2026-10-10): tasks with a time budget and a warmup, latency and throughput statistics (p50, p75, p99, p995, p999, mean, variance, relative margin of error), asynchronous tasks, hooks around each task. No dependency, MIT, 87 315 bytes installed, provenance attestation verified, three npm maintainers, six releases between 2026-08-28 and 2026-10-10; the engine behind Vitest's `bench`. It times each call alone, so the harness would give it samples of a batch of calls. Recommended, not kept: the owner prefers no dependency for a harness whose figures are published and never judged.
+3. **tinybench 6.2.2** (2026-10-10): tasks with a time budget and a warmup, latency and throughput statistics (p50, p75, p99, p995, p999, mean, variance, relative margin of error), asynchronous tasks, hooks around each task. No dependency, MIT, 87 315 bytes installed, provenance attestation verified, three npm maintainers, six releases between 2026-08-28 and 2026-10-10; the engine behind Vitest's `bench`. It times each call alone, so the harness would give it samples of a batch of calls. Recommended at first, not kept: no dependency is worth a harness whose figures are published and never judged.
 
 ## Measurements
 
@@ -36,7 +36,7 @@ On 2026-10-20, Ubuntu 26.04 x64, 12th Gen Intel Core i7-12700H (20 logical proce
 
 ## Decision
 
-Option 1, decided by the owner, with the rules that make it read what the probe's first form did not.
+Option 1, with the rules that make it read what the probe's first form did not.
 
 - **No dependency**: the harness lives in `bench/perf/` and uses `process.hrtime.bigint()` and `node:perf_hooks` only.
 - **Batched samples**: before timing, the harness sizes a batch per scenario so that one sample lasts at least 10 µs (the batch doubles from 1 until it does), and divides each sample by it; the batch size is published with the figures. p50 and p99 are then quantiles of batch means, which the publication says.

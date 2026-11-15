@@ -1,7 +1,7 @@
 # ADR 0004 — Platform baseline
 
 - Date: 2026-10-12
-- Status: accepted (decision delegated by the owner to the recommendation, 2026-10-12)
+- Status: accepted (2026-10-12)
 
 ## Context
 

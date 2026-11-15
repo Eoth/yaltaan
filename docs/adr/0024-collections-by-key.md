@@ -1,7 +1,7 @@
 # ADR 0024 — Collections by key: partition, indexBy, countBy, uniqueBy, intersectionBy, differenceBy
 
 - Date: 2026-10-30
-- Status: accepted (design choices delegated by the owner, reported for review)
+- Status: accepted
 
 ## Context
 

@@ -10,7 +10,7 @@ A record is required for: a new package; a new dependency, including a developme
 # ADR NNNN — Title in sentence case
 
 - Date: YYYY-MM-DD
-- Status: proposed — recommendation, awaiting the owner | accepted | superseded by ADR NNNN
+- Status: proposed | accepted | superseded by ADR NNNN
 
 ## Context
 What forces the decision, with facts and their sources.

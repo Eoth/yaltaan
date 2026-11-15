@@ -57,7 +57,7 @@ The whole step: 4 s before the usage, 15 to 21 s with it depending on the load; 
 
 The valibot usage is not in the repository, since no gate reads it. It is the same file, field for field, written with `v.object`, `v.pipe(v.string(), v.minLength(1))`, `v.exactOptional`, `v.nullable`, `v.variant`, `v.safeParse` and `v.config`.
 
-A reviewer given only the question and the code, and told to look for reasons to refuse, accepted the figure of the budget, the checks dropped and the method of the ceilings, and refused two things, both corrected here: one ratio over all usages (option 4), and a usage without `withMessages` and a generic consumer, on which a recursive return type of `withMessages` left every count unchanged while a caller failed with TS2344.
+A second reader, who had only the question and the code and looked for reasons to refuse, accepted the figure of the budget, the checks dropped and the method of the ceilings, and refused two things, both corrected here: one ratio over all usages (option 4), and a usage without `withMessages` and a generic consumer, on which a recursive return type of `withMessages` left every count unchanged while a caller failed with TS2344.
 
 ## Decision
 

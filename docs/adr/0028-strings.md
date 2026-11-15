@@ -1,7 +1,7 @@
 # ADR 0028 — Strings: graphemes, truncation, slugs, whitespace, hidden characters
 
 - Date: 2026-10-31
-- Status: accepted (design choices delegated by the owner, reported for review)
+- Status: accepted
 
 ## Context
 
@@ -42,7 +42,7 @@ Node 24.21.0 (Unicode 17.0), es-toolkit 1.52.0, 2026-10-31:
 
 ## Review
 
-A contradictor, given the question and the code without this record, checked the module: no invariant broken on 200 000 random truncations, the fast path sound against every rule of UAX #29 that looks back, `findHidden` equal to the Unicode tables, nothing built when the module loads. It found two promises the code broke, both fixed before the record was accepted: `truncate` segmented the whole rest of a text once it left the fast path (8 million Cyrillic letters, 9.5 ms for 5 graphemes, now under 0.01 ms, by the windows above), and the documentation said a text without a Latin letter gives an empty slug, which `™` contradicts. It measured a named-property lookup (`FOLDED[-1]`) in `slugify` that made a text of another script 17 times slower: a range check now skips the table, 4 million CJK characters 191 → 93 ms, 66 ms of which is `normalize`. It named what the documentation now says: Latin letters beyond the table separate, the characters `findHidden` does not report, an omission that joins the last grapheme. Two of its remarks became a ticket: a transliteration of the Latin letters beyond U+017F, and a `findHidden` bounded in memory (one object per character found, about 40 times the size of a text made only of hidden characters).
+A second reader, given the question and the code without this record, checked the module: no invariant broken on 200 000 random truncations, the fast path sound against every rule of UAX #29 that looks back, `findHidden` equal to the Unicode tables, nothing built when the module loads. It found two promises the code broke, both fixed before the record was accepted: `truncate` segmented the whole rest of a text once it left the fast path (8 million Cyrillic letters, 9.5 ms for 5 graphemes, now under 0.01 ms, by the windows above), and the documentation said a text without a Latin letter gives an empty slug, which `™` contradicts. It measured a named-property lookup (`FOLDED[-1]`) in `slugify` that made a text of another script 17 times slower: a range check now skips the table, 4 million CJK characters 191 → 93 ms, 66 ms of which is `normalize`. It named what the documentation now says: Latin letters beyond the table separate, the characters `findHidden` does not report, an omission that joins the last grapheme. Two of its remarks became a ticket: a transliteration of the Latin letters beyond U+017F, and a `findHidden` bounded in memory (one object per character found, about 40 times the size of a text made only of hidden characters).
 
 ## Consequences
 

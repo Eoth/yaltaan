@@ -1,7 +1,7 @@
 # ADR 0002 — Licence
 
 - Date: 2026-10-12
-- Status: accepted (the owner's choice, 2026-10-12)
+- Status: accepted (2026-10-12)
 
 ## Context
 
@@ -30,4 +30,4 @@ Option 2, MIT, with the copyright line "Copyright (c) 2026 Pak nguni". Contribut
 
 ## Review condition
 
-The owner planning a commercial edition or a dual licence (a contributor licence agreement must then exist before the first external contribution is merged); or a patent concern raised by a user, which would favour Apache-2.0.
+A plan for a commercial edition or a dual licence (a contributor licence agreement must then exist before the first external contribution is merged); or a patent concern raised by a user, which would favour Apache-2.0.

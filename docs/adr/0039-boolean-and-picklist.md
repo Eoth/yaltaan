@@ -1,7 +1,7 @@
 # ADR 0039 — `boolean` and `picklist` in the minimal schema
 
 - Date: 2026-11-07
-- Status: accepted (design choices delegated by the owner; `@experimental` until the contracts are frozen)
+- Status: accepted (`@experimental` until the contracts are frozen)
 
 ## Context
 

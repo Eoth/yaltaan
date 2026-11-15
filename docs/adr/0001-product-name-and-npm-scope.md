@@ -1,7 +1,7 @@
 # ADR 0001 — Product name and npm scope
 
 - Date: 2026-10-12
-- Status: accepted (the owner's choice, 2026-10-12)
+- Status: accepted (2026-10-12)
 
 ## Context
 
@@ -22,7 +22,7 @@ Checked on 2026-10-12 against the public registry and the GitHub API (`https://r
 
 - `@yaltaan`, `@yaltaanjs`, `@yaltaants`: free. The unscoped package `yaltaan`: free (404). GitHub user or organisation `yaltaan`: free (404).
 - `@pien`: taken (an account without packages); `@pienjs`: free.
-- Not done: trademark searches (INPI, EUIPO, WIPO, classes 9 and 42) and domain registration, left to the owner before the first publication.
+- Not done: trademark searches (INPI, EUIPO, WIPO, classes 9 and 42) and domain registration, to be done before the first publication.
 
 ## Decision
 
@@ -31,7 +31,7 @@ Option 4. The product is named **Yaltaan**; its packages are `@yaltaan/core`, `@
 ## Consequences
 
 - Manifests, documentation and examples use `@yaltaan/…`; the repository folder and the GitHub repository are named `yaltaan`.
-- The npm organisation `yaltaan` and the unscoped package `yaltaan` should be reserved by the owner early, before someone else takes them.
+- The npm organisation `yaltaan` and the unscoped package `yaltaan` should be reserved early, before someone else takes them.
 
 ## Review condition
 

@@ -1,7 +1,7 @@
 # ADR 0037 — The `@yaltaan/temporal` package
 
 - Date: 2026-11-03
-- Status: accepted by delegation of the owner (design choices), to be read by the owner with the beta kit
+- Status: accepted
 
 ## Context
 

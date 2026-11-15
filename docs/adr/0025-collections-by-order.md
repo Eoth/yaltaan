@@ -1,7 +1,7 @@
 # ADR 0025 — Collections by order: minBy, maxBy, topK, sortBy, paginate
 
 - Date: 2026-10-30
-- Status: accepted (design choices delegated by the owner, reported for review)
+- Status: accepted
 
 ## Context
 

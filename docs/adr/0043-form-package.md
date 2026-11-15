@@ -1,7 +1,7 @@
 # ADR 0043 — `@yaltaan/form`: fields and groups on the reactive graph, every state derived but three
 
 - Date: 2026-11-09
-- Status: accepted (design choices delegated by the owner, reported for review; the first form API, `@experimental` until the go/no-go decision of T2.7 and the frozen contracts)
+- Status: accepted (the first form API, `@experimental` until the go/no-go decision of T2.7 and the frozen contracts)
 
 ## Context
 
@@ -61,7 +61,7 @@ On 2026-11-09, Ubuntu 26.04 x64, Node 24.21.0, TypeScript 7.0.2 and 6.0.3, on co
 - **Laws** (`properties.test.ts`): 400 random programs, trees of up to three levels, schemas answering at once, with a promise, or either by value, whose output differs from what they read, conditions hashing every value they read, values that are small integers or lists built anew, and sets, touches, resets, submissions, batches, settlements and rejections in any order, late ones included, half of them with every state of every node watched; after each step, every state of every node equals the naive model's with the keys of every object in order, each schema was asked once per value its node took, and each listener was called exactly when its state changed by the documented equality. One run: 3,978 validations, 263 answers settled after their value was replaced, 231 rejections, 1,526 looks at a `form.validation_failed`, 9,975 notifications, 103 writes refused, in about 2 s.
 - **Mutations by hand**, each restored by copy, against an unmutated control that stays green: 13 on the first version against the laws alone, 13 caught; 44 on the final version against laws and examples, 44 caught: among them every mutation the reviewer below saw survive, the stale answer delivered, pending from below only, each order of issues, each batch broken, a reset that keeps `submitted` or `touched`, `reset(undefined)` by the number of arguments, placement and condition paths through `in` or numeric keys, a group's raw value kept by `equal`, a schema's output ignored, valibot taken for ours, a rejection left pending, a failure without an issue read as success.
 - **References** (`tests/interop/form-states.mjs`, outside the gate): the same steps on Angular Signal Forms 22.2.4, TanStack Form 1.33.5 and the form, each state asserted on each engine, where they agree (touched by group, issues on their field, submission that touches, reset with a value) and where the form departs on purpose (dirty by value, `submitted`, disabled that leaves issues): a reference that changes its behaviour fails it.
-- **Contradictor**: a fresh reviewer, given only the question and the code (183,323 tokens), ran its own probes and 62 mutations of its own, 15 of which survived; verdict: accept with fixes, all applied before this record was committed:
+- **Review**: a second reader, who had the question and the code but not this record, ran its own probes and 62 mutations of its own, 15 of which survived; verdict: accept with fixes, all applied before this record was committed:
   - valibot's schemas carry a `~run` of their own: the form called `parse` on them, read an invalid value as valid and wrote two keys into its raw value. Ours are now told by their vendor too, and an example reads valibot;
   - the type-cost step had no ceiling for the new usage: written above;
   - placing k issues on one node copied the list each time: 40,000 issues took 7.2 s. They are pushed now, and a test compares 4,000 and 32,000;

@@ -5,7 +5,7 @@
 
 ## Context
 
-The owner decided on 2026-11-03 to bring the Temporal lot forward: a real project under dayjs gets its date arithmetic and its date checks wrong. Whether Temporal and `@yaltaan/temporal` do better has to be shown, on every variant, including where dayjs wins, before the package is written. test262 ([ADR 0035](0035-test262-judge.md)) judges Temporal on values its authors chose; nothing judges dayjs, and nothing compares them.
+The Temporal lot was brought forward on 2026-11-03: a real project under dayjs gets its date arithmetic and its date checks wrong. Whether Temporal and `@yaltaan/temporal` do better has to be shown, on every variant, including where dayjs wins, before the package is written. test262 ([ADR 0035](0035-test262-judge.md)) judges Temporal on values its authors chose; nothing judges dayjs, and nothing compares them.
 
 ## Options
 
@@ -40,7 +40,7 @@ A verdict was recouped by hand on cases that do not need a referee: `Asia/Gaza`,
 
 - The result is a statement about one runtime and one version of each side: a new pin moves it, and the difference is the list of what changed.
 - What this comparison does not see: dayjs's locale data and formatting; browsers; the machine time zones it does not try; a dayjs call the families do not make; time zone data newer than those of a side.
-- A real project that always uses `dayjs.utc` and the strict mode meets few of these errors, and the report says so; the owner's own cases were not available to this comparison.
+- A real project that always uses `dayjs.utc` and the strict mode meets few of these errors, and the report says so; the cases of that project were not available to this comparison.
 
 ## Review condition
 
