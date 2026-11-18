@@ -92,9 +92,23 @@ export function array<const E extends Spec, Output = OutputOf<E>[]>(
   return { kind: 'array', element, options, type: List } as ArraySpec<E, NoInfer<Output>>;
 }
 
-// The key at `identity` in an item's raw value, through own properties.
-const keyAt = (value: unknown, identity: Path): unknown =>
-  identity.reduce<unknown>((at, key) => own(at, key as PropertyKey), value);
+// The key at `identity` in an item's raw value, from its segment `at` on, through own properties.
+function keyAt(value: unknown, identity: Path, at = 0): unknown {
+  for (; at < identity.length; at++) {
+    value = own(value, identity[at] as PropertyKey);
+  }
+  return value;
+}
+
+// The key an item holds now, read through its groups down to the node at `identity`: a write in a batch then composes
+// no raw value of a group anew, which would tell its listeners of a change that a later write of the batch undoes.
+function keyOf(item: Node, identity: Path): unknown {
+  let at = 0;
+  for (let child; at < identity.length && (child = item.children?.[identity[at] as string]) instanceof Node; at++) {
+    item = child;
+  }
+  return keyAt(item.raw.get(), identity, at);
+}
 
 // What an array spec holds beside what its type shows.
 export interface ArrayInternal extends ArraySpec {
@@ -174,7 +188,7 @@ export class List extends Node {
     if (identity) {
       const key = keyAt(value, identity);
       check(
-        !isBlank(key) && !items.some((item) => sameKey(keyAt(item.raw.get(), identity), key)),
+        !isBlank(key) && !items.some((item) => sameKey(keyOf(item, identity), key)),
         "an item's key is blank or taken",
       );
     }
@@ -276,7 +290,7 @@ export class List extends Node {
       throw new RangeError("a write reads no more items than its form's maxItems");
     }
     const current = node?.items!.get() ?? NONE;
-    const kept = new Map(identity ? current.map((item) => [bounded(keyAt(item.raw.get(), identity)), item]) : NONE);
+    const kept = new Map(identity ? current.map((item) => [bounded(keyOf(item, identity)), item]) : NONE);
     const seen = new Set<unknown>();
     const values: unknown[] = [];
     const items = Array.from({ length }, (_, index) => {

@@ -1686,19 +1686,23 @@ class Naive {
    * than at its last look (what the nodes at their end submit, a node left out on the way, the items of an array on
    * the way), every state being read at each look; none for a rule whose node or an ancestor is left out, which is
    * called again once it comes back; the same for the nodes `gone` from the tree since the last look, whose listeners
-   * kept them up to date until then.
+   * kept them up to date until then: their checks, which the issues of a node watched above them read, but what their
+   * rules require only for those `watched` themselves, since only the `required` of a node and of the nodes below it
+   * reads it, and an item built in the batch that took it out of the tree was never watched.
    */
-  calls(gone: readonly Model[]): string[] {
+  calls(gone: readonly Model[], watched: ReadonlySet<Model>): string[] {
     const due: string[] = [];
-    for (const model of [...this.nodes(), ...gone]) {
+    const tree = this.nodes();
+    for (const model of [...tree, ...gone]) {
       const away = this.gone(model);
+      const asked = watched.has(model) || tree.includes(model);
       model.template.rules.forEach((rule, index) => {
         const print: Identity = away
           ? { leaf: OUT }
           : { group: rule.declared.map((path) => this.reached(model, path)) };
         for (const [kind, last] of [
           ['check', model.checked],
-          ...(rule.required ? [['required', model.needed] as const] : []),
+          ...(rule.required && asked ? [['required', model.needed] as const] : []),
         ] as const) {
           if (last[index] === undefined || !sameIdentity(last[index], print)) {
             last[index] = print;
@@ -2271,7 +2275,7 @@ async function run(program: Program, scheduler: fc.Scheduler, counts: Counts): P
       }
     }
     // The calls of the rules: exactly those the model says are due, each with what it read, and no other.
-    const due = naive.calls(kept);
+    const due = naive.calls(kept, new Set(gone.map(([, model]) => model)));
     const heardRules = ruled.slice(ruledHeard).map((call) => `${call.template}:${call.rule}:${call.kind} ${call.seen}`);
     ruledHeard = ruled.length;
     assert.deepStrictEqual(heardRules.sort(), due.sort(), `${label}: calls of the rules`);
@@ -2548,6 +2552,212 @@ test('moving items keep their states and issues, under schemas of the item, the 
   console.log(counts);
   assert.ok(counts.movedWithIssues > 200, `${counts.movedWithIssues} items moved while they held issues`);
 });
+
+// The counterexamples the laws above found, reduced by fast-check, kept as fixed cases. First, a batch that writes a
+// field of an item kept by its key, inserts an item, whose key is checked against the others, then resets the form:
+// the item's raw value is the one it had, so its listener is told nothing. Second, a batch that inserts an item, a
+// field into another, then removes that other: the field's rule is checked, since the issues of the item watched above
+// it read them, but what it requires is read by no `required` that anyone watched, so it is not asked.
+const reduced: readonly (readonly [string, Program])[] = [
+  [
+    'an item given its raw value back in a batch',
+    {
+      root: {
+        kind: 'group',
+        initial: 0,
+        children: [
+          {
+            kind: 'array',
+            initial: 0,
+            children: [
+              {
+                kind: 'group',
+                initial: 0,
+                children: [
+                  {
+                    kind: 'field',
+                    initial: 0,
+                    children: [],
+                    schema: null,
+                    validator: null,
+                    condition: null,
+                    hidden: null,
+                    readonly: null,
+                    identity: false,
+                    start: [],
+                    rules: [],
+                  },
+                ],
+                schema: 'mixed',
+                validator: null,
+                condition: null,
+                hidden: null,
+                readonly: null,
+                identity: false,
+                start: [0],
+                rules: [],
+              },
+            ],
+            schema: 'sync',
+            validator: null,
+            condition: { reads: [0], salt: 0 },
+            identity: true,
+            start: [2, 0, 1],
+            rules: [],
+          },
+        ],
+        schema: null,
+        validator: null,
+        condition: null,
+        identity: false,
+        start: [],
+        rules: [{ reads: [0], salt: 0, required: false }],
+      },
+      steps: [
+        { kind: 'release' },
+        { kind: 'settle', node: 0, which: 0, how: 'resolve' },
+        { kind: 'release' },
+        { kind: 'remove', node: 0, item: 0 },
+        { kind: 'settle', node: 0, which: 0, how: 'resolve' },
+        { kind: 'move', node: 0, item: 0, to: 0 },
+        { kind: 'move', node: 0, item: 0, to: 0 },
+        { kind: 'submit' },
+        {
+          kind: 'batch',
+          steps: [
+            { kind: 'set', node: 2, seed: [1] },
+            { kind: 'insert', node: 0, index: 0, seed: null },
+            { kind: 'reset', node: 0, seed: null },
+          ],
+        },
+        { kind: 'remove', node: 0, item: 0 },
+      ],
+      watched: true,
+    },
+  ],
+  [
+    'a field built and taken out in one batch',
+    {
+      root: {
+        kind: 'group',
+        initial: 0,
+        children: [
+          {
+            kind: 'array',
+            initial: 0,
+            children: [
+              {
+                kind: 'array',
+                initial: 0,
+                children: [
+                  {
+                    kind: 'field',
+                    initial: 0,
+                    children: [],
+                    schema: null,
+                    validator: null,
+                    condition: null,
+                    hidden: null,
+                    readonly: null,
+                    identity: false,
+                    start: [],
+                    rules: [{ reads: [0], salt: 0, required: true }],
+                  },
+                ],
+                schema: null,
+                validator: null,
+                condition: { reads: [0], salt: 0 },
+                hidden: null,
+                readonly: null,
+                identity: false,
+                start: [0],
+                rules: [{ reads: [0], salt: 0, required: false }],
+              },
+            ],
+            schema: null,
+            validator: null,
+            condition: null,
+            hidden: null,
+            readonly: null,
+            identity: false,
+            start: [2, 0],
+            rules: [],
+          },
+          {
+            kind: 'array',
+            initial: 0,
+            children: [
+              {
+                kind: 'array',
+                initial: 0,
+                children: [
+                  {
+                    kind: 'field',
+                    initial: 0,
+                    children: [],
+                    schema: null,
+                    validator: null,
+                    condition: null,
+                    hidden: { reads: [0], salt: 0 },
+                    readonly: null,
+                    identity: false,
+                    start: [],
+                    rules: [],
+                  },
+                ],
+                schema: null,
+                validator: null,
+                condition: null,
+                hidden: null,
+                readonly: null,
+                identity: false,
+                start: [0],
+                rules: [{ reads: [0], salt: 0, required: false }],
+              },
+            ],
+            schema: null,
+            validator: null,
+            condition: null,
+            hidden: null,
+            readonly: null,
+            identity: false,
+            start: [0],
+            rules: [],
+          },
+        ],
+        schema: null,
+        validator: null,
+        condition: null,
+        identity: false,
+        start: [],
+        rules: [],
+      },
+      steps: [
+        { kind: 'remove', node: 10, item: 0 },
+        { kind: 'set', node: 0, seed: [4, 0] },
+        {
+          kind: 'batch',
+          steps: [
+            { kind: 'insert', node: 12, index: 0, seed: null },
+            { kind: 'insert', node: 33, index: 0, seed: null },
+            { kind: 'remove', node: 0, item: 1 },
+          ],
+        },
+        { kind: 'release' },
+      ],
+      watched: true,
+    },
+  ],
+];
+
+for (const [name, program] of reduced) {
+  test(`the laws hold on a counterexample they found: ${name}`, async () => {
+    await fc.assert(
+      fc.asyncProperty(fc.constant(program), fc.scheduler(), (given, scheduler) => run(given, scheduler, fresh())),
+      { numRuns: 1 },
+    );
+  });
+}
 
 // An array whose items each hold a validator, beside a field with one, with no schema to hold them back: programs of
 // writes, removals, restores and releases, so that runs are often in flight when their item leaves, or comes back.

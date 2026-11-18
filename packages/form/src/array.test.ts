@@ -213,6 +213,20 @@ test('with identity, keys compare on what the values hold now, so that the raw v
   for (const id of [[], undefined, null, '']) {
     assert.throws(() => form.insert(0, { id, name: '' } as never), TypeError, JSON.stringify(id));
   }
+  // A key inside the value of a field, such as the product a line picked.
+  const picked = createForm(
+    array(group({ product: field({ id: '', label: '' }), quantity: field(1) }), {
+      identity: ['product', 'id'],
+      initial: [{ product: { id: 'p', label: 'P' }, quantity: 2 }],
+    }),
+  );
+  const [line] = picked.items.get();
+  assert.throws(() => picked.insert(0, { product: { id: 'p', label: 'other' }, quantity: 1 }), TypeError, 'p held');
+  picked.set([
+    { product: { id: 'q', label: 'Q' }, quantity: 1 },
+    { product: { id: 'p', label: 'P' }, quantity: 3 },
+  ]);
+  assert.equal(picked.items.get()[1], line, 'kept by the key its field holds');
 });
 
 test('a key past 16,000 code units keeps its item by its first 16,000, and names it in an issue', () => {
@@ -518,6 +532,39 @@ test('two writes of a batch that give an array back its items still give it a ne
   assert.notEqual(form.raw.get(), before);
   form.set({ lines: [] });
   assert.equal(told, 1, 'the same items: nothing told');
+});
+
+test('keys read in a batch compose no item anew: an item given its raw value back is told nothing', () => {
+  const form = createForm(
+    group({
+      tags: array(group({ code: field(''), name: field('') }), {
+        identity: ['code'],
+        initial: [{ code: 'a', name: 'A' }],
+      }),
+    }),
+  );
+  const tags = form.children.tags;
+  const [tag] = tags.items.get();
+  let told = 0;
+  tag!.raw.subscribe(() => told++);
+  const before = tag!.raw.get();
+  // The reduced counterexample of the law on moving items: a field written, an item inserted, whose key is checked
+  // against the others, then the form reset.
+  form.graph.batch(() => {
+    tag!.children.name.set('B');
+    tags.insert(0, { code: 'b', name: '' });
+    form.reset();
+  });
+  assert.deepEqual([told, tag!.raw.get()], [0, { code: 'a', name: 'A' }]);
+  assert.equal(tag!.raw.get(), before);
+  // The same through a write of the array, which keeps its items by the keys they hold.
+  form.graph.batch(() => {
+    tag!.children.name.set('B');
+    form.set({ tags: [{ code: 'a', name: 'A' }] });
+  });
+  assert.deepEqual([told, tag!.raw.get()], [0, { code: 'a', name: 'A' }]);
+  tag!.children.name.set('C');
+  assert.equal(told, 1, 'a field written: told once');
 });
 
 /** The fastest of five runs, in nanoseconds: the least disturbed by the rest of the machine. */
