@@ -128,16 +128,41 @@ function prepare(side: Side): string {
     process.stderr.write(`${side.label}: its package-lock.json differs from the working tree's, running npm ci\n`);
     run('npm', ['ci', '--ignore-scripts', '--no-audit', '--no-fund'], dir);
   }
-  const packages = path.join(dir, 'packages');
-  for (const name of fs.existsSync(packages) ? fs.readdirSync(packages).sort() : []) {
-    const config = path.join('packages', name, 'tsconfig.build.json');
-    if (fs.existsSync(path.join(dir, config))) {
-      run('npx', ['--no-install', 'tsc', '-b', config], dir);
-    }
+  for (const name of buildOrder(path.join(dir, 'packages'))) {
+    run('npx', ['--no-install', 'tsc', '-b', path.join('packages', name, 'tsconfig.build.json')], dir);
   }
   convertScenarios(path.join(dir, 'bench', 'perf'));
   fs.writeFileSync(path.join(dir, '.prepared'), '');
   return dir;
+}
+
+/**
+ * The folders of the packages that have sources, each after the packages its manifest declares, as scripts/build.sh
+ * orders them: a package compiles against the declarations of those it depends on.
+ */
+function buildOrder(packages: string): string[] {
+  const found = new Map<string, { readonly dir: string; readonly needs: readonly string[] }>();
+  for (const dir of fs.existsSync(packages) ? fs.readdirSync(packages).sort() : []) {
+    if (fs.existsSync(path.join(packages, dir, 'tsconfig.build.json'))) {
+      const manifest = JSON.parse(fs.readFileSync(path.join(packages, dir, 'package.json'), 'utf8')) as {
+        name?: string;
+        dependencies?: Record<string, string>;
+      };
+      found.set(manifest.name ?? dir, { dir, needs: Object.keys(manifest.dependencies ?? {}) });
+    }
+  }
+  const order: string[] = [];
+  const seen = new Set<string>();
+  const visit = (name: string): void => {
+    const entry = found.get(name);
+    if (entry && !seen.has(name)) {
+      seen.add(name);
+      entry.needs.forEach(visit);
+      order.push(entry.dir);
+    }
+  };
+  [...found.keys()].forEach(visit);
+  return order;
 }
 
 /** Writes the JavaScript twin of every TypeScript module of the scenarios folder, tests left out. */
